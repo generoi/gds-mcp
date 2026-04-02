@@ -200,8 +200,8 @@ final class BulkUpdatePostsAbility
             'order' => 'ASC',
         ];
 
-        if (! empty($input['language']) && function_exists('pll_get_post_language')) {
-            $queryArgs['lang'] = $input['language'];
+        if (function_exists('pll_get_post_language')) {
+            $queryArgs['lang'] = $input['language'] ?? '';
         }
 
         $query = new WP_Query($queryArgs);
