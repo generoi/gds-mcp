@@ -4,11 +4,7 @@
   "plugins": [
     ".",
     "../polylang-pro",
-    "../gravityforms",
-    "../wordpress-seo",
-    "../safe-redirect-manager",
-    "../redirection",
-    "../stream"
+    "../gravityforms"
   ],
   "config": {
     "WP_TESTS_DOMAIN": "localhost",

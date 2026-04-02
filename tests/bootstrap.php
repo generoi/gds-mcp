@@ -78,3 +78,26 @@ if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
     $model->update_default_lang('en');
     $model->clean_languages_cache();
 }
+
+// Create Redirection DB tables.
+// Redirection uses $wpdb->prefix which may differ from the test prefix.
+if (class_exists('Red_Item') && class_exists('Red_Latest_Database')) {
+    global $wpdb;
+    require_once ABSPATH.'wp-admin/includes/upgrade.php';
+    (new Red_Latest_Database)->install();
+    // Ensure group 1 exists (Redirection requires a group for creating redirects).
+    $groupTable = $wpdb->prefix.'redirection_groups';
+    // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+    $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $groupTable));
+    if ($exists && ! Red_Group::get(1)) {
+        Red_Group::create('Redirections', 1);
+    }
+}
+
+// Create Stream DB tables if the plugin is loaded.
+if (function_exists('wp_stream_get_instance')) {
+    $stream = wp_stream_get_instance();
+    if (isset($stream->install) && method_exists($stream->install, 'install')) {
+        $stream->install->install($stream->get_version());
+    }
+}
