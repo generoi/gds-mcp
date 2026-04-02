@@ -35,6 +35,8 @@ wp plugin activate gds-mcp
 | `gds/get-menu` | Get all items in a navigation menu |
 | `gds/add-menu-item` | Add an item to a navigation menu |
 | `gds/manage-terms` | List, create, or update taxonomy terms |
+| `gds/duplicate-post` | Clone a post with content, meta, terms, and featured image as a draft |
+| `gds/bulk-update-posts` | Update status or meta across multiple posts by query or IDs (supports dry run) |
 | `gds/get-block` | Get full details for a block: attributes, supports, styles, example markup from the demo page or published posts |
 
 ### Resources (always available)
@@ -42,6 +44,7 @@ wp plugin activate gds-mcp
 | Resource | URI | Description |
 |----------|-----|-------------|
 | `gds/block-catalog` | `blocks://catalog` | Lightweight index of all registered blocks (title, description, category, styles, allowed inner blocks). Use `gds/get-block` for full details and examples. |
+| `gds/site-map` | `site://pages` | Site structure from the primary navigation menu tree, plus published pages not in the menu. |
 
 ### Polylang (when active)
 

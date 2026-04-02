@@ -41,19 +41,33 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction
 
-      # Integration plugins are referenced as ../plugin-name in .wp-env.json.
-      # Create stubs with valid plugin headers so wp-env can mount them.
-      # Tests for those integrations will skip (markTestSkipped) since stubs
-      # don't contain actual plugin code.
-      - name: Create integration plugin stubs
+      # .wp-env.json references sibling plugin directories.
+      # Commercial plugins (polylang-pro, gravityforms) get stubs.
+      # Free plugins are installed via WP-CLI after wp-env starts.
+      - name: Create stubs for commercial plugins
         run: |
-          for plugin in polylang-pro gravityforms wordpress-seo safe-redirect-manager redirection stream; do
+          for plugin in polylang-pro gravityforms; do
             mkdir -p "../$plugin"
             cat > "../$plugin/$plugin.php" <<STUB
           <?php
           /*
           Plugin Name: $plugin (stub)
-          Description: CI stub for gds-mcp integration tests
+          Description: CI stub — commercial plugin not available
+          Version: 0.0.0
+          */
+          STUB
+          done
+
+      # Free plugins: create minimal stubs so wp-env can mount them,
+      # then install real versions via WP-CLI.
+      - name: Create mount points for free plugins
+        run: |
+          for plugin in wordpress-seo safe-redirect-manager redirection stream; do
+            mkdir -p "../$plugin"
+            cat > "../$plugin/$plugin.php" <<STUB
+          <?php
+          /*
+          Plugin Name: $plugin (mount point)
           Version: 0.0.0
           */
           STUB
@@ -62,8 +76,22 @@ jobs:
       - name: Start wp-env
         run: npx @wordpress/env start
 
-      - name: Activate plugin
+      # Install real free plugins + Polylang free (covers core PLL API).
+      - name: Install free plugins
+        run: |
+          npx @wordpress/env run tests-cli wp plugin install \
+            polylang wordpress-seo safe-redirect-manager redirection stream \
+            --activate --force
+
+      - name: Activate gds-mcp
         run: npx @wordpress/env run tests-cli wp plugin activate gds-mcp
+
+      # Polylang needs at least one language to function.
+      - name: Configure Polylang languages
+        run: |
+          npx @wordpress/env run tests-cli wp pll lang create English en en_US
+          npx @wordpress/env run tests-cli wp pll lang create Finnish fi fi
+          npx @wordpress/env run tests-cli wp pll lang create Swedish sv sv_SE
 
       - name: Run PHPUnit
         run: npx @wordpress/env run tests-cli --env-cwd=wp-content/plugins/gds-mcp vendor/bin/phpunit

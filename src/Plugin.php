@@ -54,8 +54,11 @@ class Plugin
         Abilities\GetMenuAbility::register();
         Abilities\AddMenuItemAbility::register();
         Abilities\ManageTermsAbility::register();
+        Abilities\DuplicatePostAbility::register();
+        Abilities\BulkUpdatePostsAbility::register();
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
+        Abilities\SiteMapResource::register();
 
         // Polylang -- only if active
         if (function_exists('pll_get_post_language')) {
