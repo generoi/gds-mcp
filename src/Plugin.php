@@ -56,6 +56,7 @@ class Plugin
         Abilities\ManageTermsAbility::register();
         Abilities\DuplicatePostAbility::register();
         Abilities\BulkUpdatePostsAbility::register();
+        Abilities\ManageRevisionsAbility::register();
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
         Abilities\SiteMapResource::register();
