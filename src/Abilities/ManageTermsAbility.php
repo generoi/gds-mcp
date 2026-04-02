@@ -8,9 +8,9 @@ final class ManageTermsAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/terms/manage', [
+        HelpAbility::registerAbility('gds/terms/manage', [
             'label' => 'Manage Taxonomy Terms',
-            'description' => 'List, create, or update taxonomy terms. Use gds/post-types/list to discover available post types, then check their taxonomies via gds/posts/read.',
+            'description' => 'List, create, or update taxonomy terms. For translating terms, use gds/translations/create-term.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

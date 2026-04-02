@@ -49,6 +49,13 @@ tests_add_filter('muplugins_loaded', function () {
 // Start up the WP testing environment.
 require getenv('WP_PHPUNIT__DIR').'/includes/bootstrap.php';
 
+// Fire the Abilities API init hook if it hasn't run yet.
+// wp-phpunit may not fire this automatically.
+if (function_exists('wp_register_ability') && ! did_action('wp_abilities_api_init')) {
+    do_action('wp_abilities_api_categories_init');
+    do_action('wp_abilities_api_init');
+}
+
 // Configure Polylang languages in the fresh test DB.
 if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
     $model = PLL()->model;

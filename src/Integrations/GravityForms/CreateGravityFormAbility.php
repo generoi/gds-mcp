@@ -2,13 +2,14 @@
 
 namespace GeneroWP\MCP\Integrations\GravityForms;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use WP_Error;
 
 final class CreateGravityFormAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/forms/create', [
+        HelpAbility::registerAbility('gds/forms/create', [
             'label' => 'Create Gravity Form',
             'description' => 'Create a new Gravity Form. Fields are passed as raw Gravity Forms field arrays (type, label, isRequired, placeholder, choices, size, etc.) and are converted internally by GF. Field IDs are auto-assigned if omitted.',
             'category' => 'gds-content',

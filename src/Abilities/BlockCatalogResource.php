@@ -10,7 +10,7 @@ final class BlockCatalogResource
 {
     public static function register(): void
     {
-        wp_register_ability('gds/blocks/catalog', [
+        HelpAbility::registerAbility('gds/blocks/catalog', [
             'label' => 'Block Catalog',
             'description' => 'Read-only index of all registered blocks with metadata (title, description, category, styles, allowed inner blocks, parent constraints). Use gds/blocks/get for full attribute details, example markup, and real-world usage search.',
             'category' => 'gds-content',

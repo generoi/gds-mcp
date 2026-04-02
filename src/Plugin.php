@@ -43,6 +43,7 @@ class Plugin
         }
 
         // Core -- always available
+        Abilities\HelpAbility::register();
         Abilities\ListPostTypesAbility::register();
         Abilities\CreatePostAbility::register();
         Abilities\ReadPostAbility::register();

@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Data;
@@ -18,7 +19,7 @@ final class MachineTranslateAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/translations/machine', [
+        HelpAbility::registerAbility('gds/translations/machine', [
             'label' => 'Machine Translate',
             'description' => self::buildDescription(),
             'category' => 'gds-content',

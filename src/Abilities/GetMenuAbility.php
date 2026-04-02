@@ -8,7 +8,7 @@ final class GetMenuAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/menus/get', [
+        HelpAbility::registerAbility('gds/menus/get', [
             'label' => 'Get Menu',
             'description' => 'Get all items in a navigation menu with their hierarchy, links, and types.',
             'category' => 'gds-content',

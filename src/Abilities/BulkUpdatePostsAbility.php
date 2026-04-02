@@ -9,7 +9,7 @@ final class BulkUpdatePostsAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/posts/bulk-update', [
+        HelpAbility::registerAbility('gds/posts/bulk-update', [
             'label' => 'Bulk Update Posts',
             'description' => 'Update status or meta across multiple posts matching a query. Use post_ids for explicit targets, or filter by post_type/status/meta_query to match dynamically. Returns the count of updated posts.',
             'category' => 'gds-content',

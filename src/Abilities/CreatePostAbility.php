@@ -13,9 +13,9 @@ final class CreatePostAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/posts/create', [
+        HelpAbility::registerAbility('gds/posts/create', [
             'label' => 'Create Post',
-            'description' => 'Create a new post, page, or any custom post type. Use gds/post-types/list to discover available types.',
+            'description' => 'Create a new post, page, or custom post type. Use gds/post-types/list to discover types. For translations, use gds/translations/create instead.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

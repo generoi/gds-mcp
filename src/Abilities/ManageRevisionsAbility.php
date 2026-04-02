@@ -8,7 +8,7 @@ final class ManageRevisionsAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/posts/revisions', [
+        HelpAbility::registerAbility('gds/posts/revisions', [
             'label' => 'Manage Revisions',
             'description' => 'List, view, or restore post revisions. Use to see content history, compare changes, or roll back to a previous version.',
             'category' => 'gds-content',

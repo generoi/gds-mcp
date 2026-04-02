@@ -8,7 +8,7 @@ final class CssVarsResource
 {
     public static function register(): void
     {
-        wp_register_ability('gds/design/css-vars', [
+        HelpAbility::registerAbility('gds/design/css-vars', [
             'label' => 'CSS Custom Properties',
             'description' => 'All resolved CSS custom properties from the theme stylesheet (:root declarations). Includes colors, typography, spacing, grid, buttons, inputs, and layout tokens with actual values (hex, clamp, calc).',
             'category' => 'gds-content',

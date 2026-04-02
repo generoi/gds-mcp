@@ -11,7 +11,7 @@ final class ListMenusAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/menus/list', [
+        HelpAbility::registerAbility('gds/menus/list', [
             'label' => 'List Menus',
             'description' => 'List all navigation menus with their language, locations, and item count. With Polylang, each language has its own menu — always verify you are editing the correct language\'s menu before adding items.',
             'category' => 'gds-content',

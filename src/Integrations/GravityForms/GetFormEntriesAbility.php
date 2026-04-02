@@ -2,13 +2,14 @@
 
 namespace GeneroWP\MCP\Integrations\GravityForms;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use WP_Error;
 
 final class GetFormEntriesAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/forms/entries', [
+        HelpAbility::registerAbility('gds/forms/entries', [
             'label' => 'Get Gravity Form Entries',
             'description' => 'Query form submission entries with filtering by date, status, and field values. Returns entry data with field labels mapped to values.',
             'category' => 'gds-content',

@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use PLL_MO;
 use WP_Error;
@@ -12,7 +13,7 @@ final class ListStringTranslationsAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/strings/list', [
+        HelpAbility::registerAbility('gds/strings/list', [
             'label' => 'List String Translations',
             'description' => 'List all registered Polylang string translations with their translations in each language. Useful for auditing missing translations or finding strings to update (e.g. button labels, widget titles, theme strings).',
             'category' => 'gds-content',

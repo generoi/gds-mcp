@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Stream;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use WP_Error;
 
 /**
@@ -11,7 +12,7 @@ final class QueryActivityLogAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/activity/query', [
+        HelpAbility::registerAbility('gds/activity/query', [
             'label' => 'Query Activity Log',
             'description' => 'Query the Stream activity log to see recent changes: who edited what, when content was published, plugin activations, login activity, etc.',
             'category' => 'gds-content',

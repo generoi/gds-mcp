@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use PLL_MO;
 use WP_Error;
@@ -12,7 +13,7 @@ final class UpdateStringTranslationAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/strings/update', [
+        HelpAbility::registerAbility('gds/strings/update', [
             'label' => 'Update String Translation',
             'description' => 'Update the translation of a registered Polylang string for a specific language. Use gds/strings/list first to find the exact string value to translate.',
             'category' => 'gds-content',

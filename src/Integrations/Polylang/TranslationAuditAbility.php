@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 use WP_Query;
@@ -12,7 +13,7 @@ final class TranslationAuditAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/translations/audit', [
+        HelpAbility::registerAbility('gds/translations/audit', [
             'label' => 'Translation Audit',
             'description' => 'Audit all content for missing translations. Reports which posts are untranslated, partially translated, or fully translated across all languages.',
             'category' => 'gds-content',

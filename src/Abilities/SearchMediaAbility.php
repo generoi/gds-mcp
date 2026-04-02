@@ -9,7 +9,7 @@ final class SearchMediaAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/media/search', [
+        HelpAbility::registerAbility('gds/media/search', [
             'label' => 'Search Media',
             'description' => 'Search the WordPress media library by filename, title, or MIME type. Returns URLs and metadata for matching attachments.',
             'category' => 'gds-content',

@@ -2,13 +2,14 @@
 
 namespace GeneroWP\MCP\Integrations\YoastSeo;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use WP_Error;
 
 final class UpdateSeoMetaAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/seo/update', [
+        HelpAbility::registerAbility('gds/seo/update', [
             'label' => 'Update SEO Meta',
             'description' => 'Update the Yoast SEO metadata for a post or page: title, meta description, focus keyphrase, canonical URL.',
             'category' => 'gds-content',

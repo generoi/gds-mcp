@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 
@@ -11,9 +12,9 @@ final class CreateTranslationAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/translations/create', [
+        HelpAbility::registerAbility('gds/translations/create', [
             'label' => 'Create Translation',
-            'description' => 'Create a new post linked as a Polylang translation of a source post. Copies source content as the starting point when content is not provided.',
+            'description' => 'Create a translated post linked via Polylang. Copies source content, meta, and taxonomy terms. For machine translation, use gds/translations/machine. For term translations, use gds/translations/create-term.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

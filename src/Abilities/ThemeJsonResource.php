@@ -9,7 +9,7 @@ final class ThemeJsonResource
 {
     public static function register(): void
     {
-        wp_register_ability('gds/design/theme-json', [
+        HelpAbility::registerAbility('gds/design/theme-json', [
             'label' => 'Theme JSON',
             'description' => 'Read-only design tokens from theme.json (color palette, gradients, spacing, font sizes, layout, per-block overrides) and resolved CSS custom properties from the built stylesheet. Read design://css-vars for just the CSS variables.',
             'category' => 'gds-content',

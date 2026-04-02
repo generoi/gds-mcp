@@ -13,7 +13,7 @@ final class UpdatePostContentAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/posts/update', [
+        HelpAbility::registerAbility('gds/posts/update', [
             'label' => 'Update Post Content',
             'description' => 'Update the title, content, excerpt, status, slug, or ACF fields of an existing post or page.',
             'category' => 'gds-content',

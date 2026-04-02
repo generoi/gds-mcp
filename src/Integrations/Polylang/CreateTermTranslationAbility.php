@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 
@@ -15,7 +16,7 @@ final class CreateTermTranslationAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/translations/create-term', [
+        HelpAbility::registerAbility('gds/translations/create-term', [
             'label' => 'Create Term Translation',
             'description' => 'Create a translated taxonomy term linked via Polylang. Important for avoiding slug clashes between languages — each term should have a translated version with a language-appropriate slug.',
             'category' => 'gds-content',

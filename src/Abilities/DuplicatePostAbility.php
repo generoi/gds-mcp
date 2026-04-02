@@ -11,7 +11,7 @@ final class DuplicatePostAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/posts/duplicate', [
+        HelpAbility::registerAbility('gds/posts/duplicate', [
             'label' => 'Duplicate Post',
             'description' => 'Clone a post with its content, meta, and taxonomy terms. The duplicate is created as a draft with a "(Copy)" title suffix. Optionally assign a different language for multilingual workflows.',
             'category' => 'gds-content',

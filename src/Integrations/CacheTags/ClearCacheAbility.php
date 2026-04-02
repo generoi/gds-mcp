@@ -4,6 +4,7 @@ namespace GeneroWP\MCP\Integrations\CacheTags;
 
 use Genero\Sage\CacheTags\Actions\Site;
 use Genero\Sage\CacheTags\CacheTags;
+use GeneroWP\MCP\Abilities\HelpAbility;
 use WP_Error;
 
 /**
@@ -18,7 +19,7 @@ final class ClearCacheAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/cache/clear', [
+        HelpAbility::registerAbility('gds/cache/clear', [
             'label' => 'Clear Cache',
             'description' => self::buildDescription(),
             'category' => 'gds-content',

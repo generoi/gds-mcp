@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Redirects;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Integrations\Redirects\Providers\Redirection;
 use GeneroWP\MCP\Integrations\Redirects\Providers\SafeRedirectManager;
 use GeneroWP\MCP\Integrations\Redirects\Providers\YoastRedirects;
@@ -15,7 +16,7 @@ final class ManageRedirectsAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/redirects/manage', [
+        HelpAbility::registerAbility('gds/redirects/manage', [
             'label' => 'Manage Redirects',
             'description' => 'List or create URL redirects. Auto-detects the available plugin: Safe Redirect Manager, Redirection, or Yoast SEO (per-post redirects only).',
             'category' => 'gds-content',

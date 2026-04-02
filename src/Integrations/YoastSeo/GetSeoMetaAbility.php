@@ -2,15 +2,16 @@
 
 namespace GeneroWP\MCP\Integrations\YoastSeo;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use WP_Error;
 
 final class GetSeoMetaAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/seo/get', [
+        HelpAbility::registerAbility('gds/seo/get', [
             'label' => 'Get SEO Meta',
-            'description' => 'Get the Yoast SEO metadata for a post or page: title, meta description, focus keyphrase, canonical URL, and robots settings.',
+            'description' => 'Get Yoast SEO metadata: title, meta description, focus keyphrase, canonical URL. Use gds/seo/update to modify. For post content, use gds/posts/read.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

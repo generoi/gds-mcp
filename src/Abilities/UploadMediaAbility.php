@@ -18,7 +18,7 @@ final class UploadMediaAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/media/upload', [
+        HelpAbility::registerAbility('gds/media/upload', [
             'label' => 'Upload Media from URL',
             'description' => 'Download an image or file from a URL and add it to the WordPress media library. Uses WordPress core sideload which validates file types and sanitizes filenames. Optionally set it as a post\'s featured image.',
             'category' => 'gds-content',

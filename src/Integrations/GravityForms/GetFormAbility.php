@@ -2,13 +2,14 @@
 
 namespace GeneroWP\MCP\Integrations\GravityForms;
 
+use GeneroWP\MCP\Abilities\HelpAbility;
 use WP_Error;
 
 final class GetFormAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/forms/get', [
+        HelpAbility::registerAbility('gds/forms/get', [
             'label' => 'Get Gravity Form',
             'description' => 'Get a specific Gravity Form with all its fields, confirmations, and notifications.',
             'category' => 'gds-content',
