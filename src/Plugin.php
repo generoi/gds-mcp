@@ -59,6 +59,8 @@ class Plugin
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
         Abilities\SiteMapResource::register();
+        Abilities\ThemeJsonResource::register();
+        Abilities\CssVarsResource::register();
 
         // ACF -- only if active
         if (function_exists('acf_get_field_groups')) {
