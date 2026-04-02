@@ -1,0 +1,61 @@
+name: Test
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+env:
+  PHP_VERSION: "8.3"
+  NODE_VERSION: "22"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+
+      - run: composer install --no-interaction
+
+      - run: composer lint
+
+  test:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ env.PHP_VERSION }}
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction
+
+      # Integration plugins are referenced as ../plugin-name in .wp-env.json.
+      # In CI we need to create stub directories so wp-env doesn't fail.
+      # Tests for those integrations will be skipped (markTestSkipped).
+      - name: Create integration plugin stubs
+        run: |
+          for plugin in polylang-pro gravityforms wordpress-seo safe-redirect-manager redirection stream; do
+            mkdir -p "../$plugin"
+            echo "<?php // Stub for CI" > "../$plugin/$plugin.php"
+          done
+
+      - name: Start wp-env
+        run: npx @wordpress/env start
+
+      - name: Activate plugin
+        run: npx @wordpress/env run tests-cli wp plugin activate gds-mcp
+
+      - name: Run PHPUnit
+        run: npx @wordpress/env run tests-cli --env-cwd=wp-content/plugins/gds-mcp vendor/bin/phpunit

@@ -1,0 +1,5 @@
+vendor/
+node_modules/
+composer.lock
+.phpunit.result.cache
+tests/wp-tests-config.php

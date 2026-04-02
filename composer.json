@@ -1,0 +1,39 @@
+{
+  "name": "generoi/gds-mcp",
+  "type": "wordpress-plugin",
+  "license": "MIT",
+  "description": "WordPress MCP abilities for content management, translations, and forms",
+  "homepage": "https://github.com/generoi/gds-mcp",
+  "authors": [
+    {
+      "name": "Genero",
+      "email": "info@genero.fi"
+    }
+  ],
+  "require": {
+    "php": ">=8.0.0"
+  },
+  "require-dev": {
+    "laravel/pint": "^1.17",
+    "phpunit/phpunit": "^9.0",
+    "wp-phpunit/wp-phpunit": "^6.6",
+    "yoast/phpunit-polyfills": "^2.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "GeneroWP\\MCP\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "GeneroWP\\MCP\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "lint": "pint --test",
+    "lint:fix": "pint",
+    "test": "phpunit",
+    "test:wp-env": "wp-env run tests-cli --env-cwd=wp-content/plugins/gds-mcp vendor/bin/phpunit",
+    "build:production": "@composer install --optimize-autoloader --no-dev"
+  }
+}

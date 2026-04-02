@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<phpunit
+    bootstrap="tests/bootstrap.php"
+    colors="true"
+    beStrictAboutTestsThatDoNotTestAnything="true"
+>
+    <testsuites>
+        <testsuite name="unit">
+            <directory suffix="Test.php">tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+
+    <php>
+        <!-- wp-env path. Override for DDEV: WP_PHPUNIT__TESTS_CONFIG=tests/wp-tests-config.php -->
+        <env name="WP_PHPUNIT__TESTS_CONFIG" value="/var/www/html/wp-config.php" />
+    </php>
+</phpunit>
