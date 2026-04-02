@@ -53,8 +53,10 @@ class CreateTranslationIntegrationTest extends TestCase
         $this->assertSame($sourceId, $result['source_post_id']);
 
         // Verify Polylang translation link.
+        clean_post_cache($sourceId);
+        clean_post_cache($result['id']);
         $translations = pll_get_post_translations($sourceId);
-        $this->assertArrayHasKey($targetLang, $translations);
+        $this->assertArrayHasKey($targetLang, $translations, 'Translation should be linked. Got: '.wp_json_encode($translations));
         $this->assertSame($result['id'], $translations[$targetLang]);
 
         // Verify content was copied from source.
@@ -75,11 +77,13 @@ class CreateTranslationIntegrationTest extends TestCase
         }
 
         // Create first translation.
-        CreateTranslationAbility::execute([
+        $first = CreateTranslationAbility::execute([
             'source_post_id' => $sourceId,
             'language' => $targetLang,
             'post_title' => 'First',
         ]);
+        $this->assertIsArray($first, 'First translation should succeed');
+        clean_post_cache($sourceId);
 
         // Try to create duplicate.
         $result = CreateTranslationAbility::execute([

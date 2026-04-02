@@ -10,20 +10,24 @@ require_once dirname(__DIR__).'/vendor/autoload.php';
 // Give access to tests_add_filter() function.
 require_once getenv('WP_PHPUNIT__DIR').'/includes/functions.php';
 
+// Polylang needs PLL_ADMIN defined to initialize without pre-existing languages.
+// Without this, Polylang skips init_context() and $GLOBALS['polylang'] is never set.
+if (! defined('PLL_ADMIN')) {
+    define('PLL_ADMIN', true);
+}
+
 /**
  * Load gds-mcp and integration plugins in muplugins_loaded.
  *
  * wp-phpunit uses a fresh DB where no plugins are "activated".
  * We manually require plugin files so they initialize.
- * Pattern from wp-snellman-m3-routes: dirname(__DIR__, 2) = plugins dir.
  */
 tests_add_filter('muplugins_loaded', function () {
-    $pluginsDir = dirname(__DIR__, 2); // /wp-content/plugins/
+    $pluginsDir = dirname(__DIR__, 2);
 
-    // Load integration plugins if they exist.
     $integrations = [
-        'polylang-pro/polylang.php', // Try Pro first (local dev).
-        'polylang/polylang.php',    // Fall back to free (CI).
+        'polylang-pro/polylang.php',
+        'polylang/polylang.php',
         'wordpress-seo/wp-seo.php',
         'safe-redirect-manager/safe-redirect-manager.php',
         'redirection/redirection.php',
@@ -37,23 +41,31 @@ tests_add_filter('muplugins_loaded', function () {
         }
     }
 
-    // Load our plugin last.
     require dirname(__DIR__).'/gds-mcp.php';
 });
 
 // Start up the WP testing environment.
 require getenv('WP_PHPUNIT__DIR').'/includes/bootstrap.php';
 
-// Configure Polylang languages in the test DB.
+// Configure Polylang languages in the fresh test DB.
 if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
-    $languagesFile = dirname(__DIR__, 2).'/polylang/settings/languages.php';
-    $knownLanguages = file_exists($languagesFile) ? include $languagesFile : [];
     $model = PLL()->model;
 
+    // Find the languages definition file (Pro or free).
+    $pluginsDir = dirname(__DIR__, 2);
+    foreach (['polylang-pro/vendor/wpsyntex/polylang/settings/languages.php', 'polylang/settings/languages.php'] as $path) {
+        $languagesFile = $pluginsDir.'/'.$path;
+        if (file_exists($languagesFile)) {
+            break;
+        }
+        $languagesFile = null;
+    }
+    $knownLanguages = $languagesFile ? include $languagesFile : [];
+
     foreach ([
-        ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US'],
-        ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi'],
-        ['name' => 'Swedish', 'slug' => 'sv', 'locale' => 'sv_SE'],
+        ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0],
+        ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1],
+        ['name' => 'Swedish', 'slug' => 'sv', 'locale' => 'sv_SE', 'term_group' => 2],
     ] as $lang) {
         if ($model->get_language($lang['slug'])) {
             continue;
@@ -61,4 +73,8 @@ if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
         $defaults = $knownLanguages[$lang['locale']] ?? [];
         $model->add_language(array_merge($defaults, $lang));
     }
+
+    // Set English as default.
+    $model->update_default_lang('en');
+    $model->clean_languages_cache();
 }
