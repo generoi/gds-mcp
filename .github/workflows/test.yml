@@ -55,7 +55,7 @@ jobs:
       - name: Install integration plugins
         run: |
           npx @wordpress/env run tests-cli wp plugin install \
-            polylang wordpress-seo safe-redirect-manager redirection stream \
+            polylang wordpress-seo safe-redirect-manager redirection stream advanced-custom-fields \
             --activate
 
       - name: Activate gds-mcp

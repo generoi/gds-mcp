@@ -32,6 +32,8 @@ tests_add_filter('muplugins_loaded', function () {
         'safe-redirect-manager/safe-redirect-manager.php',
         'redirection/redirection.php',
         'stream/stream.php',
+        'advanced-custom-fields-pro/acf.php',
+        'advanced-custom-fields/acf.php',
     ];
 
     foreach ($integrations as $plugin) {
