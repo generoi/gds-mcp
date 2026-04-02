@@ -23,11 +23,16 @@ class SiteMapResourceTest extends WP_UnitTestCase
 
     public function test_disconnected_pages_found(): void
     {
-        self::factory()->post->create([
+        $postId = self::factory()->post->create([
             'post_type' => 'page',
             'post_status' => 'publish',
             'post_title' => 'Orphan Page',
         ]);
+
+        // Assign language so Polylang doesn't filter it out.
+        if (function_exists('pll_set_post_language') && function_exists('pll_default_language')) {
+            pll_set_post_language($postId, pll_default_language());
+        }
 
         $result = SiteMapResource::execute([]);
 

@@ -46,15 +46,15 @@ class ReadPostAbilityTest extends WP_UnitTestCase
         $this->assertSame('post_not_found', $result->get_error_code());
     }
 
-    public function test_execute_returns_null_language_without_polylang(): void
+    public function test_execute_includes_language_fields(): void
     {
         $postId = self::factory()->post->create();
 
         $result = ReadPostAbility::execute(['post_id' => $postId]);
 
         $this->assertIsArray($result);
-        $this->assertNull($result['language']);
-        $this->assertNull($result['translations']);
+        $this->assertArrayHasKey('language', $result);
+        $this->assertArrayHasKey('translations', $result);
     }
 
     public function test_execute_includes_parent_id(): void

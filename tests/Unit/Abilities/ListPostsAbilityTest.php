@@ -81,11 +81,16 @@ class ListPostsAbilityTest extends WP_UnitTestCase
 
     public function test_execute_returns_post_structure(): void
     {
-        self::factory()->post->create([
+        $postId = self::factory()->post->create([
             'post_type' => 'page',
             'post_status' => 'publish',
             'post_title' => 'Structure Test',
         ]);
+
+        // Assign language if Polylang is active so the post isn't filtered out.
+        if (function_exists('pll_set_post_language')) {
+            pll_set_post_language($postId, pll_default_language());
+        }
 
         $result = ListPostsAbility::execute(['post_type' => 'page', 'search' => 'Structure Test']);
 
