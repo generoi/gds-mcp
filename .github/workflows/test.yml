@@ -42,13 +42,21 @@ jobs:
         run: composer install --no-interaction
 
       # Integration plugins are referenced as ../plugin-name in .wp-env.json.
-      # In CI we need to create stub directories so wp-env doesn't fail.
-      # Tests for those integrations will be skipped (markTestSkipped).
+      # Create stubs with valid plugin headers so wp-env can mount them.
+      # Tests for those integrations will skip (markTestSkipped) since stubs
+      # don't contain actual plugin code.
       - name: Create integration plugin stubs
         run: |
           for plugin in polylang-pro gravityforms wordpress-seo safe-redirect-manager redirection stream; do
             mkdir -p "../$plugin"
-            echo "<?php // Stub for CI" > "../$plugin/$plugin.php"
+            cat > "../$plugin/$plugin.php" <<STUB
+          <?php
+          /*
+          Plugin Name: $plugin (stub)
+          Description: CI stub for gds-mcp integration tests
+          Version: 0.0.0
+          */
+          STUB
           done
 
       - name: Start wp-env
