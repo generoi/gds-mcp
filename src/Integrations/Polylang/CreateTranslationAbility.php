@@ -12,9 +12,9 @@ final class CreateTranslationAbility
 
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/translations/create', [
+        HelpAbility::registerAbility('gds/translations-create', [
             'label' => 'Create Translation',
-            'description' => 'Create a translated post linked via Polylang. Copies source content, meta, and taxonomy terms. For machine translation, use gds/translations/machine. For term translations, use gds/translations/create-term.',
+            'description' => 'Create a translated post linked via Polylang. Copies source content, meta, and taxonomy terms. For machine translation, use gds/translations-machine. For term translations, use gds/translations-create-term.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

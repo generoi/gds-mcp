@@ -8,7 +8,7 @@ final class DeleteTermAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/terms/delete', [
+        HelpAbility::registerAbility('gds/terms-delete', [
             'label' => 'Delete Term',
             'description' => 'Permanently delete a taxonomy term. Posts assigned to this term will be reassigned to the default term (if any).',
             'category' => 'gds-content',

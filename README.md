@@ -24,87 +24,87 @@ wp plugin activate gds-mcp
 
 | Ability | Description |
 |---------|-------------|
-| `gds/post-types/list` | Discover all registered post types with labels and counts |
-| `gds/posts/create` | Create a new post, page, or custom post type |
-| `gds/posts/read` | Read a post with content, meta, taxonomy terms, language, and translations |
-| `gds/posts/list` | Search and filter posts by type, language, status |
-| `gds/posts/update` | Update title, content, excerpt, status, or slug |
-| `gds/media/search` | Search the media library by filename, title, or MIME type |
-| `gds/media/upload` | Download a file from URL and add to the media library |
-| `gds/menus/list` | List navigation menus with language and location assignments |
-| `gds/menus/get` | Get all items in a navigation menu |
-| `gds/menus/add-item` | Add an item to a navigation menu |
-| `gds/terms/manage` | List, create, or update taxonomy terms |
-| `gds/posts/duplicate` | Clone a post with content, meta, terms, and featured image as a draft |
-| `gds/posts/bulk-update` | Update status or meta across multiple posts by query or IDs (supports dry run) |
-| `gds/posts/revisions` | List, view, or restore post revisions |
-| `gds/posts/delete` | Move a post to trash or permanently delete (force=true) |
-| `gds/terms/delete` | Permanently delete a taxonomy term |
-| `gds/media/delete` | Permanently delete a media attachment and files |
-| `gds/menus/remove-item` | Remove an item from a navigation menu |
-| `gds/blocks/get` | Get full details for a block: attributes, supports, styles, example markup from the demo page or published posts |
+| `gds/post-types-list` | Discover all registered post types with labels and counts |
+| `gds/posts-create` | Create a new post, page, or custom post type |
+| `gds/posts-read` | Read a post with content, meta, taxonomy terms, language, and translations |
+| `gds/posts-list` | Search and filter posts by type, language, status |
+| `gds/posts-update` | Update title, content, excerpt, status, or slug |
+| `gds/media-search` | Search the media library by filename, title, or MIME type |
+| `gds/media-upload` | Download a file from URL and add to the media library |
+| `gds/menus-list` | List navigation menus with language and location assignments |
+| `gds/menus-get` | Get all items in a navigation menu |
+| `gds/menus-add-item` | Add an item to a navigation menu |
+| `gds/terms-manage` | List, create, or update taxonomy terms |
+| `gds/posts-duplicate` | Clone a post with content, meta, terms, and featured image as a draft |
+| `gds/posts-bulk-update` | Update status or meta across multiple posts by query or IDs (supports dry run) |
+| `gds/posts-revisions` | List, view, or restore post revisions |
+| `gds/posts-delete` | Move a post to trash or permanently delete (force=true) |
+| `gds/terms-delete` | Permanently delete a taxonomy term |
+| `gds/media-delete` | Permanently delete a media attachment and files |
+| `gds/menus-remove-item` | Remove an item from a navigation menu |
+| `gds/blocks-get` | Get full details for a block: attributes, supports, styles, example markup from the demo page or published posts |
 
 ### Resources (always available)
 
 | Resource | URI | Description |
 |----------|-----|-------------|
-| `gds/blocks/catalog` | `blocks://catalog` | Lightweight index of all registered blocks with styles, allowed inner blocks, parent constraints |
-| `gds/site/map` | `site://pages` | Site structure from the primary navigation menu tree + disconnected pages |
-| `gds/design/theme-json` | `theme://json` | Design tokens from theme.json (colors, spacing, font sizes, layout) + resolved CSS custom properties |
-| `gds/design/css-vars` | `design://css-vars` | All resolved CSS custom properties from the theme stylesheet |
+| `gds/blocks-catalog` | `blocks://catalog` | Lightweight index of all registered blocks with styles, allowed inner blocks, parent constraints |
+| `gds/site-map` | `site://pages` | Site structure from the primary navigation menu tree + disconnected pages |
+| `gds/design-theme-json` | `theme://json` | Design tokens from theme.json (colors, spacing, font sizes, layout) + resolved CSS custom properties |
+| `gds/design-css-vars` | `design://css-vars` | All resolved CSS custom properties from the theme stylesheet |
 
 ### ACF (when active)
 
 | Resource | URI | Description |
 |----------|-----|-------------|
-| `gds/acf/fields` | `acf://fields` | ACF field groups with fields, types, and post type assignments |
+| `gds/acf-fields` | `acf://fields` | ACF field groups with fields, types, and post type assignments |
 
-Posts read via `gds/posts/read` automatically include structured ACF field data (label, type, value) when ACF is active.
+Posts read via `gds/posts-read` automatically include structured ACF field data (label, type, value) when ACF is active.
 
 ### Polylang (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/translations/create` | Create a translated post linked via Polylang (copies content, meta, terms) |
-| `gds/translations/create-term` | Create a translated taxonomy term linked via Polylang |
-| `gds/translations/audit` | Audit all content for missing translations across post types |
-| `gds/strings/list` | List registered Polylang string translations with status per language |
-| `gds/strings/update` | Update a string translation for a specific language |
-| `gds/translations/machine` | Machine-translate a post or string group via DeepL (Polylang Pro) |
+| `gds/translations-create` | Create a translated post linked via Polylang (copies content, meta, terms) |
+| `gds/translations-create-term` | Create a translated taxonomy term linked via Polylang |
+| `gds/translations-audit` | Audit all content for missing translations across post types |
+| `gds/strings-list` | List registered Polylang string translations with status per language |
+| `gds/strings-update` | Update a string translation for a specific language |
+| `gds/translations-machine` | Machine-translate a post or string group via DeepL (Polylang Pro) |
 
 ### Gravity Forms (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/forms/list` | List all forms with entry counts |
-| `gds/forms/get` | Get a form with all fields, confirmations, and notifications |
-| `gds/forms/entries` | Query form submissions with filtering and pagination |
-| `gds/forms/create` | Create a form from a structured field definition |
+| `gds/forms-list` | List all forms with entry counts |
+| `gds/forms-get` | Get a form with all fields, confirmations, and notifications |
+| `gds/forms-entries` | Query form submissions with filtering and pagination |
+| `gds/forms-create` | Create a form from a structured field definition |
 
 ### Yoast SEO (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/seo/get` | Read SEO title, meta description, focus keyphrase |
-| `gds/seo/update` | Update SEO metadata for a post |
+| `gds/seo-get` | Read SEO title, meta description, focus keyphrase |
+| `gds/seo-update` | Update SEO metadata for a post |
 
 ### Cache (sage-cachetags)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/cache/clear` | Flush site cache or purge specific content by cache tag |
+| `gds/cache-clear` | Flush site cache or purge specific content by cache tag |
 
 ### Redirects (Safe Redirect Manager / Redirection / Yoast)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/redirects/manage` | List or create URL redirects (auto-detects plugin) |
+| `gds/redirects-manage` | List or create URL redirects (auto-detects plugin) |
 
 ### Stream (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/activity/query` | Query the activity log for recent changes |
+| `gds/activity-query` | Query the activity log for recent changes |
 
 ## Connecting
 
@@ -178,10 +178,10 @@ add_filter('wp_register_ability_args', function (array $args, string $name): arr
 
     // Deny destructive operations.
     $denied = [
-        'gds/posts/delete',
-        'gds/terms/delete',
-        'gds/media/delete',
-        'gds/menus/remove-item',
+        'gds/posts-delete',
+        'gds/terms-delete',
+        'gds/media-delete',
+        'gds/menus-remove-item',
     ];
 
     if (!in_array($name, $denied, true)) {

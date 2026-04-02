@@ -9,7 +9,7 @@ final class ListFormsAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/forms/list', [
+        HelpAbility::registerAbility('gds/forms-list', [
             'label' => 'List Gravity Forms',
             'description' => 'List all Gravity Forms with their ID, title, status, and entry count.',
             'category' => 'gds-content',

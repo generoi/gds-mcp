@@ -12,9 +12,9 @@ final class ListPostsAbility
 
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/posts/list', [
+        HelpAbility::registerAbility('gds/posts-list', [
             'label' => 'List Posts',
-            'description' => 'Search and filter content by type, language, status, or keyword. Use gds/post-types/list to discover available types. Use gds/posts/read for full content of a specific post.',
+            'description' => 'Search and filter content by type, language, status, or keyword. Use gds/post-types-list to discover available types. Use gds/posts-read for full content of a specific post.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

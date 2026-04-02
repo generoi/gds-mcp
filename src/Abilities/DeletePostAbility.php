@@ -8,7 +8,7 @@ final class DeletePostAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/posts/delete', [
+        HelpAbility::registerAbility('gds/posts-delete', [
             'label' => 'Delete Post',
             'description' => 'Move a post to trash or permanently delete it. By default moves to trash (recoverable). Use force=true for permanent deletion.',
             'category' => 'gds-content',

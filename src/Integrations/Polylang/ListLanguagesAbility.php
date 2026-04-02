@@ -12,7 +12,7 @@ final class ListLanguagesAbility
 
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/languages/list', [
+        HelpAbility::registerAbility('gds/languages-list', [
             'label' => 'List Languages',
             'description' => 'List all Polylang languages with their slug, locale, active status, and post counts. Includes both enabled and disabled languages — disabled languages are only visible to admins for editing purposes.',
             'category' => 'gds-content',

@@ -77,8 +77,8 @@ final class HelpAbility
         $total = 0;
 
         foreach (self::$registry as $name => $info) {
-            $parts = explode('/', $name, 3);
-            $group = $parts[1] ?? 'other';
+            $suffix = explode('/', $name, 2)[1] ?? 'other';
+            $group = self::extractGroup($suffix);
 
             if (! isset($groups[$group])) {
                 $groups[$group] = [
@@ -104,5 +104,28 @@ final class HelpAbility
             'total' => $total,
             'tip' => 'Read resources first (blocks://catalog, site://pages, design://css-vars, acf://fields) to understand the site, then use tools to create/update content.',
         ];
+    }
+
+    /**
+     * Extract the resource group from an ability suffix.
+     * e.g. "posts-list" -> "posts", "post-types-list" -> "post-types",
+     *      "translations-create-term" -> "translations".
+     */
+    private static function extractGroup(string $suffix): string
+    {
+        $knownGroups = [
+            'posts', 'post-types', 'media', 'menus', 'terms',
+            'translations', 'strings', 'languages', 'forms',
+            'seo', 'redirects', 'cache', 'activity',
+            'blocks', 'design', 'acf', 'site',
+        ];
+
+        foreach ($knownGroups as $group) {
+            if (str_starts_with($suffix, $group.'-') || $suffix === $group) {
+                return $group;
+            }
+        }
+
+        return $suffix;
     }
 }

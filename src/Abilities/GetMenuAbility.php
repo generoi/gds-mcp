@@ -8,7 +8,7 @@ final class GetMenuAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/menus/get', [
+        HelpAbility::registerAbility('gds/menus-get', [
             'label' => 'Get Menu',
             'description' => 'Get all items in a navigation menu with their hierarchy, links, and types.',
             'category' => 'gds-content',
@@ -17,7 +17,7 @@ final class GetMenuAbility
                 'properties' => [
                     'menu_id' => [
                         'type' => 'integer',
-                        'description' => 'The menu term ID. Use gds/menus/list to find available menus.',
+                        'description' => 'The menu term ID. Use gds/menus-list to find available menus.',
                     ],
                 ],
                 'required' => ['menu_id'],

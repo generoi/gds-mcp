@@ -13,7 +13,7 @@ final class ListStringTranslationsAbility
 
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/strings/list', [
+        HelpAbility::registerAbility('gds/strings-list', [
             'label' => 'List String Translations',
             'description' => 'List all registered Polylang string translations with their translations in each language. Useful for auditing missing translations or finding strings to update (e.g. button labels, widget titles, theme strings).',
             'category' => 'gds-content',

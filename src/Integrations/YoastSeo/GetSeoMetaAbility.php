@@ -9,9 +9,9 @@ final class GetSeoMetaAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/seo/get', [
+        HelpAbility::registerAbility('gds/seo-get', [
             'label' => 'Get SEO Meta',
-            'description' => 'Get Yoast SEO metadata: title, meta description, focus keyphrase, canonical URL. Use gds/seo/update to modify. For post content, use gds/posts/read.',
+            'description' => 'Get Yoast SEO metadata: title, meta description, focus keyphrase, canonical URL. Use gds/seo-update to modify. For post content, use gds/posts-read.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

@@ -16,7 +16,7 @@ final class ManageRedirectsAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/redirects/manage', [
+        HelpAbility::registerAbility('gds/redirects-manage', [
             'label' => 'Manage Redirects',
             'description' => 'List or create URL redirects. Auto-detects the available plugin: Safe Redirect Manager, Redirection, or Yoast SEO (per-post redirects only).',
             'category' => 'gds-content',

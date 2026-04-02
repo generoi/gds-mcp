@@ -8,9 +8,9 @@ final class ListPostTypesAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/post-types/list', [
+        HelpAbility::registerAbility('gds/post-types-list', [
             'label' => 'List Post Types',
-            'description' => 'List all registered post types with their labels and capabilities. Use this to discover available content types before querying with gds/posts/list. Common types include: page, post, wp_template_part (site header, footer, sidebar), wp_block (reusable blocks / synced patterns), and any custom post types (products, news, cases, etc.).',
+            'description' => 'List all registered post types with their labels and capabilities. Use this to discover available content types before querying with gds/posts-list. Common types include: page, post, wp_template_part (site header, footer, sidebar), wp_block (reusable blocks / synced patterns), and any custom post types (products, news, cases, etc.).',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

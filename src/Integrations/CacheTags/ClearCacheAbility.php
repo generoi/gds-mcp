@@ -19,7 +19,7 @@ final class ClearCacheAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/cache/clear', [
+        HelpAbility::registerAbility('gds/cache-clear', [
             'label' => 'Clear Cache',
             'description' => self::buildDescription(),
             'category' => 'gds-content',

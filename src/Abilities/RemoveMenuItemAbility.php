@@ -8,7 +8,7 @@ final class RemoveMenuItemAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/menus/remove-item', [
+        HelpAbility::registerAbility('gds/menus-remove-item', [
             'label' => 'Remove Menu Item',
             'description' => 'Remove an item from a navigation menu.',
             'category' => 'gds-content',
@@ -17,7 +17,7 @@ final class RemoveMenuItemAbility
                 'properties' => [
                     'menu_item_id' => [
                         'type' => 'integer',
-                        'description' => 'The menu item ID to remove (from gds/menus/get).',
+                        'description' => 'The menu item ID to remove (from gds/menus-get).',
                     ],
                 ],
                 'required' => ['menu_item_id'],

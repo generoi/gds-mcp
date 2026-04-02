@@ -8,7 +8,7 @@ final class DeleteMediaAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/media/delete', [
+        HelpAbility::registerAbility('gds/media-delete', [
             'label' => 'Delete Media',
             'description' => 'Permanently delete a media attachment and its associated files from the server.',
             'category' => 'gds-content',

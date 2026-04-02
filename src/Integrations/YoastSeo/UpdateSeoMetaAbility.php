@@ -9,7 +9,7 @@ final class UpdateSeoMetaAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/seo/update', [
+        HelpAbility::registerAbility('gds/seo-update', [
             'label' => 'Update SEO Meta',
             'description' => 'Update the Yoast SEO metadata for a post or page: title, meta description, focus keyphrase, canonical URL.',
             'category' => 'gds-content',

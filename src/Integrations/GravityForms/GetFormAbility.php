@@ -9,7 +9,7 @@ final class GetFormAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/forms/get', [
+        HelpAbility::registerAbility('gds/forms-get', [
             'label' => 'Get Gravity Form',
             'description' => 'Get a specific Gravity Form with all its fields, confirmations, and notifications.',
             'category' => 'gds-content',

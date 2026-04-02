@@ -13,9 +13,9 @@ final class ReadPostAbility
 
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/posts/read', [
+        HelpAbility::registerAbility('gds/posts-read', [
             'label' => 'Read Post',
-            'description' => 'Read a post with content, ACF fields, meta, taxonomy terms, language, and translations. Use gds/posts/revisions for version history, gds/seo/get for SEO data. Works with any post type (use gds/post-types/list to discover types).',
+            'description' => 'Read a post with content, ACF fields, meta, taxonomy terms, language, and translations. Use gds/posts-revisions for version history, gds/seo-get for SEO data. Works with any post type (use gds/post-types-list to discover types).',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

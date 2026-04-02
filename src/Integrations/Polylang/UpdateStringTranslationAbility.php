@@ -13,9 +13,9 @@ final class UpdateStringTranslationAbility
 
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/strings/update', [
+        HelpAbility::registerAbility('gds/strings-update', [
             'label' => 'Update String Translation',
-            'description' => 'Update the translation of a registered Polylang string for a specific language. Use gds/strings/list first to find the exact string value to translate.',
+            'description' => 'Update the translation of a registered Polylang string for a specific language. Use gds/strings-list first to find the exact string value to translate.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

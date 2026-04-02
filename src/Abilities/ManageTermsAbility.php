@@ -8,9 +8,9 @@ final class ManageTermsAbility
 {
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/terms/manage', [
+        HelpAbility::registerAbility('gds/terms-manage', [
             'label' => 'Manage Taxonomy Terms',
-            'description' => 'List, create, or update taxonomy terms. For translating terms, use gds/translations/create-term.',
+            'description' => 'List, create, or update taxonomy terms. For translating terms, use gds/translations-create-term.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
