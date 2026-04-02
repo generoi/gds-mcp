@@ -58,6 +58,10 @@ class Plugin
         Abilities\DuplicatePostAbility::register();
         Abilities\BulkUpdatePostsAbility::register();
         Abilities\ManageRevisionsAbility::register();
+        Abilities\DeletePostAbility::register();
+        Abilities\DeleteTermAbility::register();
+        Abilities\DeleteMediaAbility::register();
+        Abilities\RemoveMenuItemAbility::register();
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
         Abilities\SiteMapResource::register();

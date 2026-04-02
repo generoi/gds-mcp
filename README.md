@@ -38,6 +38,10 @@ wp plugin activate gds-mcp
 | `gds/posts/duplicate` | Clone a post with content, meta, terms, and featured image as a draft |
 | `gds/posts/bulk-update` | Update status or meta across multiple posts by query or IDs (supports dry run) |
 | `gds/posts/revisions` | List, view, or restore post revisions |
+| `gds/posts/delete` | Move a post to trash or permanently delete (force=true) |
+| `gds/terms/delete` | Permanently delete a taxonomy term |
+| `gds/media/delete` | Permanently delete a media attachment and files |
+| `gds/menus/remove-item` | Remove an item from a navigation menu |
 | `gds/blocks/get` | Get full details for a block: attributes, supports, styles, example markup from the demo page or published posts |
 
 ### Resources (always available)
@@ -153,17 +157,34 @@ if (! defined('ABSPATH') || ! class_exists(McpAdapter::class)) {
 
 McpAdapter::instance();
 
+// Expose all gds/ and core/ abilities as public MCP tools.
 add_filter('wp_register_ability_args', function (array $args, string $name): array {
-    // Add ability names you want to expose via MCP.
-    $public = [
-        'core/get-site-info',
-        'gds/post-types/list',
-        'gds/posts/read',
-        'gds/posts/list',
-        // ... add more as needed
+    if (str_starts_with($name, 'gds/') || str_starts_with($name, 'core/')) {
+        $args['meta']['mcp']['public'] = true;
+    }
+    return $args;
+}, 10, 2);
+```
+
+### Disabling destructive operations
+
+To expose everything except delete operations, use a deny-list:
+
+```php
+add_filter('wp_register_ability_args', function (array $args, string $name): array {
+    if (!str_starts_with($name, 'gds/') && !str_starts_with($name, 'core/')) {
+        return $args;
+    }
+
+    // Deny destructive operations.
+    $denied = [
+        'gds/posts/delete',
+        'gds/terms/delete',
+        'gds/media/delete',
+        'gds/menus/remove-item',
     ];
 
-    if (in_array($name, $public, true)) {
+    if (!in_array($name, $denied, true)) {
         $args['meta']['mcp']['public'] = true;
     }
 
