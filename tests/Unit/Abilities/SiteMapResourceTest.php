@@ -3,9 +3,9 @@
 namespace GeneroWP\MCP\Tests\Unit\Abilities;
 
 use GeneroWP\MCP\Abilities\SiteMapResource;
-use WP_UnitTestCase;
+use GeneroWP\MCP\Tests\TestCase;
 
-class SiteMapResourceTest extends WP_UnitTestCase
+class SiteMapResourceTest extends TestCase
 {
     protected function setUp(): void
     {
@@ -23,16 +23,11 @@ class SiteMapResourceTest extends WP_UnitTestCase
 
     public function test_disconnected_pages_found(): void
     {
-        $postId = self::factory()->post->create([
+        $this->createPost([
             'post_type' => 'page',
             'post_status' => 'publish',
             'post_title' => 'Orphan Page',
         ]);
-
-        // Assign language so Polylang doesn't filter it out.
-        if (function_exists('pll_set_post_language') && function_exists('pll_default_language')) {
-            pll_set_post_language($postId, pll_default_language());
-        }
 
         $result = SiteMapResource::execute([]);
 

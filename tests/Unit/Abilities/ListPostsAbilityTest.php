@@ -3,9 +3,9 @@
 namespace GeneroWP\MCP\Tests\Unit\Abilities;
 
 use GeneroWP\MCP\Abilities\ListPostsAbility;
-use WP_UnitTestCase;
+use GeneroWP\MCP\Tests\TestCase;
 
-class ListPostsAbilityTest extends WP_UnitTestCase
+class ListPostsAbilityTest extends TestCase
 {
     protected function setUp(): void
     {
@@ -15,7 +15,7 @@ class ListPostsAbilityTest extends WP_UnitTestCase
 
     public function test_execute_returns_posts(): void
     {
-        self::factory()->post->create_many(3, [
+        $this->createPosts(3, [
             'post_type' => 'page',
             'post_status' => 'publish',
         ]);
@@ -31,12 +31,12 @@ class ListPostsAbilityTest extends WP_UnitTestCase
 
     public function test_execute_filters_by_search(): void
     {
-        self::factory()->post->create([
+        $this->createPost([
             'post_title' => 'Unique Findable Title',
             'post_type' => 'page',
             'post_status' => 'publish',
         ]);
-        self::factory()->post->create([
+        $this->createPost([
             'post_title' => 'Other Page',
             'post_type' => 'page',
             'post_status' => 'publish',
@@ -53,7 +53,7 @@ class ListPostsAbilityTest extends WP_UnitTestCase
 
     public function test_execute_respects_pagination(): void
     {
-        self::factory()->post->create_many(5, [
+        $this->createPosts(5, [
             'post_type' => 'page',
             'post_status' => 'publish',
         ]);
@@ -75,22 +75,16 @@ class ListPostsAbilityTest extends WP_UnitTestCase
             'per_page' => 500,
         ]);
 
-        // Should not error; internally capped at 100.
         $this->assertIsArray($result);
     }
 
     public function test_execute_returns_post_structure(): void
     {
-        $postId = self::factory()->post->create([
+        $this->createPost([
             'post_type' => 'page',
             'post_status' => 'publish',
             'post_title' => 'Structure Test',
         ]);
-
-        // Assign language if Polylang is active so the post isn't filtered out.
-        if (function_exists('pll_set_post_language')) {
-            pll_set_post_language($postId, pll_default_language());
-        }
 
         $result = ListPostsAbility::execute(['post_type' => 'page', 'search' => 'Structure Test']);
 
