@@ -41,47 +41,22 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction
 
-      # .wp-env.json references sibling plugin directories.
-      # Commercial plugins (polylang-pro, gravityforms) get stubs.
+      # In CI, use a minimal .wp-env.override.json that only mounts our plugin.
       # Free plugins are installed via WP-CLI after wp-env starts.
-      - name: Create stubs for commercial plugins
-        run: |
-          for plugin in polylang-pro gravityforms; do
-            mkdir -p "../$plugin"
-            cat > "../$plugin/$plugin.php" <<STUB
-          <?php
-          /*
-          Plugin Name: $plugin (stub)
-          Description: CI stub — commercial plugin not available
-          Version: 0.0.0
-          */
-          STUB
-          done
-
-      # Free plugins: create minimal stubs so wp-env can mount them,
-      # then install real versions via WP-CLI.
-      - name: Create mount points for free plugins
-        run: |
-          for plugin in wordpress-seo safe-redirect-manager redirection stream; do
-            mkdir -p "../$plugin"
-            cat > "../$plugin/$plugin.php" <<STUB
-          <?php
-          /*
-          Plugin Name: $plugin (mount point)
-          Version: 0.0.0
-          */
-          STUB
-          done
+      # Commercial plugins (polylang-pro, gravityforms) are not available in CI;
+      # their tests skip gracefully.
+      - name: Configure wp-env for CI
+        run: cp .wp-env.override.json.ci .wp-env.override.json
 
       - name: Start wp-env
         run: npx @wordpress/env start
 
-      # Install real free plugins + Polylang free (covers core PLL API).
-      - name: Install free plugins
+      # Install real free plugins from wordpress.org.
+      - name: Install integration plugins
         run: |
           npx @wordpress/env run tests-cli wp plugin install \
             polylang wordpress-seo safe-redirect-manager redirection stream \
-            --activate --force
+            --activate
 
       - name: Activate gds-mcp
         run: npx @wordpress/env run tests-cli wp plugin activate gds-mcp
