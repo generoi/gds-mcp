@@ -65,6 +65,10 @@ final class GetFormAbility
 
     public static function execute(?array $input = []): array|WP_Error
     {
+        if (! class_exists('GFAPI')) {
+            return new WP_Error('gravity_forms_not_active', 'Gravity Forms is not active.');
+        }
+
         $formId = $input['form_id'] ?? 0;
         $form = \GFAPI::get_form($formId);
 

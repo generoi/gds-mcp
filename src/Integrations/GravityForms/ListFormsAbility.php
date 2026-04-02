@@ -69,6 +69,10 @@ final class ListFormsAbility
 
     public static function execute(?array $input = []): array|WP_Error
     {
+        if (! class_exists('GFAPI')) {
+            return new WP_Error('gravity_forms_not_active', 'Gravity Forms is not active.');
+        }
+
         $active = $input['active'] ?? true;
         $forms = \GFAPI::get_forms($active, false, 'title', 'ASC');
 

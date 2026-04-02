@@ -84,6 +84,10 @@ final class CreateGravityFormAbility
 
     public static function execute(?array $input = []): array|WP_Error
     {
+        if (! class_exists('GFAPI')) {
+            return new WP_Error('gravity_forms_not_active', 'Gravity Forms is not active.');
+        }
+
         // Auto-assign field IDs if not provided.
         $fields = $input['fields'] ?? [];
         foreach ($fields as $index => &$field) {
