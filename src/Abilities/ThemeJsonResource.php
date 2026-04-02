@@ -155,8 +155,24 @@ final class ThemeJsonResource
      */
     public static function extractCssCustomProperties(): array
     {
-        $cssFile = get_theme_file_path('build/app-styles.css');
-        if (! file_exists($cssFile)) {
+        // Check common build output paths across different toolchains.
+        $candidates = [
+            'build/app-styles.css',
+            'dist/app.css',
+            'public/app.css',
+            'build/app.css',
+        ];
+
+        $cssFile = null;
+        foreach ($candidates as $candidate) {
+            $path = get_theme_file_path($candidate);
+            if (file_exists($path)) {
+                $cssFile = $path;
+                break;
+            }
+        }
+
+        if (! $cssFile) {
             return [];
         }
 
