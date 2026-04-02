@@ -128,11 +128,16 @@ final class ListPostsAbility
         $posts = array_map(function ($post) {
             $translations = self::getTranslationSummary($post->ID);
 
+            $author = get_userdata($post->post_author);
+
             return [
                 'id' => $post->ID,
                 'post_type' => $post->post_type,
                 'title' => $post->post_title,
                 'status' => $post->post_status,
+                'author' => $author ? $author->display_name : '',
+                'date' => $post->post_date_gmt,
+                'modified' => $post->post_modified_gmt,
                 'language' => self::getPostLanguage($post->ID),
                 'translations' => $translations,
                 'parent_id' => $post->post_parent,

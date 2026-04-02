@@ -81,6 +81,8 @@ final class ReadPostAbility
             return new WP_Error('post_not_found', 'Post not found.');
         }
 
+        $author = get_userdata($post->post_author);
+
         return [
             'id' => $post->ID,
             'post_type' => $post->post_type,
@@ -91,12 +93,36 @@ final class ReadPostAbility
             'slug' => $post->post_name,
             'url' => get_permalink($post),
             'parent_id' => $post->post_parent,
+            'author' => post_type_supports($post->post_type, 'author') ? [
+                'id' => (int) $post->post_author,
+                'name' => $author ? $author->display_name : '',
+            ] : null,
+            'date' => $post->post_date_gmt,
+            'modified' => $post->post_modified_gmt,
+            'featured_image' => post_type_supports($post->post_type, 'thumbnail')
+                ? self::getFeaturedImage($post->ID) : null,
             'language' => self::getPostLanguage($post->ID),
             'translations' => self::getTranslationSummary($post->ID),
             'fields' => self::getAcfFields($post->ID),
             'meta' => self::getPublicMeta($post->ID),
             'taxonomies' => self::getTaxonomyTerms($post->ID, $post->post_type),
-            'modified' => $post->post_modified_gmt,
+        ];
+    }
+
+    /**
+     * Get featured image data if set.
+     */
+    private static function getFeaturedImage(int $postId): ?array
+    {
+        $thumbnailId = get_post_thumbnail_id($postId);
+        if (! $thumbnailId) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $thumbnailId,
+            'url' => wp_get_attachment_url($thumbnailId),
+            'alt' => get_post_meta($thumbnailId, '_wp_attachment_image_alt', true) ?: '',
         ];
     }
 

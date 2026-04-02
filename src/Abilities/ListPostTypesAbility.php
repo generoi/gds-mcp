@@ -91,6 +91,8 @@ final class ListPostTypesAbility
 
             $counts = wp_count_posts($postType->name);
 
+            $supports = array_keys(array_filter(get_all_post_type_supports($postType->name)));
+
             $result[] = [
                 'name' => $postType->name,
                 'label' => $postType->labels->name,
@@ -98,6 +100,7 @@ final class ListPostTypesAbility
                 'public' => $postType->public,
                 'hierarchical' => $postType->hierarchical,
                 'has_archive' => (bool) $postType->has_archive,
+                'supports' => $supports,
                 'count' => (int) ($counts->publish ?? 0),
             ];
         }
