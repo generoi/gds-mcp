@@ -2,18 +2,20 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Concerns\AcfAware;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 
 final class UpdatePostContentAbility
 {
+    use AcfAware;
     use PolylangAware;
 
     public static function register(): void
     {
         wp_register_ability('gds/update-post-content', [
             'label' => 'Update Post Content',
-            'description' => 'Update the title, content, excerpt, status, or slug of an existing post or page.',
+            'description' => 'Update the title, content, excerpt, status, slug, or ACF fields of an existing post or page.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -42,6 +44,10 @@ final class UpdatePostContentAbility
                     'post_name' => [
                         'type' => 'string',
                         'description' => 'New URL slug for the post.',
+                    ],
+                    'fields' => [
+                        'type' => 'object',
+                        'description' => 'ACF field values to update (uses update_field() so ACF hooks fire). Keyed by field name. Read acf://fields to discover available fields.',
                     ],
                 ],
                 'required' => ['post_id'],
@@ -94,28 +100,38 @@ final class UpdatePostContentAbility
             return new WP_Error('post_not_found', 'Post not found.');
         }
 
-        $updateFields = ['post_title', 'post_content', 'post_excerpt', 'post_status', 'post_name'];
+        $postFields = ['post_title', 'post_content', 'post_excerpt', 'post_status', 'post_name'];
         $data = ['ID' => $post->ID];
         $hasUpdate = false;
 
-        foreach ($updateFields as $field) {
+        foreach ($postFields as $field) {
             if (isset($input[$field])) {
                 $data[$field] = $input[$field];
                 $hasUpdate = true;
             }
         }
 
+        $acfFields = $input['fields'] ?? [];
+        if ($acfFields) {
+            $hasUpdate = true;
+        }
+
         if (! $hasUpdate) {
             return new WP_Error('no_fields', 'At least one field to update must be provided.');
         }
 
-        $result = wp_update_post($data, true);
-
-        if (is_wp_error($result)) {
-            return $result;
+        if (count($data) > 1) {
+            $result = wp_update_post($data, true);
+            if (is_wp_error($result)) {
+                return $result;
+            }
         }
 
-        $updated = get_post($result);
+        if ($acfFields) {
+            self::updateAcfFields($post->ID, $acfFields);
+        }
+
+        $updated = get_post($post->ID);
 
         return [
             'id' => $updated->ID,

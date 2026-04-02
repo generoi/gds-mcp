@@ -48,13 +48,6 @@ class RedirectProvidersIntegrationTest extends WP_UnitTestCase
             $this->markTestSkipped('Redirection plugin not active.');
         }
 
-        // Redirection caches $wpdb->prefix at load time, but wp-phpunit
-        // overrides it for tests. This causes table name mismatches.
-        // Skip if the groups table doesn't exist in the prefix Redirection uses.
-        if (! \Red_Group::get(1)) {
-            $this->markTestSkipped('Redirection DB tables not available in test prefix.');
-        }
-
         $from = '/redirection-test-'.uniqid();
         $result = Redirection::create($from, '/redirection-destination', ['status_code' => 302]);
 

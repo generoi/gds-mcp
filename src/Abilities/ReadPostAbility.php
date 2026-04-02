@@ -2,11 +2,13 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Concerns\AcfAware;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 
 final class ReadPostAbility
 {
+    use AcfAware;
     use PolylangAware;
 
     public static function register(): void
@@ -91,6 +93,7 @@ final class ReadPostAbility
             'parent_id' => $post->post_parent,
             'language' => self::getPostLanguage($post->ID),
             'translations' => self::getTranslationSummary($post->ID),
+            'fields' => self::getAcfFields($post->ID),
             'meta' => self::getPublicMeta($post->ID),
             'taxonomies' => self::getTaxonomyTerms($post->ID, $post->post_type),
             'modified' => $post->post_modified_gmt,

@@ -79,17 +79,20 @@ if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
     $model->clean_languages_cache();
 }
 
-// Create Redirection DB tables.
-// Redirection uses $wpdb->prefix which may differ from the test prefix.
-if (class_exists('Red_Item') && class_exists('Red_Latest_Database')) {
-    global $wpdb;
+// Create Redirection DB tables and default group.
+$redirectionDbFile = dirname(__DIR__, 2).'/redirection/database/database.php';
+if (class_exists('Red_Item') && file_exists($redirectionDbFile)) {
+    require_once $redirectionDbFile;
+    $schemaFile = dirname(__DIR__, 2).'/redirection/database/schema/latest.php';
+    if (file_exists($schemaFile)) {
+        require_once $schemaFile;
+    }
     require_once ABSPATH.'wp-admin/includes/upgrade.php';
-    (new Red_Latest_Database)->install();
-    // Ensure group 1 exists (Redirection requires a group for creating redirects).
-    $groupTable = $wpdb->prefix.'redirection_groups';
-    // phpcs:ignore WordPress.DB.DirectDatabaseQuery
-    $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $groupTable));
-    if ($exists && ! Red_Group::get(1)) {
+    if (class_exists('Red_Latest_Database')) {
+        (new Red_Latest_Database)->install();
+    }
+    // Redirection requires group 1 for creating redirects.
+    if (class_exists('Red_Group') && ! Red_Group::get(1)) {
         Red_Group::create('Redirections', 1);
     }
 }

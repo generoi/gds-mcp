@@ -18,6 +18,9 @@ class CreateTranslationIntegrationTest extends TestCase
         if (! function_exists('pll_set_post_language') || ! function_exists('pll_default_language')) {
             $this->markTestSkipped('Polylang is not active.');
         }
+
+        // Reset Polylang's language cache between tests.
+        PLL()->model->clean_languages_cache();
     }
 
     public function test_creates_translation_and_links_via_polylang(): void

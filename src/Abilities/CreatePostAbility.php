@@ -2,11 +2,13 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Concerns\AcfAware;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 
 final class CreatePostAbility
 {
+    use AcfAware;
     use PolylangAware;
 
     public static function register(): void
@@ -53,9 +55,13 @@ final class CreatePostAbility
                         'type' => 'string',
                         'description' => 'Polylang language slug to assign (e.g. fi, en, sv).',
                     ],
+                    'fields' => [
+                        'type' => 'object',
+                        'description' => 'ACF field values to set (uses update_field() so ACF hooks fire). Keyed by field name. Read acf://fields to discover available fields.',
+                    ],
                     'meta' => [
                         'type' => 'object',
-                        'description' => 'Post meta key-value pairs to set.',
+                        'description' => 'Raw post meta key-value pairs. Prefer "fields" for ACF fields.',
                     ],
                 ],
                 'required' => ['post_title'],
@@ -131,7 +137,12 @@ final class CreatePostAbility
             pll_set_post_language($postId, $input['language']);
         }
 
-        // Set meta.
+        // Set ACF fields (preferred — fires ACF hooks for relationships, etc.).
+        if (! empty($input['fields']) && is_array($input['fields'])) {
+            self::updateAcfFields($postId, $input['fields']);
+        }
+
+        // Set raw meta (for non-ACF fields).
         if (! empty($input['meta']) && is_array($input['meta'])) {
             foreach ($input['meta'] as $key => $value) {
                 update_post_meta($postId, $key, $value);

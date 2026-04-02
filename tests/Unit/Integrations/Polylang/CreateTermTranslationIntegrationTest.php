@@ -18,6 +18,8 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
         if (! function_exists('pll_set_term_language') || ! function_exists('pll_default_language')) {
             $this->markTestSkipped('Polylang is not active.');
         }
+
+        PLL()->model->clean_languages_cache();
     }
 
     public function test_creates_term_translation_and_links(): void

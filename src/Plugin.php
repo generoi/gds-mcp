@@ -60,6 +60,11 @@ class Plugin
         Abilities\GetBlockAbility::register();
         Abilities\SiteMapResource::register();
 
+        // ACF -- only if active
+        if (function_exists('acf_get_field_groups')) {
+            Abilities\AcfFieldsResource::register();
+        }
+
         // Polylang -- only if active
         if (function_exists('pll_get_post_language')) {
             Integrations\Polylang\CreateTranslationAbility::register();
