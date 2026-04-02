@@ -118,8 +118,9 @@ final class ListPostsAbility
             $queryArgs['s'] = $input['search'];
         }
 
-        if (! empty($input['language']) && self::polylangAvailable()) {
-            $queryArgs['lang'] = $input['language'];
+        if (self::polylangAvailable()) {
+            // Explicit language filter, or '' to disable Polylang's auto-filtering.
+            $queryArgs['lang'] = $input['language'] ?? '';
         }
 
         $query = new WP_Query($queryArgs);

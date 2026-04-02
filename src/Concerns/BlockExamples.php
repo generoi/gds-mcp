@@ -74,10 +74,12 @@ trait BlockExamples
             : 'wp:'.$blockName;
 
         $demoPageId = self::getDemoPageId() ?? 0;
+        $frontPageId = (int) get_option('page_on_front', 0);
 
         // Find published posts containing this block (exclude demo page).
+        // Prioritize: synced patterns (wp_block), front page, then recency.
         $typeClause = '';
-        $params = ['%<!-- '.$wpdb->esc_like($commentTag).'%', $demoPageId];
+        $params = ['%<!-- '.$wpdb->esc_like($commentTag).'%', $demoPageId, $frontPageId];
         if ($postType) {
             $typeClause = 'AND post_type = %s';
             $params[] = $postType;
@@ -91,7 +93,13 @@ trait BlockExamples
              AND post_content LIKE %s
              AND ID != %d
              {$typeClause}
-             ORDER BY post_modified DESC
+             ORDER BY
+               CASE
+                 WHEN post_type = 'wp_block' THEN 0
+                 WHEN ID = %d THEN 1
+                 ELSE 2
+               END,
+               post_modified DESC
              LIMIT %d",
             ...$params
         ));
@@ -123,9 +131,6 @@ trait BlockExamples
                 }
 
                 $serialized = serialize_block($block);
-                if (mb_strlen($serialized) > 1500) {
-                    $serialized = mb_substr($serialized, 0, 1500)."\n<!-- ... truncated -->";
-                }
 
                 $results[] = [
                     'post_id' => $post->ID,
@@ -185,15 +190,8 @@ trait BlockExamples
                 $fp = self::structuralFingerprint($block);
 
                 if (! in_array($fp, $fingerprints[$name], true)) {
-                    $serialized = serialize_block($block);
-
-                    if (mb_strlen($serialized) <= 1500) {
-                        $examples[$name][] = $serialized;
-                        $fingerprints[$name][] = $fp;
-                    } elseif (count($examples[$name]) === 0) {
-                        $examples[$name][] = mb_substr($serialized, 0, 1500)."\n<!-- ... truncated -->";
-                        $fingerprints[$name][] = $fp;
-                    }
+                    $examples[$name][] = serialize_block($block);
+                    $fingerprints[$name][] = $fp;
                 }
             }
 

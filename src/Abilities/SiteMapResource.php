@@ -193,6 +193,7 @@ final class SiteMapResource
             'posts_per_page' => 100,
             'orderby' => 'title',
             'order' => 'ASC',
+            'lang' => '', // Disable Polylang auto-filtering.
         ];
 
         if ($excludeIds) {
