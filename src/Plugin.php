@@ -71,6 +71,7 @@ class Plugin
 
         // Polylang -- only if active
         if (function_exists('pll_get_post_language')) {
+            Integrations\Polylang\ListLanguagesAbility::register();
             Integrations\Polylang\CreateTranslationAbility::register();
             Integrations\Polylang\CreateTermTranslationAbility::register();
             Integrations\Polylang\TranslationAuditAbility::register();
