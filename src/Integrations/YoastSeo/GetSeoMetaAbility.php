@@ -8,7 +8,7 @@ final class GetSeoMetaAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/get-seo-meta', [
+        wp_register_ability('gds/seo/get', [
             'label' => 'Get SEO Meta',
             'description' => 'Get the Yoast SEO metadata for a post or page: title, meta description, focus keyphrase, canonical URL, and robots settings.',
             'category' => 'gds-content',

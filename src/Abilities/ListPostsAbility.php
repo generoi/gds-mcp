@@ -12,9 +12,9 @@ final class ListPostsAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/list-posts', [
+        wp_register_ability('gds/posts/list', [
             'label' => 'List Posts',
-            'description' => 'Search and filter posts, pages, and custom post types. Works with any post type including wp_template_part (header, footer), wp_block (reusable blocks / synced patterns), and custom types (use gds/list-post-types to discover available types).',
+            'description' => 'Search and filter posts, pages, and custom post types. Works with any post type including wp_template_part (header, footer), wp_block (reusable blocks / synced patterns), and custom types (use gds/post-types/list to discover available types).',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

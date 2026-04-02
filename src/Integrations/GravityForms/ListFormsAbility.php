@@ -8,7 +8,7 @@ final class ListFormsAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/list-gravity-forms', [
+        wp_register_ability('gds/forms/list', [
             'label' => 'List Gravity Forms',
             'description' => 'List all Gravity Forms with their ID, title, status, and entry count.',
             'category' => 'gds-content',

@@ -18,7 +18,7 @@ final class MachineTranslateAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/machine-translate', [
+        wp_register_ability('gds/translations/machine', [
             'label' => 'Machine Translate',
             'description' => self::buildDescription(),
             'category' => 'gds-content',
@@ -35,7 +35,7 @@ final class MachineTranslateAbility
                     ],
                     'string_group' => [
                         'type' => 'string',
-                        'description' => 'Translate registered Polylang strings instead of a post. Pass the group name (e.g. "WordPress", "ACF") or empty string for all groups. Use gds/list-string-translations to see available groups.',
+                        'description' => 'Translate registered Polylang strings instead of a post. Pass the group name (e.g. "WordPress", "ACF") or empty string for all groups. Use gds/strings/list to see available groups.',
                     ],
                 ],
                 'required' => ['language'],
@@ -126,7 +126,7 @@ final class MachineTranslateAbility
 
         $postId = $input['post_id'] ?? 0;
         if (! $postId) {
-            return new WP_Error('missing_input', 'Provide post_id or string_group. For terms, use gds/create-term-translation instead.');
+            return new WP_Error('missing_input', 'Provide post_id or string_group. For terms, use gds/translations/create-term instead.');
         }
 
         return self::translatePost($postId, $targetLang, $service, $language);

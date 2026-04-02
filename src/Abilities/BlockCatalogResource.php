@@ -10,9 +10,9 @@ final class BlockCatalogResource
 {
     public static function register(): void
     {
-        wp_register_ability('gds/block-catalog', [
+        wp_register_ability('gds/blocks/catalog', [
             'label' => 'Block Catalog',
-            'description' => 'Read-only index of all registered blocks with metadata (title, description, category, styles, allowed inner blocks, parent constraints). Use gds/get-block for full attribute details, example markup, and real-world usage search.',
+            'description' => 'Read-only index of all registered blocks with metadata (title, description, category, styles, allowed inner blocks, parent constraints). Use gds/blocks/get for full attribute details, example markup, and real-world usage search.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -64,7 +64,7 @@ final class BlockCatalogResource
     }
 
     /**
-     * Return the block catalog index. Use gds/get-block for full detail,
+     * Return the block catalog index. Use gds/blocks/get for full detail,
      * examples, and post search on individual blocks.
      */
     public static function execute(?array $input = []): array

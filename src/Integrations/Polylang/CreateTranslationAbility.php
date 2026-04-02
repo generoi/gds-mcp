@@ -11,7 +11,7 @@ final class CreateTranslationAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/create-translation', [
+        wp_register_ability('gds/translations/create', [
             'label' => 'Create Translation',
             'description' => 'Create a new post linked as a Polylang translation of a source post. Copies source content as the starting point when content is not provided.',
             'category' => 'gds-content',

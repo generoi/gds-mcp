@@ -8,9 +8,9 @@ final class AddMenuItemAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/add-menu-item', [
+        wp_register_ability('gds/menus/add-item', [
             'label' => 'Add Menu Item',
-            'description' => 'Add an item to a navigation menu. Can link to a page, post, custom URL, or any post type. IMPORTANT: With Polylang, each language has its own menu. Always use gds/list-menus first to find the correct language\'s menu ID, and link to pages in the matching language.',
+            'description' => 'Add an item to a navigation menu. Can link to a page, post, custom URL, or any post type. IMPORTANT: With Polylang, each language has its own menu. Always use gds/menus/list first to find the correct language\'s menu ID, and link to pages in the matching language.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

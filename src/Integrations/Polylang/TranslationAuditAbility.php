@@ -12,7 +12,7 @@ final class TranslationAuditAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/translation-audit', [
+        wp_register_ability('gds/translations/audit', [
             'label' => 'Translation Audit',
             'description' => 'Audit all content for missing translations. Reports which posts are untranslated, partially translated, or fully translated across all languages.',
             'category' => 'gds-content',

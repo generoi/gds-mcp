@@ -24,72 +24,83 @@ wp plugin activate gds-mcp
 
 | Ability | Description |
 |---------|-------------|
-| `gds/list-post-types` | Discover all registered post types with labels and counts |
-| `gds/create-post` | Create a new post, page, or custom post type |
-| `gds/read-post` | Read a post with content, meta, taxonomy terms, language, and translations |
-| `gds/list-posts` | Search and filter posts by type, language, status |
-| `gds/update-post-content` | Update title, content, excerpt, status, or slug |
-| `gds/search-media` | Search the media library by filename, title, or MIME type |
-| `gds/upload-media` | Download a file from URL and add to the media library |
-| `gds/list-menus` | List navigation menus with language and location assignments |
-| `gds/get-menu` | Get all items in a navigation menu |
-| `gds/add-menu-item` | Add an item to a navigation menu |
-| `gds/manage-terms` | List, create, or update taxonomy terms |
-| `gds/duplicate-post` | Clone a post with content, meta, terms, and featured image as a draft |
-| `gds/bulk-update-posts` | Update status or meta across multiple posts by query or IDs (supports dry run) |
-| `gds/get-block` | Get full details for a block: attributes, supports, styles, example markup from the demo page or published posts |
+| `gds/post-types/list` | Discover all registered post types with labels and counts |
+| `gds/posts/create` | Create a new post, page, or custom post type |
+| `gds/posts/read` | Read a post with content, meta, taxonomy terms, language, and translations |
+| `gds/posts/list` | Search and filter posts by type, language, status |
+| `gds/posts/update` | Update title, content, excerpt, status, or slug |
+| `gds/media/search` | Search the media library by filename, title, or MIME type |
+| `gds/media/upload` | Download a file from URL and add to the media library |
+| `gds/menus/list` | List navigation menus with language and location assignments |
+| `gds/menus/get` | Get all items in a navigation menu |
+| `gds/menus/add-item` | Add an item to a navigation menu |
+| `gds/terms/manage` | List, create, or update taxonomy terms |
+| `gds/posts/duplicate` | Clone a post with content, meta, terms, and featured image as a draft |
+| `gds/posts/bulk-update` | Update status or meta across multiple posts by query or IDs (supports dry run) |
+| `gds/posts/revisions` | List, view, or restore post revisions |
+| `gds/blocks/get` | Get full details for a block: attributes, supports, styles, example markup from the demo page or published posts |
 
 ### Resources (always available)
 
 | Resource | URI | Description |
 |----------|-----|-------------|
-| `gds/block-catalog` | `blocks://catalog` | Lightweight index of all registered blocks (title, description, category, styles, allowed inner blocks). Use `gds/get-block` for full details and examples. |
-| `gds/site-map` | `site://pages` | Site structure from the primary navigation menu tree, plus published pages not in the menu. |
+| `gds/blocks/catalog` | `blocks://catalog` | Lightweight index of all registered blocks with styles, allowed inner blocks, parent constraints |
+| `gds/site/map` | `site://pages` | Site structure from the primary navigation menu tree + disconnected pages |
+| `gds/design/theme-json` | `theme://json` | Design tokens from theme.json (colors, spacing, font sizes, layout) + resolved CSS custom properties |
+| `gds/design/css-vars` | `design://css-vars` | All resolved CSS custom properties from the theme stylesheet |
+
+### ACF (when active)
+
+| Resource | URI | Description |
+|----------|-----|-------------|
+| `gds/acf/fields` | `acf://fields` | ACF field groups with fields, types, and post type assignments |
+
+Posts read via `gds/posts/read` automatically include structured ACF field data (label, type, value) when ACF is active.
 
 ### Polylang (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/create-translation` | Create a translated post linked via Polylang (copies content, meta, terms) |
-| `gds/create-term-translation` | Create a translated taxonomy term linked via Polylang |
-| `gds/translation-audit` | Audit all content for missing translations across post types |
-| `gds/list-string-translations` | List registered Polylang string translations with status per language |
-| `gds/update-string-translation` | Update a string translation for a specific language |
-| `gds/machine-translate` | Machine-translate a post or string group via DeepL (Polylang Pro) |
+| `gds/translations/create` | Create a translated post linked via Polylang (copies content, meta, terms) |
+| `gds/translations/create-term` | Create a translated taxonomy term linked via Polylang |
+| `gds/translations/audit` | Audit all content for missing translations across post types |
+| `gds/strings/list` | List registered Polylang string translations with status per language |
+| `gds/strings/update` | Update a string translation for a specific language |
+| `gds/translations/machine` | Machine-translate a post or string group via DeepL (Polylang Pro) |
 
 ### Gravity Forms (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/list-gravity-forms` | List all forms with entry counts |
-| `gds/get-gravity-form` | Get a form with all fields, confirmations, and notifications |
-| `gds/get-gravity-form-entries` | Query form submissions with filtering and pagination |
-| `gds/create-gravity-form` | Create a form from a structured field definition |
+| `gds/forms/list` | List all forms with entry counts |
+| `gds/forms/get` | Get a form with all fields, confirmations, and notifications |
+| `gds/forms/entries` | Query form submissions with filtering and pagination |
+| `gds/forms/create` | Create a form from a structured field definition |
 
 ### Yoast SEO (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/get-seo-meta` | Read SEO title, meta description, focus keyphrase |
-| `gds/update-seo-meta` | Update SEO metadata for a post |
+| `gds/seo/get` | Read SEO title, meta description, focus keyphrase |
+| `gds/seo/update` | Update SEO metadata for a post |
 
 ### Cache (sage-cachetags)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/clear-cache` | Flush site cache or purge specific content by cache tag |
+| `gds/cache/clear` | Flush site cache or purge specific content by cache tag |
 
 ### Redirects (Safe Redirect Manager / Redirection / Yoast)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/manage-redirects` | List or create URL redirects (auto-detects plugin) |
+| `gds/redirects/manage` | List or create URL redirects (auto-detects plugin) |
 
 ### Stream (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/query-activity-log` | Query the activity log for recent changes |
+| `gds/activity/query` | Query the activity log for recent changes |
 
 ## Connecting
 
@@ -146,9 +157,9 @@ add_filter('wp_register_ability_args', function (array $args, string $name): arr
     // Add ability names you want to expose via MCP.
     $public = [
         'core/get-site-info',
-        'gds/list-post-types',
-        'gds/read-post',
-        'gds/list-posts',
+        'gds/post-types/list',
+        'gds/posts/read',
+        'gds/posts/list',
         // ... add more as needed
     ];
 

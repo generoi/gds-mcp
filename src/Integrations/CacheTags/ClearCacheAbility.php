@@ -18,7 +18,7 @@ final class ClearCacheAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/clear-cache', [
+        wp_register_ability('gds/cache/clear', [
             'label' => 'Clear Cache',
             'description' => self::buildDescription(),
             'category' => 'gds-content',

@@ -12,9 +12,9 @@ final class UpdateStringTranslationAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/update-string-translation', [
+        wp_register_ability('gds/strings/update', [
             'label' => 'Update String Translation',
-            'description' => 'Update the translation of a registered Polylang string for a specific language. Use gds/list-string-translations first to find the exact string value to translate.',
+            'description' => 'Update the translation of a registered Polylang string for a specific language. Use gds/strings/list first to find the exact string value to translate.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

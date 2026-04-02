@@ -11,7 +11,7 @@ final class SiteMapResource
 
     public static function register(): void
     {
-        wp_register_ability('gds/site-map', [
+        wp_register_ability('gds/site/map', [
             'label' => 'Site Map',
             'description' => 'Read-only site structure showing the primary navigation menu tree and any published pages not in the menu. Use this to understand the site hierarchy before creating or linking content.',
             'category' => 'gds-content',

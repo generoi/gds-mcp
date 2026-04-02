@@ -8,7 +8,7 @@ final class GetFormAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/get-gravity-form', [
+        wp_register_ability('gds/forms/get', [
             'label' => 'Get Gravity Form',
             'description' => 'Get a specific Gravity Form with all its fields, confirmations, and notifications.',
             'category' => 'gds-content',

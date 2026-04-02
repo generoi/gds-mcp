@@ -13,7 +13,7 @@ final class GetBlockAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/get-block', [
+        wp_register_ability('gds/blocks/get', [
             'label' => 'Get Block',
             'description' => 'Get full details for a block: attributes, supports, styles, and example markup from the demo page or published posts. Read blocks://catalog first to discover available blocks.',
             'category' => 'gds-content',

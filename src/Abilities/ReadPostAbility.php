@@ -13,7 +13,7 @@ final class ReadPostAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/read-post', [
+        wp_register_ability('gds/posts/read', [
             'label' => 'Read Post',
             'description' => 'Read a single post or page with its content, post meta, taxonomy terms, language, and translation links. Works with any post type including template parts (header, footer) and reusable blocks.',
             'category' => 'gds-content',

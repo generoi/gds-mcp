@@ -8,7 +8,7 @@ final class GetFormEntriesAbility
 {
     public static function register(): void
     {
-        wp_register_ability('gds/get-gravity-form-entries', [
+        wp_register_ability('gds/forms/entries', [
             'label' => 'Get Gravity Form Entries',
             'description' => 'Query form submission entries with filtering by date, status, and field values. Returns entry data with field labels mapped to values.',
             'category' => 'gds-content',
