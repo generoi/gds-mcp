@@ -5,6 +5,9 @@ namespace GeneroWP\MCP\Tests\Unit\Integrations\Polylang;
 use GeneroWP\MCP\Integrations\Polylang\CreateTranslationAbility;
 use GeneroWP\MCP\Tests\TestCase;
 
+/**
+ * @group polylang-integration
+ */
 class CreateTranslationIntegrationTest extends TestCase
 {
     protected function setUp(): void

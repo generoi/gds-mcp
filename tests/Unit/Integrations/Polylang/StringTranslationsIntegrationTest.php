@@ -6,6 +6,9 @@ use GeneroWP\MCP\Integrations\Polylang\ListStringTranslationsAbility;
 use GeneroWP\MCP\Integrations\Polylang\UpdateStringTranslationAbility;
 use WP_UnitTestCase;
 
+/**
+ * @group polylang-integration
+ */
 class StringTranslationsIntegrationTest extends WP_UnitTestCase
 {
     protected function setUp(): void

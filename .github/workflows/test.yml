@@ -80,5 +80,7 @@ jobs:
             }
           '
 
+      # Polylang integration tests need persistent DB state (languages, translations)
+      # that wp-phpunit's fresh test DB doesn't support. Run those locally in DDEV.
       - name: Run PHPUnit
-        run: npx @wordpress/env run tests-cli --env-cwd=wp-content/plugins/gds-mcp vendor/bin/phpunit
+        run: npx @wordpress/env run tests-cli --env-cwd=wp-content/plugins/gds-mcp vendor/bin/phpunit --exclude-group=polylang-integration

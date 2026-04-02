@@ -5,6 +5,9 @@ namespace GeneroWP\MCP\Tests\Unit\Integrations\Polylang;
 use GeneroWP\MCP\Integrations\Polylang\CreateTermTranslationAbility;
 use WP_UnitTestCase;
 
+/**
+ * @group polylang-integration
+ */
 class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
 {
     protected function setUp(): void
