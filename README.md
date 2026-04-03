@@ -108,11 +108,10 @@ Posts read via `gds/posts-read` automatically include structured ACF field data 
 
 ## Connecting
 
-### For developers (STDIO via WP-CLI)
+### STDIO (developers with shell access)
 
-If you have shell access (DDEV, SSH), configure your MCP client to use the STDIO transport:
+Configure in Claude Code or Claude Desktop MCP settings:
 
-**Claude Code** (`.claude/mcp.json` in project root):
 ```json
 {
   "mcpServers": {
@@ -124,35 +123,29 @@ If you have shell access (DDEV, SSH), configure your MCP client to use the STDIO
 }
 ```
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json` on Mac):
-```json
-{
-  "mcpServers": {
-    "wordpress": {
-      "command": "ddev",
-      "args": ["wp", "mcp-adapter", "serve", "--server=mcp-adapter-default-server", "--user=admin"]
-    }
-  }
-}
+### HTTP (production, remote access)
+
+For production or remote sites, use the HTTP transport with a WordPress application password.
+
+**1. Create an application password:**
+
+```bash
+# Via WP-CLI
+wp user application-password create USERNAME yourname-claude-mcp --porcelain
+
+# Or via WP Admin: Users > Profile > Application Passwords
 ```
 
-### For content editors (HTTP via application password)
+**2. Claude Code:**
 
-Content editors connect remotely using WordPress application passwords. No shell access needed.
+```bash
+AUTH=$(echo -n 'USERNAME:YOUR_APP_PASSWORD' | base64)
+claude mcp add-json -s local my-site-production \
+  "{\"type\":\"http\",\"url\":\"https://example.com/wp-json/mcp/mcp-adapter-default-server\",\"headers\":{\"Authorization\":\"Basic $AUTH\"}}"
+```
 
-#### Step 1: Create an application password
+**3. Claude Desktop:**
 
-1. Log in to WordPress admin
-2. Go to **Users → Profile** (or **Users → All Users** → click your username)
-3. Scroll down to **Application Passwords**
-4. Enter a name (e.g. "Claude Desktop") and click **Add New Application Password**
-5. Copy the generated password — it will only be shown once (format: `xxxx xxxx xxxx xxxx xxxx xxxx`)
-
-> **Note:** Application passwords require HTTPS on production. They work over HTTP only on localhost.
-
-#### Step 2: Configure your AI client
-
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
@@ -160,29 +153,14 @@ Content editors connect remotely using WordPress application passwords. No shell
       "command": "npx",
       "args": ["-y", "@automattic/mcp-wordpress-remote@latest"],
       "env": {
-        "WP_API_URL": "https://yoursite.com/wp-json/mcp/mcp-adapter-default-server",
-        "WP_API_USERNAME": "your-wordpress-username",
-        "WP_API_PASSWORD": "xxxx xxxx xxxx xxxx xxxx xxxx"
+        "WP_API_URL": "https://example.com/wp-json/mcp/mcp-adapter-default-server",
+        "WP_API_USERNAME": "USERNAME",
+        "WP_API_PASSWORD": "xxxx-xxxx-xxxx-xxxx"
       }
     }
   }
 }
 ```
-
-Replace:
-- `yoursite.com` with your WordPress site URL
-- `your-wordpress-username` with your WordPress login username
-- The password with the application password from Step 1
-
-#### Step 3: Verify
-
-Open Claude Desktop and ask: *"What tools do you have available?"* — it should list the WordPress MCP tools.
-
-Or ask: *"List all pages on the site"* — it should call `gds/posts-list` and return your pages.
-
-#### Permissions
-
-Each ability checks `current_user_can()` — the editor can only do what their WordPress role allows. An Editor can create/edit posts but can't manage plugins or options. An Administrator can do everything.
 
 ## Host project setup
 
