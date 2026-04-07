@@ -31,9 +31,11 @@ wp plugin activate gds-mcp
 | `gds/posts-update` | Update title, content, excerpt, status, or slug |
 | `gds/media-search` | Search the media library by filename, title, or MIME type |
 | `gds/media-upload` | Download a file from URL and add to the media library |
+| `gds/menus-manage` | Create, update, or delete navigation menus (name, locations) |
 | `gds/menus-list` | List navigation menus with language and location assignments |
 | `gds/menus-get` | Get all items in a navigation menu |
 | `gds/menus-add-item` | Add an item to a navigation menu |
+| `gds/menus-update-item` | Update a menu item's title, URL, parent, or position |
 | `gds/terms-manage` | List, create, or update taxonomy terms |
 | `gds/posts-duplicate` | Clone a post with content, meta, terms, and featured image as a draft |
 | `gds/posts-bulk-update` | Update status or meta across multiple posts by query or IDs (supports dry run) |

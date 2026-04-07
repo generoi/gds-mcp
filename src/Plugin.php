@@ -62,6 +62,8 @@ class Plugin
         Abilities\DeleteTermAbility::register();
         Abilities\DeleteMediaAbility::register();
         Abilities\RemoveMenuItemAbility::register();
+        Abilities\UpdateMenuItemAbility::register();
+        Abilities\ManageMenuAbility::register();
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
         Abilities\SiteMapResource::register();
