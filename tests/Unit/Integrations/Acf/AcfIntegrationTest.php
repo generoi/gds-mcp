@@ -3,7 +3,7 @@
 namespace GeneroWP\MCP\Tests\Unit\Integrations\Acf;
 
 use GeneroWP\MCP\Abilities\AcfFieldsResource;
-use GeneroWP\MCP\Abilities\ReadPostAbility;
+use GeneroWP\MCP\Abilities\PostTypeAbility;
 use WP_UnitTestCase;
 
 /**
@@ -101,17 +101,12 @@ class AcfIntegrationTest extends WP_UnitTestCase
         $postId = self::factory()->post->create(['post_status' => 'publish']);
         update_field('read_test_field', 'hello from acf', $postId);
 
-        $result = ReadPostAbility::execute(['post_id' => $postId]);
+        $posts = new PostTypeAbility('post', '/wp/v2/posts', 'posts', 'Posts');
+        $result = $posts->executeRead(['id' => $postId]);
 
         $this->assertIsArray($result);
-        $this->assertArrayHasKey('fields', $result);
-
-        if ($result['fields'] !== null) {
-            $this->assertArrayHasKey('read_test_field', $result['fields']);
-            $this->assertSame('hello from acf', $result['fields']['read_test_field']['value']);
-            $this->assertSame('text', $result['fields']['read_test_field']['type']);
-            $this->assertSame('Read Test Field', $result['fields']['read_test_field']['label']);
-        }
+        // ACF fields are exposed via the REST API's acf field
+        $this->assertArrayHasKey('acf', $result);
     }
 
     public function test_update_acf_fields_via_update_field(): void

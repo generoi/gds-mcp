@@ -46,8 +46,6 @@ class Plugin
         Abilities\HelpAbility::register();
         Abilities\ListPostTypesAbility::register();
         Abilities\PostTypeAbility::registerAll();
-        Abilities\SearchMediaAbility::register();
-        Abilities\UploadMediaAbility::register();
         Abilities\ListMenusAbility::register();
         Abilities\GetMenuAbility::register();
         Abilities\AddMenuItemAbility::register();
@@ -56,7 +54,6 @@ class Plugin
         Abilities\BulkUpdatePostsAbility::register();
         Abilities\ManageRevisionsAbility::register();
         Abilities\DeleteTermAbility::register();
-        Abilities\DeleteMediaAbility::register();
         Abilities\RemoveMenuItemAbility::register();
         Abilities\UpdateMenuItemAbility::register();
         Abilities\ManageMenuAbility::register();

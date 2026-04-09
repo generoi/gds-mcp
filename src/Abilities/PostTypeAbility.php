@@ -35,11 +35,6 @@ final class PostTypeAbility
         $postTypes = get_post_types(['public' => true, 'show_in_rest' => true], 'objects');
 
         foreach ($postTypes as $type) {
-            // Skip attachments — handled by SearchMediaAbility
-            if ($type->name === 'attachment') {
-                continue;
-            }
-
             $restBase = $type->rest_base ?: $type->name;
             $namespace = $type->rest_namespace ?? 'wp/v2';
             $route = "/{$namespace}/{$restBase}";
