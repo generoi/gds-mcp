@@ -43,8 +43,8 @@ final class ListPostTypesAbility
                     ],
                 ],
             ],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'execute_callback' => [self::class, 'execute'],
+            'permission_callback' => '__return_true',
+            'execute_callback' => [new self, 'execute'],
             'meta' => [
                 'annotations' => [
                     'readonly' => true,
@@ -55,21 +55,7 @@ final class ListPostTypesAbility
         ]);
     }
 
-    public static function checkPermission(mixed $input = []): bool|WP_Error
-    {
-        $input = is_array($input) ? $input : [];
-        if (! is_user_logged_in()) {
-            return new WP_Error('authentication_required', 'User must be authenticated.');
-        }
-
-        if (! current_user_can('read')) {
-            return new WP_Error('insufficient_capability', 'You do not have permission to list post types.');
-        }
-
-        return true;
-    }
-
-    public static function execute(mixed $input = []): array
+    public function execute(mixed $input = []): array
     {
         $input = is_array($input) ? $input : [];
         $publicOnly = $input['public_only'] ?? false;

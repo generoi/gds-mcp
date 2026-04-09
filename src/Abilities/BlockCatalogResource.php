@@ -32,8 +32,8 @@ final class BlockCatalogResource
                     ],
                 ],
             ],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'execute_callback' => [self::class, 'execute'],
+            'permission_callback' => '__return_true',
+            'execute_callback' => [new self, 'execute'],
             'meta' => [
                 'uri' => 'blocks://catalog',
                 'mimeType' => 'application/json',
@@ -50,25 +50,11 @@ final class BlockCatalogResource
         ]);
     }
 
-    public static function checkPermission(mixed $input = []): bool|WP_Error
-    {
-        $input = is_array($input) ? $input : [];
-        if (! is_user_logged_in()) {
-            return new WP_Error('authentication_required', 'User must be authenticated.');
-        }
-
-        if (! current_user_can('edit_posts')) {
-            return new WP_Error('insufficient_capability', 'You do not have permission to read the block catalog.');
-        }
-
-        return true;
-    }
-
     /**
      * Return the block catalog index. Use gds/blocks-get for full detail,
      * examples, and post search on individual blocks.
      */
-    public static function execute(mixed $input = []): array
+    public function execute(mixed $input = []): array
     {
         $input = is_array($input) ? $input : [];
         $registry = WP_Block_Type_Registry::get_instance();

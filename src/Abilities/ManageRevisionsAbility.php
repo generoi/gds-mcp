@@ -2,166 +2,133 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Concerns\RestDelegation;
 use WP_Error;
 
+/**
+ * Revision management abilities.
+ *
+ * List and view delegate to REST API (/wp/v2/{type}/{id}/revisions).
+ * Restore uses wp_restore_post_revision() (no REST equivalent).
+ */
 final class ManageRevisionsAbility
 {
+    use RestDelegation;
+
+    private static ?self $instance = null;
+
+    public static function instance(): self
+    {
+        return self::$instance ??= new self;
+    }
+
     public static function register(): void
     {
-        HelpAbility::registerAbility('gds/posts-revisions', [
-            'label' => 'Manage Revisions',
-            'description' => 'List, view, or restore post revisions. Use to see content history, compare changes, or roll back to a previous version.',
+        $ability = self::instance();
+
+        HelpAbility::registerAbility('gds/revisions-list', [
+            'label' => 'List Revisions',
+            'description' => 'List revisions for a post. Delegates to the WordPress REST API.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'action' => [
-                        'type' => 'string',
-                        'description' => 'Action to perform.',
-                        'enum' => ['list', 'view', 'restore'],
-                    ],
-                    'post_id' => [
-                        'type' => 'integer',
-                        'description' => 'The post ID to list revisions for (required for list).',
-                    ],
-                    'revision_id' => [
-                        'type' => 'integer',
-                        'description' => 'The revision ID to view or restore (required for view/restore).',
-                    ],
+                    'post_id' => ['type' => 'integer', 'description' => 'The post ID to list revisions for.'],
                 ],
-                'required' => ['action'],
-                'additionalProperties' => false,
+                'required' => ['post_id'],
+                'additionalProperties' => true,
             ],
-            'output_schema' => [
+            'output_schema' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => true]],
+            'permission_callback' => '__return_true',
+            'execute_callback' => [$ability, 'listRevisions'],
+            'meta' => ['annotations' => ['readonly' => true, 'destructive' => false, 'idempotent' => true]],
+        ]);
+
+        HelpAbility::registerAbility('gds/revisions-read', [
+            'label' => 'Read Revision',
+            'description' => 'Read a single revision with full content.',
+            'category' => 'gds-content',
+            'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'revisions' => ['type' => 'array'],
-                    'revision' => ['type' => 'object'],
-                    'restored' => ['type' => 'object'],
+                    'post_id' => ['type' => 'integer', 'description' => 'The parent post ID.'],
+                    'id' => ['type' => 'integer', 'description' => 'The revision ID.'],
                 ],
+                'required' => ['post_id', 'id'],
+                'additionalProperties' => true,
             ],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'execute_callback' => [self::class, 'execute'],
-            'meta' => [
-                'annotations' => [
-                    'readonly' => false,
-                    'destructive' => false,
-                    'idempotent' => false,
+            'output_schema' => ['type' => 'object', 'additionalProperties' => true],
+            'permission_callback' => '__return_true',
+            'execute_callback' => [$ability, 'readRevision'],
+            'meta' => ['annotations' => ['readonly' => true, 'destructive' => false, 'idempotent' => true]],
+        ]);
+
+        HelpAbility::registerAbility('gds/revisions-restore', [
+            'label' => 'Restore Revision',
+            'description' => 'Restore a post to a previous revision. No REST equivalent — uses wp_restore_post_revision().',
+            'category' => 'gds-content',
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'revision_id' => ['type' => 'integer', 'description' => 'The revision ID to restore.'],
                 ],
+                'required' => ['revision_id'],
+                'additionalProperties' => false,
             ],
+            'output_schema' => ['type' => 'object', 'additionalProperties' => true],
+            'permission_callback' => '__return_true',
+            'execute_callback' => [$ability, 'restoreRevision'],
+            'meta' => ['annotations' => ['readonly' => false, 'destructive' => false, 'idempotent' => true]],
         ]);
     }
 
-    public static function checkPermission(mixed $input = []): bool|WP_Error
+    public function listRevisions(mixed $input = []): array|WP_Error
     {
         $input = is_array($input) ? $input : [];
-        if (! is_user_logged_in()) {
-            return new WP_Error('authentication_required', 'User must be authenticated.');
-        }
-
         $postId = $input['post_id'] ?? 0;
-        $revisionId = $input['revision_id'] ?? 0;
+        unset($input['post_id']);
 
-        // For restore, check edit permission on the parent post.
-        if ($revisionId && ($input['action'] ?? '') === 'restore') {
-            $revision = wp_get_post_revision($revisionId);
-            $parentId = $revision ? $revision->post_parent : 0;
-            if ($parentId && ! current_user_can('edit_post', $parentId)) {
-                return new WP_Error('insufficient_capability', 'You do not have permission to edit this post.');
-            }
+        $route = $this->getRevisionRoute($postId);
+        if (is_wp_error($route)) {
+            return $route;
         }
 
-        if ($postId && ! current_user_can('edit_post', $postId)) {
-            return new WP_Error('insufficient_capability', 'You do not have permission to view this post\'s revisions.');
-        }
+        $response = self::restGet($route, $input);
 
-        return true;
+        return self::isRestError($response)
+            ? self::restErrorToWpError($response)
+            : array_map(fn ($item) => (array) $item, $response->get_data());
     }
 
-    public static function execute(mixed $input = []): array|WP_Error
+    public function readRevision(mixed $input = []): array|WP_Error
     {
         $input = is_array($input) ? $input : [];
-        $action = $input['action'] ?? '';
+        $postId = $input['post_id'] ?? 0;
+        $revisionId = $input['id'] ?? 0;
+        unset($input['post_id'], $input['id']);
 
-        return match ($action) {
-            'list' => self::listRevisions($input),
-            'view' => self::viewRevision($input),
-            'restore' => self::restoreRevision($input),
-            default => new WP_Error('invalid_action', 'Action must be list, view, or restore.'),
-        };
-    }
-
-    private static function listRevisions(array $input): array|WP_Error
-    {
-        $postId = (int) ($input['post_id'] ?? 0);
-        if (! $postId) {
-            return new WP_Error('missing_post_id', 'post_id is required for list.');
+        $route = $this->getRevisionRoute($postId);
+        if (is_wp_error($route)) {
+            return $route;
         }
 
-        $post = get_post($postId);
-        if (! $post) {
-            return new WP_Error('post_not_found', 'Post not found.');
-        }
+        $response = self::restGet("{$route}/{$revisionId}", $input);
 
-        $revisions = wp_get_post_revisions($postId, ['order' => 'DESC']);
-
-        return [
-            'post_id' => $postId,
-            'post_title' => $post->post_title,
-            'revisions' => array_values(array_map(function ($rev) {
-                $author = get_userdata($rev->post_author);
-
-                return [
-                    'id' => $rev->ID,
-                    'date' => $rev->post_modified_gmt,
-                    'author' => $author ? $author->display_name : sprintf('User #%d', $rev->post_author),
-                    'title' => $rev->post_title,
-                    'excerpt' => wp_trim_words(wp_strip_all_tags($rev->post_content), 30),
-                ];
-            }, $revisions)),
-        ];
+        return self::isRestError($response)
+            ? self::restErrorToWpError($response)
+            : (array) $response->get_data();
     }
 
-    private static function viewRevision(array $input): array|WP_Error
+    public function restoreRevision(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $revisionId = (int) ($input['revision_id'] ?? 0);
-        if (! $revisionId) {
-            return new WP_Error('missing_revision_id', 'revision_id is required for view.');
-        }
 
         $revision = wp_get_post_revision($revisionId);
         if (! $revision) {
             return new WP_Error('revision_not_found', 'Revision not found.');
         }
 
-        $author = get_userdata($revision->post_author);
-
-        return [
-            'revision' => [
-                'id' => $revision->ID,
-                'parent_id' => $revision->post_parent,
-                'date' => $revision->post_modified_gmt,
-                'author' => $author ? $author->display_name : sprintf('User #%d', $revision->post_author),
-                'title' => $revision->post_title,
-                'content' => $revision->post_content,
-                'excerpt' => $revision->post_excerpt,
-            ],
-        ];
-    }
-
-    private static function restoreRevision(array $input): array|WP_Error
-    {
-        $revisionId = (int) ($input['revision_id'] ?? 0);
-        if (! $revisionId) {
-            return new WP_Error('missing_revision_id', 'revision_id is required for restore.');
-        }
-
-        $revision = wp_get_post_revision($revisionId);
-        if (! $revision) {
-            return new WP_Error('revision_not_found', 'Revision not found.');
-        }
-
-        // wp_restore_post_revision requires the revision functions.
         if (! function_exists('wp_restore_post_revision')) {
             require_once ABSPATH.'wp-admin/includes/post.php';
         }
@@ -175,12 +142,26 @@ final class ManageRevisionsAbility
         $post = get_post($revision->post_parent);
 
         return [
-            'restored' => [
-                'post_id' => $post->ID,
-                'title' => $post->post_title,
-                'revision_id' => $revisionId,
-                'revision_date' => $revision->post_modified_gmt,
-            ],
+            'post_id' => $post->ID,
+            'title' => $post->post_title,
+            'revision_id' => $revisionId,
+            'revision_date' => $revision->post_modified_gmt,
+            'restored' => true,
         ];
+    }
+
+    private function getRevisionRoute(int $postId): string|WP_Error
+    {
+        $post = get_post($postId);
+        if (! $post) {
+            return new WP_Error('post_not_found', 'Post not found.');
+        }
+
+        $route = self::getRestRoute($post->post_type);
+        if (! $route) {
+            return new WP_Error('invalid_post_type', "Post type '{$post->post_type}' is not available via REST API.");
+        }
+
+        return "{$route}/{$postId}/revisions";
     }
 }
