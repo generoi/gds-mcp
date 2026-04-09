@@ -44,6 +44,25 @@ tests_add_filter('muplugins_loaded', function () {
     }
 
     require dirname(__DIR__).'/gds-mcp.php';
+
+    // Load MCP adapter if available (needed for integration tests).
+    $mcpAdapterPaths = [
+        dirname(__DIR__).'/vendor/wordpress/mcp-adapter/mcp-adapter.php',
+        dirname(__DIR__, 5).'/vendor/wordpress/mcp-adapter/mcp-adapter.php',
+    ];
+    foreach ($mcpAdapterPaths as $path) {
+        if (file_exists($path)) {
+            require_once $path;
+
+            break;
+        }
+    }
+
+    // Load the MCP adapter bootstrap mu-plugin.
+    $muPluginPath = $pluginsDir.'/../mu-plugins/gds-mcp-adapter.php';
+    if (file_exists($muPluginPath)) {
+        require_once $muPluginPath;
+    }
 });
 
 // Start up the WP testing environment.

@@ -2,82 +2,38 @@
 
 namespace GeneroWP\MCP\Abilities;
 
-use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Concerns\RestDelegation;
 use WP_Error;
-use WP_Query;
 
 final class ListPostsAbility
 {
-    use PolylangAware;
+    use RestDelegation;
+
+    private static ?self $instance = null;
+
+    public static function instance(): self
+    {
+        return self::$instance ??= new self;
+    }
 
     public static function register(): void
     {
+        $ability = self::instance();
+
         HelpAbility::registerAbility('gds/posts-list', [
             'label' => 'List Posts',
-            'description' => 'Search and filter content by type, language, status, or keyword. Use gds/post-types-list to discover available types. Use gds/posts-read for full content of a specific post.',
+            'description' => 'Search and filter content. Delegates to the WordPress REST API — accepts all standard REST parameters. Use gds/post-types-list to discover available types.',
             'category' => 'gds-content',
-            'input_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'search' => [
-                        'type' => 'string',
-                        'description' => 'Search term to match against title and content.',
-                    ],
-                    'post_type' => [
-                        'type' => 'string',
-                        'description' => 'Post type slug to filter by.',
-                        'default' => 'page',
-                    ],
-                    'language' => [
-                        'type' => 'string',
-                        'description' => 'Polylang language slug to filter by (e.g. fi, en, sv).',
-                    ],
-                    'status' => [
-                        'type' => 'string',
-                        'description' => 'Post status to filter by.',
-                        'default' => 'publish',
-                    ],
-                    'per_page' => [
-                        'type' => 'integer',
-                        'description' => 'Number of results per page.',
-                        'default' => 20,
-                        'minimum' => 1,
-                        'maximum' => 100,
-                    ],
-                    'page' => [
-                        'type' => 'integer',
-                        'description' => 'Page number for pagination.',
-                        'default' => 1,
-                        'minimum' => 1,
-                    ],
+            'input_schema' => self::getRestInputSchema('/wp/v2/pages', [
+                'post_type' => [
+                    'type' => 'string',
+                    'description' => 'Post type slug to filter by.',
+                    'default' => 'page',
                 ],
-                'additionalProperties' => false,
-            ],
-            'output_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'posts' => [
-                        'type' => 'array',
-                        'items' => [
-                            'type' => 'object',
-                            'properties' => [
-                                'id' => ['type' => 'integer'],
-                                'post_type' => ['type' => 'string'],
-                                'title' => ['type' => 'string'],
-                                'status' => ['type' => 'string'],
-                                'language' => ['type' => ['string', 'null']],
-                                'translations' => ['type' => ['object', 'null']],
-                                'parent_id' => ['type' => 'integer'],
-                                'url' => ['type' => 'string'],
-                            ],
-                        ],
-                    ],
-                    'total' => ['type' => 'integer'],
-                    'pages' => ['type' => 'integer'],
-                ],
-            ],
-            'permission_callback' => [self::class, 'checkPermission'],
-            'execute_callback' => [self::class, 'execute'],
+            ]),
+            'output_schema' => self::getRestListOutputSchema('/wp/v2/pages'),
+            'permission_callback' => '__return_true',
+            'execute_callback' => [$ability, 'execute'],
             'meta' => [
                 'annotations' => [
                     'readonly' => true,
@@ -88,69 +44,31 @@ final class ListPostsAbility
         ]);
     }
 
-    public static function checkPermission(mixed $input = []): bool|WP_Error
+    public function execute(mixed $input = []): array|WP_Error
     {
         $input = is_array($input) ? $input : [];
-        if (! is_user_logged_in()) {
-            return new WP_Error('authentication_required', 'User must be authenticated.');
+        $postType = $input['post_type'] ?? 'page';
+        $route = self::getRestRoute($postType);
+
+        if (! $route) {
+            return new WP_Error('invalid_post_type', "Post type '{$postType}' is not available via REST API.");
         }
 
-        if (! current_user_can('read')) {
-            return new WP_Error('insufficient_capability', 'You do not have permission to list posts.');
+        $params = $input;
+        unset($params['post_type']);
+
+        $response = self::restGet($route, $params);
+
+        if (self::isRestError($response)) {
+            return self::restErrorToWpError($response);
         }
 
-        return true;
-    }
-
-    public static function execute(mixed $input = []): array
-    {
-        $input = is_array($input) ? $input : [];
-        $perPage = min($input['per_page'] ?? 20, 100);
-
-        $queryArgs = [
-            'post_type' => $input['post_type'] ?? 'page',
-            'post_status' => $input['status'] ?? 'publish',
-            'posts_per_page' => $perPage,
-            'paged' => $input['page'] ?? 1,
-            'orderby' => 'title',
-            'order' => 'ASC',
-        ];
-
-        if (! empty($input['search'])) {
-            $queryArgs['s'] = $input['search'];
-        }
-
-        if (self::polylangAvailable()) {
-            // Explicit language filter, or '' to disable Polylang's auto-filtering.
-            $queryArgs['lang'] = $input['language'] ?? '';
-        }
-
-        $query = new WP_Query($queryArgs);
-
-        $posts = array_map(function ($post) {
-            $translations = self::getTranslationSummary($post->ID);
-
-            $author = get_userdata($post->post_author);
-
-            return [
-                'id' => $post->ID,
-                'post_type' => $post->post_type,
-                'title' => $post->post_title,
-                'status' => $post->post_status,
-                'author' => $author ? $author->display_name : '',
-                'date' => $post->post_date_gmt,
-                'modified' => $post->post_modified_gmt,
-                'language' => self::getPostLanguage($post->ID),
-                'translations' => $translations,
-                'parent_id' => $post->post_parent,
-                'url' => get_permalink($post),
-            ];
-        }, $query->posts);
+        $headers = $response->get_headers();
 
         return [
-            'posts' => $posts,
-            'total' => $query->found_posts,
-            'pages' => $query->max_num_pages,
+            'posts' => array_map(fn ($item) => (array) $item, $response->get_data()),
+            'total' => (int) ($headers['X-WP-Total'] ?? 0),
+            'pages' => (int) ($headers['X-WP-TotalPages'] ?? 0),
         ];
     }
 }

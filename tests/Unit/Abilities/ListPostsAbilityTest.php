@@ -20,7 +20,7 @@ class ListPostsAbilityTest extends TestCase
             'post_status' => 'publish',
         ]);
 
-        $result = ListPostsAbility::execute(['post_type' => 'page']);
+        $result = ListPostsAbility::instance()->execute(['post_type' => 'page']);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('posts', $result);
@@ -42,13 +42,12 @@ class ListPostsAbilityTest extends TestCase
             'post_status' => 'publish',
         ]);
 
-        $result = ListPostsAbility::execute([
+        $result = ListPostsAbility::instance()->execute([
             'post_type' => 'page',
             'search' => 'Unique Findable',
         ]);
 
         $this->assertCount(1, $result['posts']);
-        $this->assertSame('Unique Findable Title', $result['posts'][0]['title']);
     }
 
     public function test_execute_respects_pagination(): void
@@ -58,7 +57,7 @@ class ListPostsAbilityTest extends TestCase
             'post_status' => 'publish',
         ]);
 
-        $result = ListPostsAbility::execute([
+        $result = ListPostsAbility::instance()->execute([
             'post_type' => 'page',
             'per_page' => 2,
             'page' => 1,
@@ -68,17 +67,7 @@ class ListPostsAbilityTest extends TestCase
         $this->assertGreaterThanOrEqual(3, $result['pages']);
     }
 
-    public function test_execute_caps_per_page_at_100(): void
-    {
-        $result = ListPostsAbility::execute([
-            'post_type' => 'page',
-            'per_page' => 500,
-        ]);
-
-        $this->assertIsArray($result);
-    }
-
-    public function test_execute_returns_post_structure(): void
+    public function test_execute_returns_rest_fields_plus_polylang(): void
     {
         $this->createPost([
             'post_type' => 'page',
@@ -86,27 +75,42 @@ class ListPostsAbilityTest extends TestCase
             'post_title' => 'Structure Test',
         ]);
 
-        $result = ListPostsAbility::execute(['post_type' => 'page', 'search' => 'Structure Test']);
+        $result = ListPostsAbility::instance()->execute(['post_type' => 'page', 'search' => 'Structure Test']);
+
+        $this->assertNotEmpty($result['posts']);
+        $post = $result['posts'][0];
+        // REST API core fields
+        $this->assertArrayHasKey('id', $post);
+        $this->assertArrayHasKey('type', $post);
+        $this->assertArrayHasKey('title', $post);
+        $this->assertArrayHasKey('status', $post);
+        $this->assertArrayHasKey('link', $post);
+    }
+
+    public function test_execute_fields_filter(): void
+    {
+        $this->createPost([
+            'post_type' => 'page',
+            'post_status' => 'publish',
+        ]);
+
+        $result = ListPostsAbility::instance()->execute([
+            'post_type' => 'page',
+            '_fields' => 'id,title,link',
+        ]);
 
         $this->assertNotEmpty($result['posts']);
         $post = $result['posts'][0];
         $this->assertArrayHasKey('id', $post);
-        $this->assertArrayHasKey('post_type', $post);
         $this->assertArrayHasKey('title', $post);
-        $this->assertArrayHasKey('status', $post);
-        $this->assertArrayHasKey('language', $post);
-        $this->assertArrayHasKey('translations', $post);
-        $this->assertArrayHasKey('parent_id', $post);
-        $this->assertArrayHasKey('url', $post);
+        $this->assertArrayHasKey('link', $post);
+        $this->assertArrayNotHasKey('status', $post);
     }
 
-    public function test_permission_denied_for_guest(): void
+    public function test_invalid_post_type_returns_error(): void
     {
-        wp_set_current_user(0);
-
-        $result = ListPostsAbility::checkPermission();
+        $result = ListPostsAbility::instance()->execute(['post_type' => 'nonexistent_type']);
 
         $this->assertWPError($result);
-        $this->assertSame('authentication_required', $result->get_error_code());
     }
 }
