@@ -42,21 +42,16 @@ class Plugin
             return;
         }
 
-        // Core -- always available
+        // Core -- REST-delegated CRUD for all post types and taxonomies
         Abilities\HelpAbility::register();
         Abilities\ListPostTypesAbility::register();
         Abilities\PostTypeAbility::registerAll();
-        Abilities\ListMenusAbility::register();
-        Abilities\GetMenuAbility::register();
-        Abilities\AddMenuItemAbility::register();
-        Abilities\ManageTermsAbility::register();
+        Abilities\TaxonomyAbility::registerAll();
+
+        // Custom abilities without REST equivalents
         Abilities\DuplicatePostAbility::register();
         Abilities\BulkUpdatePostsAbility::register();
         Abilities\ManageRevisionsAbility::register();
-        Abilities\DeleteTermAbility::register();
-        Abilities\RemoveMenuItemAbility::register();
-        Abilities\UpdateMenuItemAbility::register();
-        Abilities\ManageMenuAbility::register();
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
         Abilities\PatchBlockAbility::register();
@@ -90,12 +85,6 @@ class Plugin
             Integrations\GravityForms\GetFormAbility::register();
             Integrations\GravityForms\GetFormEntriesAbility::register();
             Integrations\GravityForms\CreateGravityFormAbility::register();
-        }
-
-        // Yoast SEO -- only if active
-        if (defined('WPSEO_VERSION')) {
-            Integrations\YoastSeo\GetSeoMetaAbility::register();
-            Integrations\YoastSeo\UpdateSeoMetaAbility::register();
         }
 
         // Cache clearing -- via sage-cachetags (abstracts Kinsta, Fastly, etc.)

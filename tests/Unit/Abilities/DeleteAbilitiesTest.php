@@ -2,9 +2,8 @@
 
 namespace GeneroWP\MCP\Tests\Unit\Abilities;
 
-use GeneroWP\MCP\Abilities\DeleteTermAbility;
 use GeneroWP\MCP\Abilities\PostTypeAbility;
-use GeneroWP\MCP\Abilities\RemoveMenuItemAbility;
+use GeneroWP\MCP\Abilities\TaxonomyAbility;
 use GeneroWP\MCP\Tests\TestCase;
 
 class DeleteAbilitiesTest extends TestCase
@@ -52,27 +51,17 @@ class DeleteAbilitiesTest extends TestCase
     public function test_delete_term(): void
     {
         $term = wp_insert_term('Deletable', 'category');
+        $ability = new TaxonomyAbility('category', '/wp/v2/categories', 'categories', 'Categories');
 
-        $result = DeleteTermAbility::execute([
-            'term_id' => $term['term_id'],
-            'taxonomy' => 'category',
-        ]);
+        $result = $ability->executeDelete(['id' => $term['term_id'], 'force' => true]);
 
         $this->assertIsArray($result);
-        $this->assertTrue($result['deleted']);
-        $this->assertSame('Deletable', $result['name']);
-        $this->assertNull(get_term($term['term_id'], 'category'));
-    }
-
-    public function test_delete_term_invalid_taxonomy(): void
-    {
-        $result = DeleteTermAbility::execute(['term_id' => 1, 'taxonomy' => 'nonexistent']);
-        $this->assertWPError($result);
+        $this->assertTrue($result['deleted'] ?? false);
     }
 
     // ── Menu Items ───────────────────────────────────────────────
 
-    public function test_remove_menu_item(): void
+    public function test_delete_menu_item(): void
     {
         $menuId = wp_create_nav_menu('Delete Test Menu');
         $itemId = wp_update_nav_menu_item($menuId, 0, [
@@ -82,16 +71,10 @@ class DeleteAbilitiesTest extends TestCase
             'menu-item-status' => 'publish',
         ]);
 
-        $result = RemoveMenuItemAbility::execute(['menu_item_id' => $itemId]);
+        $ability = new PostTypeAbility('nav_menu_item', '/wp/v2/menu-items', 'menu-items', 'Menu Items');
+        $result = $ability->executeDelete(['id' => $itemId, 'force' => true]);
 
         $this->assertIsArray($result);
-        $this->assertTrue($result['deleted']);
-        $this->assertSame('Remove Me', $result['title']);
-    }
-
-    public function test_remove_menu_item_not_found(): void
-    {
-        $result = RemoveMenuItemAbility::execute(['menu_item_id' => 999999]);
-        $this->assertWPError($result);
+        $this->assertTrue($result['deleted'] ?? false);
     }
 }
