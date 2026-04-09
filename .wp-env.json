@@ -4,7 +4,11 @@
   "plugins": [
     ".",
     "../polylang-pro",
-    "../gravityforms"
+    "../gravityforms",
+    "https://downloads.wordpress.org/plugin/wordpress-seo.latest-stable.zip",
+    "https://downloads.wordpress.org/plugin/safe-redirect-manager.latest-stable.zip",
+    "https://downloads.wordpress.org/plugin/redirection.latest-stable.zip",
+    "https://downloads.wordpress.org/plugin/stream.latest-stable.zip"
   ],
   "config": {
     "WP_TESTS_DOMAIN": "localhost",

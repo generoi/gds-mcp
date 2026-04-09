@@ -26,10 +26,10 @@ class CreateTranslationIntegrationTest extends TestCase
     public function test_creates_translation_and_links_via_polylang(): void
     {
         $sourceId = $this->createPost([
-            'post_title' => 'Original Post',
+            'title' => 'Original Post',
             'post_content' => '<!-- wp:paragraph --><p>Hello</p><!-- /wp:paragraph -->',
             'post_type' => 'post',
-            'post_status' => 'publish',
+            'status' => 'publish',
         ]);
 
         $defaultLang = pll_default_language();
@@ -42,18 +42,16 @@ class CreateTranslationIntegrationTest extends TestCase
         }
 
         $result = (new CreateTranslationAbility)->execute([
-            'source_post_id' => $sourceId,
+            'source_id' => $sourceId,
             'lang' => $targetLang,
-            'post_title' => 'Translated Post',
-            'post_status' => 'draft',
+            'title' => 'Translated Post',
+            'status' => 'draft',
         ]);
 
         $this->assertIsArray($result);
         $this->assertGreaterThan(0, $result['id']);
-        $this->assertSame('Translated Post', $result['title']);
+        $this->assertSame('Translated Post', $result['title']['rendered'] ?? $result['title']);
         $this->assertSame('draft', $result['status']);
-        $this->assertSame($targetLang, $result['lang']);
-        $this->assertSame($sourceId, $result['source_post_id']);
 
         // Verify Polylang translation link.
         clean_post_cache($sourceId);
@@ -69,7 +67,7 @@ class CreateTranslationIntegrationTest extends TestCase
 
     public function test_rejects_duplicate_translation(): void
     {
-        $sourceId = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
+        $sourceId = $this->createPost(['post_type' => 'post', 'status' => 'publish']);
 
         $defaultLang = pll_default_language();
         $targetLang = $defaultLang === 'en' ? 'fi' : 'en';
@@ -81,18 +79,18 @@ class CreateTranslationIntegrationTest extends TestCase
 
         // Create first translation.
         $first = (new CreateTranslationAbility)->execute([
-            'source_post_id' => $sourceId,
+            'source_id' => $sourceId,
             'lang' => $targetLang,
-            'post_title' => 'First',
+            'title' => 'First',
         ]);
         $this->assertIsArray($first, 'First translation should succeed');
         clean_post_cache($sourceId);
 
         // Try to create duplicate.
         $result = (new CreateTranslationAbility)->execute([
-            'source_post_id' => $sourceId,
+            'source_id' => $sourceId,
             'lang' => $targetLang,
-            'post_title' => 'Duplicate',
+            'title' => 'Duplicate',
         ]);
 
         $this->assertWPError($result);
@@ -103,7 +101,7 @@ class CreateTranslationIntegrationTest extends TestCase
     {
         $sourceId = $this->createPost([
             'post_type' => 'post',
-            'post_status' => 'publish',
+            'status' => 'publish',
         ]);
         update_post_meta($sourceId, 'custom_field', 'test_value');
         wp_set_object_terms($sourceId, ['test-cat'], 'category');
@@ -117,7 +115,7 @@ class CreateTranslationIntegrationTest extends TestCase
         }
 
         $result = (new CreateTranslationAbility)->execute([
-            'source_post_id' => $sourceId,
+            'source_id' => $sourceId,
             'lang' => $targetLang,
         ]);
 

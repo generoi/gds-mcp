@@ -22,8 +22,8 @@ class MachineTranslateAbilityTest extends WP_UnitTestCase
 
         $postId = self::factory()->post->create();
         $result = (new MachineTranslateAbility)->execute([
-            'post_id' => $postId,
-            'language' => 'en',
+            'id' => $postId,
+            'lang' => 'en',
         ]);
 
         $this->assertWPError($result);
@@ -41,8 +41,8 @@ class MachineTranslateAbilityTest extends WP_UnitTestCase
 
         $postId = self::factory()->post->create();
         $result = (new MachineTranslateAbility)->execute([
-            'post_id' => $postId,
-            'language' => 'en',
+            'id' => $postId,
+            'lang' => 'en',
         ]);
 
         $this->assertWPError($result);

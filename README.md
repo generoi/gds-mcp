@@ -18,83 +18,98 @@ composer require generoi/gds-mcp
 wp plugin activate gds-mcp
 ```
 
+## Architecture
+
+CRUD abilities delegate to the WordPress REST API via `rest_do_request()` — a pure PHP call that works in HTTP, STDIO, and CLI contexts. Input/output schemas are pulled dynamically from REST route registrations. Permissions are handled by the REST API itself.
+
+Custom abilities (duplication, block patching, translations, etc.) handle operations without REST equivalents, returning REST responses where possible for consistency.
+
 ## Abilities
 
-### Core (always available)
+### REST-Delegated CRUD (auto-registered for all post types and taxonomies)
+
+Post types: `gds/{rest_base}-list`, `gds/{rest_base}-read`, `gds/{rest_base}-create`, `gds/{rest_base}-update`, `gds/{rest_base}-delete`
+
+| Post Type | Abilities |
+|-----------|-----------|
+| Pages | `gds/pages-list`, `gds/pages-read`, `gds/pages-create`, `gds/pages-update`, `gds/pages-delete` |
+| Posts | `gds/posts-list`, `gds/posts-read`, `gds/posts-create`, `gds/posts-update`, `gds/posts-delete` |
+| Media | `gds/media-list`, `gds/media-read`, `gds/media-create`, `gds/media-update`, `gds/media-delete` |
+| Patterns | `gds/blocks-list`, `gds/blocks-read`, `gds/blocks-create`, `gds/blocks-update`, `gds/blocks-delete` |
+| Templates | `gds/templates-list`, etc. |
+| Template Parts | `gds/template-parts-list`, etc. |
+| Menu Items | `gds/menu-items-list`, etc. |
+| Navigation | `gds/navigation-list`, etc. |
+| Custom types | Auto-registered for any `show_in_rest` post type |
+
+Taxonomies: `gds/{rest_base}-list`, `gds/{rest_base}-read`, `gds/{rest_base}-create`, `gds/{rest_base}-update`, `gds/{rest_base}-delete`
+
+| Taxonomy | Abilities |
+|----------|-----------|
+| Categories | `gds/categories-list`, `gds/categories-read`, etc. |
+| Tags | `gds/tags-list`, `gds/tags-read`, etc. |
+| Menus | `gds/menus-list`, `gds/menus-read`, etc. |
+| Custom taxonomies | Auto-registered for any `show_in_rest` taxonomy |
+
+All REST parameters pass through — use `_fields`, `search`, `per_page`, `page`, `slug`, `include`, `orderby`, `lang`, etc.
+
+### Custom Abilities (always available)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/post-types-list` | Discover all registered post types with labels and counts |
-| `gds/posts-create` | Create a new post, page, or custom post type |
-| `gds/posts-read` | Read a post with content, meta, taxonomy terms, language, and translations |
-| `gds/posts-list` | Search and filter posts by type, language, status |
-| `gds/posts-update` | Update title, content, excerpt, status, or slug |
-| `gds/media-search` | Search the media library by filename, title, or MIME type |
-| `gds/media-upload` | Download a file from URL and add to the media library |
-| `gds/menus-manage` | Create, update, or delete navigation menus (name, locations) |
-| `gds/menus-list` | List navigation menus with language and location assignments |
-| `gds/menus-get` | Get all items in a navigation menu |
-| `gds/menus-add-item` | Add an item to a navigation menu |
-| `gds/menus-update-item` | Update a menu item's title, URL, parent, or position |
-| `gds/terms-manage` | List, create, or update taxonomy terms |
-| `gds/posts-duplicate` | Clone a post with content, meta, terms, and featured image as a draft |
-| `gds/posts-bulk-update` | Update status or meta across multiple posts by query or IDs (supports dry run) |
-| `gds/posts-revisions` | List, view, or restore post revisions |
-| `gds/posts-delete` | Move a post to trash or permanently delete (force=true) |
-| `gds/terms-delete` | Permanently delete a taxonomy term |
-| `gds/media-delete` | Permanently delete a media attachment and files |
-| `gds/menus-remove-item` | Remove an item from a navigation menu |
-| `gds/blocks-get` | Get full details for a block: attributes, supports, styles, example markup from the demo page or published posts |
+| `gds/help` | Grouped summary of all available tools and resources |
+| `gds/posts-duplicate` | Clone a post with content, meta, terms, and featured image |
+| `gds/posts-bulk-update` | Update status or meta across multiple posts (supports dry run) |
+| `gds/revisions-list` | List revisions for a post (REST-delegated) |
+| `gds/revisions-read` | Read a single revision (REST-delegated) |
+| `gds/revisions-restore` | Restore a post to a previous revision |
+| `gds/blocks-get` | Block details with attributes, supports, and real-world usage examples from published posts |
+| `gds/blocks-patch` | Update specific blocks within a post without replacing full content |
 
 ### Resources (always available)
 
-| Resource | URI | Description |
-|----------|-----|-------------|
-| `gds/blocks-catalog` | `blocks://catalog` | Lightweight index of all registered blocks with styles, allowed inner blocks, parent constraints |
-| `gds/site-map` | `site://pages` | Site structure from the primary navigation menu tree + disconnected pages |
-| `gds/design-theme-json` | `theme://json` | Design tokens from theme.json (colors, spacing, font sizes, layout) + resolved CSS custom properties |
-| `gds/design-css-vars` | `design://css-vars` | All resolved CSS custom properties from the theme stylesheet |
+| Ability | URI | Description |
+|---------|-----|-------------|
+| `gds/block-types-list` | `blocks://catalog` | All registered block types (REST-delegated to /wp/v2/block-types) |
+| `gds/site-map` | `site://pages` | Site structure from navigation menu + disconnected pages |
+| `gds/design-theme-json` | `theme://json` | Design tokens from theme.json + resolved CSS custom properties |
 
 ### ACF (when active)
 
-| Resource | URI | Description |
-|----------|-----|-------------|
+| Ability | URI | Description |
+|---------|-----|-------------|
 | `gds/acf-fields` | `acf://fields` | ACF field groups with fields, types, and post type assignments |
 
-Posts read via `gds/posts-read` automatically include structured ACF field data (label, type, value) when ACF is active.
+ACF fields are also included in REST responses for post types via the `acf` field.
 
 ### Polylang (when active)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/translations-create` | Create a translated post linked via Polylang (copies content, meta, terms) |
-| `gds/translations-create-term` | Create a translated taxonomy term linked via Polylang |
-| `gds/translations-audit` | Audit all content for missing translations across post types |
-| `gds/strings-list` | List registered Polylang string translations with status per language |
-| `gds/strings-update` | Update a string translation for a specific language |
-| `gds/translations-machine` | Machine-translate a post or string group via DeepL (Polylang Pro) |
+| `gds/languages-list` | List languages (REST-delegated to /pll/v1/languages) |
+| `gds/translations-create` | Create a translated post linked via Polylang |
+| `gds/translations-create-term` | Create a translated taxonomy term |
+| `gds/translations-audit` | Audit content for missing translations |
+| `gds/strings-list` | List Polylang string translations |
+| `gds/strings-update` | Update a string translation |
+| `gds/translations-machine` | Machine-translate via DeepL (Polylang Pro) |
 
-### Gravity Forms (when active)
+Polylang also adds `lang` and `translations` fields to all REST responses automatically.
 
-| Ability | Description |
-|---------|-------------|
-| `gds/forms-list` | List all forms with entry counts |
-| `gds/forms-get` | Get a form with all fields, confirmations, and notifications |
-| `gds/forms-entries` | Query form submissions with filtering and pagination |
-| `gds/forms-create` | Create a form from a structured field definition |
-
-### Yoast SEO (when active)
+### Gravity Forms (when active, REST API must be enabled)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/seo-get` | Read SEO title, meta description, focus keyphrase |
-| `gds/seo-update` | Update SEO metadata for a post |
+| `gds/forms-list` | List forms (REST-delegated to /gf/v2/forms) |
+| `gds/forms-read` | Read a form with fields |
+| `gds/forms-create` | Create a form |
+| `gds/forms-entries` | List form submissions |
 
 ### Cache (sage-cachetags)
 
 | Ability | Description |
 |---------|-------------|
-| `gds/cache-clear` | Flush site cache or purge specific content by cache tag |
+| `gds/cache-clear` | Flush site cache or purge by tag |
 
 ### Redirects (Safe Redirect Manager / Redirection / Yoast)
 
@@ -106,13 +121,11 @@ Posts read via `gds/posts-read` automatically include structured ACF field data 
 
 | Ability | Description |
 |---------|-------------|
-| `gds/activity-query` | Query the activity log for recent changes |
+| `gds/activity-query` | Query the activity log |
 
 ## Connecting
 
 ### STDIO (developers with shell access)
-
-Configure in Claude Code or Claude Desktop MCP settings:
 
 ```json
 {
@@ -127,8 +140,6 @@ Configure in Claude Code or Claude Desktop MCP settings:
 
 ### HTTP (production, remote access)
 
-For production or remote sites, use the HTTP transport with a WordPress application password.
-
 **1. Create an application password:**
 
 ```bash
@@ -142,7 +153,7 @@ wp user application-password create USERNAME yourname-claude-mcp --porcelain
 
 ```bash
 AUTH=$(echo -n 'USERNAME:YOUR_APP_PASSWORD' | base64)
-claude mcp add-json -s local my-site-production \
+claude mcp add-json -s local my-site \
   "{\"type\":\"http\",\"url\":\"https://example.com/wp-json/mcp/mcp-adapter-default-server\",\"headers\":{\"Authorization\":\"Basic $AUTH\"}}"
 ```
 
@@ -166,7 +177,7 @@ claude mcp add-json -s local my-site-production \
 
 ## Host project setup
 
-The host project needs the MCP adapter bootstrap mu-plugin to expose abilities. Example `gds-mcp-adapter.php`:
+The host project needs an MCP adapter bootstrap mu-plugin:
 
 ```php
 <?php
@@ -178,37 +189,11 @@ if (! defined('ABSPATH') || ! class_exists(McpAdapter::class)) {
 
 McpAdapter::instance();
 
-// Expose all gds/ and core/ abilities as public MCP tools.
+// Expose all gds/ abilities as public MCP tools.
 add_filter('wp_register_ability_args', function (array $args, string $name): array {
-    if (str_starts_with($name, 'gds/') || str_starts_with($name, 'core/')) {
+    if (str_starts_with($name, 'gds/')) {
         $args['meta']['mcp']['public'] = true;
     }
-    return $args;
-}, 10, 2);
-```
-
-### Disabling destructive operations
-
-To expose everything except delete operations, use a deny-list:
-
-```php
-add_filter('wp_register_ability_args', function (array $args, string $name): array {
-    if (!str_starts_with($name, 'gds/') && !str_starts_with($name, 'core/')) {
-        return $args;
-    }
-
-    // Deny destructive operations.
-    $denied = [
-        'gds/posts-delete',
-        'gds/terms-delete',
-        'gds/media-delete',
-        'gds/menus-remove-item',
-    ];
-
-    if (!in_array($name, $denied, true)) {
-        $args['meta']['mcp']['public'] = true;
-    }
-
     return $args;
 }, 10, 2);
 ```
@@ -222,8 +207,6 @@ composer lint:fix    # Fix code style
 ```
 
 ## Testing
-
-Uses [wp-env](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-env/) for integration testing with WordPress + all integration plugins:
 
 ```bash
 npx @wordpress/env start
