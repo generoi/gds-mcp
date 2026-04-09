@@ -42,13 +42,12 @@ class Plugin
             return;
         }
 
-        // Core -- REST-delegated CRUD for all post types and taxonomies
+        // REST-delegated CRUD for all post types and taxonomies
         Abilities\HelpAbility::register();
-        Abilities\ListPostTypesAbility::register();
         Abilities\PostTypeAbility::registerAll();
         Abilities\TaxonomyAbility::registerAll();
 
-        // Custom abilities without REST equivalents
+        // Custom abilities (no REST equivalent)
         Abilities\DuplicatePostAbility::register();
         Abilities\BulkUpdatePostsAbility::register();
         Abilities\ManageRevisionsAbility::register();
@@ -57,7 +56,6 @@ class Plugin
         Abilities\PatchBlockAbility::register();
         Abilities\SiteMapResource::register();
         Abilities\ThemeJsonResource::register();
-        Abilities\CssVarsResource::register();
 
         // ACF -- only if active
         if (function_exists('acf_get_field_groups')) {
