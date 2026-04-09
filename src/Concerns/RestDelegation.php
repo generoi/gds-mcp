@@ -161,9 +161,11 @@ trait RestDelegation
             $properties[$name] = array_diff_key($schema, array_flip($internalKeys));
         }
 
+        $merged = array_merge($properties, $extra);
+
         return [
             'type' => 'object',
-            'properties' => array_merge($properties, $extra),
+            'properties' => $merged ?: new \stdClass,
             'additionalProperties' => true,
         ];
     }
