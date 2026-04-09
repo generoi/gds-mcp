@@ -19,7 +19,7 @@ class ManageRedirectsIntegrationTest extends WP_UnitTestCase
 
     public function test_create_and_list_redirect(): void
     {
-        $createResult = ManageRedirectsAbility::execute([
+        $createResult = (new ManageRedirectsAbility)->execute([
             'action' => 'create',
             'from' => '/test-old-page-'.uniqid(),
             'to' => '/test-new-page',
@@ -33,7 +33,7 @@ class ManageRedirectsIntegrationTest extends WP_UnitTestCase
         $this->assertSame(301, $createResult['redirect']['status_code']);
 
         // Verify it shows up in list.
-        $listResult = ManageRedirectsAbility::execute(['action' => 'list']);
+        $listResult = (new ManageRedirectsAbility)->execute(['action' => 'list']);
 
         $this->assertIsArray($listResult);
         $this->assertNotEmpty($listResult['redirects']);
@@ -44,7 +44,7 @@ class ManageRedirectsIntegrationTest extends WP_UnitTestCase
 
     public function test_create_validates_from_path(): void
     {
-        $result = ManageRedirectsAbility::execute([
+        $result = (new ManageRedirectsAbility)->execute([
             'action' => 'create',
             'from' => 'not-a-path',
             'to' => '/destination',
@@ -56,7 +56,7 @@ class ManageRedirectsIntegrationTest extends WP_UnitTestCase
 
     public function test_create_validates_to_url(): void
     {
-        $result = ManageRedirectsAbility::execute([
+        $result = (new ManageRedirectsAbility)->execute([
             'action' => 'create',
             'from' => '/old-page',
             'to' => 'not a url',

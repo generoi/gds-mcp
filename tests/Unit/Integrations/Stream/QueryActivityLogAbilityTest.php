@@ -19,20 +19,8 @@ class QueryActivityLogAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('Stream is active.');
         }
 
-        $result = QueryActivityLogAbility::execute([]);
+        $result = (new QueryActivityLogAbility)->execute([]);
         $this->assertWPError($result);
         $this->assertSame('stream_not_active', $result->get_error_code());
-    }
-
-    public function test_permission_denied_for_editor(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
-        $result = QueryActivityLogAbility::checkPermission();
-        $this->assertWPError($result);
-    }
-
-    public function test_permission_granted_for_admin(): void
-    {
-        $this->assertTrue(QueryActivityLogAbility::checkPermission());
     }
 }

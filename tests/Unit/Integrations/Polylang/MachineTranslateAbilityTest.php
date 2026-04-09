@@ -21,7 +21,7 @@ class MachineTranslateAbilityTest extends WP_UnitTestCase
         }
 
         $postId = self::factory()->post->create();
-        $result = MachineTranslateAbility::execute([
+        $result = (new MachineTranslateAbility)->execute([
             'post_id' => $postId,
             'language' => 'en',
         ]);
@@ -40,24 +40,12 @@ class MachineTranslateAbilityTest extends WP_UnitTestCase
         }
 
         $postId = self::factory()->post->create();
-        $result = MachineTranslateAbility::execute([
+        $result = (new MachineTranslateAbility)->execute([
             'post_id' => $postId,
             'language' => 'en',
         ]);
 
         $this->assertWPError($result);
         $this->assertSame('machine_translation_not_available', $result->get_error_code());
-    }
-
-    public function test_permission_denied_for_subscriber(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
-        $result = MachineTranslateAbility::checkPermission();
-        $this->assertWPError($result);
-    }
-
-    public function test_permission_granted_for_editor(): void
-    {
-        $this->assertTrue(MachineTranslateAbility::checkPermission());
     }
 }

@@ -41,9 +41,9 @@ class CreateTranslationIntegrationTest extends TestCase
             $this->markTestSkipped("Target language '{$targetLang}' not configured.");
         }
 
-        $result = CreateTranslationAbility::execute([
+        $result = (new CreateTranslationAbility)->execute([
             'source_post_id' => $sourceId,
-            'language' => $targetLang,
+            'lang' => $targetLang,
             'post_title' => 'Translated Post',
             'post_status' => 'draft',
         ]);
@@ -52,7 +52,7 @@ class CreateTranslationIntegrationTest extends TestCase
         $this->assertGreaterThan(0, $result['id']);
         $this->assertSame('Translated Post', $result['title']);
         $this->assertSame('draft', $result['status']);
-        $this->assertSame($targetLang, $result['language']);
+        $this->assertSame($targetLang, $result['lang']);
         $this->assertSame($sourceId, $result['source_post_id']);
 
         // Verify Polylang translation link.
@@ -80,18 +80,18 @@ class CreateTranslationIntegrationTest extends TestCase
         }
 
         // Create first translation.
-        $first = CreateTranslationAbility::execute([
+        $first = (new CreateTranslationAbility)->execute([
             'source_post_id' => $sourceId,
-            'language' => $targetLang,
+            'lang' => $targetLang,
             'post_title' => 'First',
         ]);
         $this->assertIsArray($first, 'First translation should succeed');
         clean_post_cache($sourceId);
 
         // Try to create duplicate.
-        $result = CreateTranslationAbility::execute([
+        $result = (new CreateTranslationAbility)->execute([
             'source_post_id' => $sourceId,
-            'language' => $targetLang,
+            'lang' => $targetLang,
             'post_title' => 'Duplicate',
         ]);
 
@@ -116,9 +116,9 @@ class CreateTranslationIntegrationTest extends TestCase
             $this->markTestSkipped("Target language '{$targetLang}' not configured.");
         }
 
-        $result = CreateTranslationAbility::execute([
+        $result = (new CreateTranslationAbility)->execute([
             'source_post_id' => $sourceId,
-            'language' => $targetLang,
+            'lang' => $targetLang,
         ]);
 
         $this->assertIsArray($result);

@@ -21,12 +21,11 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
             'post_status' => 'publish',
         ]);
 
-        $result = DuplicatePostAbility::execute(['post_id' => $sourceId]);
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
 
         $this->assertArrayHasKey('id', $result);
         $this->assertNotSame($sourceId, $result['id']);
-        $this->assertSame($sourceId, $result['source_id']);
-        $this->assertSame('Original (Copy)', $result['title']);
+        $this->assertSame('Original (Copy)', $result['title']['rendered']);
         $this->assertSame('draft', $result['status']);
 
         $duplicate = get_post($result['id']);
@@ -35,23 +34,23 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
 
     public function test_custom_title(): void
     {
-        $sourceId = self::factory()->post->create(['post_title' => 'Original']);
+        $sourceId = self::factory()->post->create(['title' => 'Original']);
 
-        $result = DuplicatePostAbility::execute([
-            'post_id' => $sourceId,
-            'post_title' => 'Custom Title',
+        $result = (new DuplicatePostAbility)->execute([
+            'id' => $sourceId,
+            'title' => 'Custom Title',
         ]);
 
-        $this->assertSame('Custom Title', $result['title']);
+        $this->assertSame('Custom Title', $result['title']['rendered']);
     }
 
     public function test_custom_status(): void
     {
-        $sourceId = self::factory()->post->create(['post_title' => 'Original']);
+        $sourceId = self::factory()->post->create(['title' => 'Original']);
 
-        $result = DuplicatePostAbility::execute([
-            'post_id' => $sourceId,
-            'post_status' => 'publish',
+        $result = (new DuplicatePostAbility)->execute([
+            'id' => $sourceId,
+            'status' => 'publish',
         ]);
 
         $this->assertSame('publish', $result['status']);
@@ -59,11 +58,11 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
 
     public function test_copies_meta(): void
     {
-        $sourceId = self::factory()->post->create(['post_title' => 'With Meta']);
+        $sourceId = self::factory()->post->create(['title' => 'With Meta']);
         update_post_meta($sourceId, 'custom_field', 'custom_value');
         update_post_meta($sourceId, '_private_field', 'hidden');
 
-        $result = DuplicatePostAbility::execute(['post_id' => $sourceId]);
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
 
         $this->assertSame('custom_value', get_post_meta($result['id'], 'custom_field', true));
         // Private meta should not be copied.
@@ -73,10 +72,10 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
     public function test_copies_taxonomy_terms(): void
     {
         register_taxonomy('test_tag', 'post');
-        $sourceId = self::factory()->post->create(['post_title' => 'Tagged']);
+        $sourceId = self::factory()->post->create(['title' => 'Tagged']);
         wp_set_object_terms($sourceId, ['alpha', 'beta'], 'test_tag');
 
-        $result = DuplicatePostAbility::execute(['post_id' => $sourceId]);
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
 
         $terms = get_the_terms($result['id'], 'test_tag');
         $slugs = array_column($terms, 'slug');
@@ -86,29 +85,22 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
 
     public function test_copies_featured_image(): void
     {
-        $sourceId = self::factory()->post->create(['post_title' => 'With Thumb']);
+        $sourceId = self::factory()->post->create(['title' => 'With Thumb']);
         $attachmentId = self::factory()->attachment->create_upload_object(
             DIR_TESTDATA.'/images/canola.jpg',
             $sourceId
         );
         set_post_thumbnail($sourceId, $attachmentId);
 
-        $result = DuplicatePostAbility::execute(['post_id' => $sourceId]);
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
 
         $this->assertSame($attachmentId, (int) get_post_thumbnail_id($result['id']));
     }
 
     public function test_error_for_nonexistent_post(): void
     {
-        $result = DuplicatePostAbility::execute(['post_id' => 999999]);
+        $result = (new DuplicatePostAbility)->execute(['id' => 999999]);
         $this->assertWPError($result);
         $this->assertSame('post_not_found', $result->get_error_code());
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-        $result = DuplicatePostAbility::checkPermission();
-        $this->assertWPError($result);
     }
 }

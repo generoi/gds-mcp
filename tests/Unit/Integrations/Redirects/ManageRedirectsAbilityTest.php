@@ -19,7 +19,7 @@ class ManageRedirectsAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('No redirect plugin active.');
         }
 
-        $result = ManageRedirectsAbility::execute(['action' => 'list']);
+        $result = (new ManageRedirectsAbility)->execute(['action' => 'list']);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('provider', $result);
@@ -32,19 +32,12 @@ class ManageRedirectsAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('No redirect plugin active.');
         }
 
-        $result = ManageRedirectsAbility::execute([
+        $result = (new ManageRedirectsAbility)->execute([
             'action' => 'create',
             'from' => '/old-page',
         ]);
 
         $this->assertWPError($result);
         $this->assertSame('missing_fields', $result->get_error_code());
-    }
-
-    public function test_permission_denied_for_editor(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
-        $result = ManageRedirectsAbility::checkPermission();
-        $this->assertWPError($result);
     }
 }

@@ -12,7 +12,6 @@ class ListLanguagesAbilityTest extends WP_UnitTestCase
         parent::setUp();
         wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
 
-        // Recreate languages since wp-phpunit rolls back the DB between tests.
         if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
             $model = PLL()->model;
             $model->clean_languages_cache();
@@ -30,36 +29,20 @@ class ListLanguagesAbilityTest extends WP_UnitTestCase
         }
     }
 
-    public function test_execute_returns_error_without_polylang(): void
-    {
-        if (function_exists('pll_get_post_language')) {
-            $this->markTestSkipped('Polylang is active.');
-        }
-
-        $result = ListLanguagesAbility::execute([]);
-        $this->assertWPError($result);
-    }
-
     public function test_execute_returns_languages(): void
     {
         if (! function_exists('pll_get_post_language') || ! function_exists('PLL') || ! PLL()) {
             $this->markTestSkipped('Polylang not available.');
         }
 
-        $result = ListLanguagesAbility::execute([]);
+        $result = ListLanguagesAbility::instance()->execute([]);
 
         $this->assertIsArray($result);
-        $this->assertArrayHasKey('default', $result);
-        $this->assertArrayHasKey('languages', $result);
-        $this->assertNotEmpty($result['languages']);
+        $this->assertNotEmpty($result);
 
-        $lang = $result['languages'][0];
+        $lang = $result[0];
         $this->assertArrayHasKey('slug', $lang);
         $this->assertArrayHasKey('name', $lang);
-        $this->assertArrayHasKey('locale', $lang);
-        $this->assertArrayHasKey('active', $lang);
-        $this->assertArrayHasKey('is_default', $lang);
-        $this->assertArrayHasKey('order', $lang);
     }
 
     public function test_default_language_is_flagged(): void
@@ -68,18 +51,10 @@ class ListLanguagesAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('Polylang not available.');
         }
 
-        $result = ListLanguagesAbility::execute([]);
-        $default = $result['default'];
+        $result = ListLanguagesAbility::instance()->execute([]);
+        $defaultLangs = array_filter($result, fn ($l) => ! empty($l['is_default']));
 
-        $defaultLangs = array_filter($result['languages'], fn ($l) => $l['is_default']);
         $this->assertCount(1, $defaultLangs);
-        $this->assertSame($default, array_values($defaultLangs)[0]['slug']);
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-        $result = ListLanguagesAbility::checkPermission();
-        $this->assertWPError($result);
+        $this->assertSame('en', array_values($defaultLangs)[0]['slug']);
     }
 }

@@ -25,7 +25,7 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
     {
         pll_register_string('test_mcp_string', 'Hello World', 'GDS MCP Tests');
 
-        $result = ListStringTranslationsAbility::execute([]);
+        $result = (new ListStringTranslationsAbility)->execute([]);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('strings', $result);
@@ -37,7 +37,7 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
     {
         pll_register_string('test_group_filter', 'Group Filter Test', 'GDS MCP Tests');
 
-        $result = ListStringTranslationsAbility::execute(['group' => 'GDS MCP Tests']);
+        $result = (new ListStringTranslationsAbility)->execute(['group' => 'GDS MCP Tests']);
 
         $this->assertIsArray($result);
         $names = array_column($result['strings'], 'name');
@@ -56,7 +56,7 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
         pll_register_string('test_update_string', $testString, 'GDS MCP Tests');
 
         // Update translation.
-        $updateResult = UpdateStringTranslationAbility::execute([
+        $updateResult = (new UpdateStringTranslationAbility)->execute([
             'string' => $testString,
             'lang' => $targetLang,
             'translation' => 'Translated: '.$testString,
@@ -67,7 +67,7 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
         $this->assertSame('Translated: '.$testString, $updateResult['translation']);
 
         // Verify it appears in the list.
-        $listResult = ListStringTranslationsAbility::execute(['search' => $testString]);
+        $listResult = (new ListStringTranslationsAbility)->execute(['search' => $testString]);
         $found = false;
         foreach ($listResult['strings'] as $str) {
             if ($str['string'] === $testString && ($str['translations'][$targetLang] ?? null) === 'Translated: '.$testString) {

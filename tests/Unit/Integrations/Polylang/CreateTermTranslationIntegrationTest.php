@@ -35,17 +35,17 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
         $term = wp_insert_term('Original Term', 'category');
         pll_set_term_language($term['term_id'], $defaultLang);
 
-        $result = CreateTermTranslationAbility::execute([
-            'source_term_id' => $term['term_id'],
+        $result = (new CreateTermTranslationAbility)->execute([
+            'source_id' => $term['term_id'],
             'taxonomy' => 'category',
-            'language' => $targetLang,
+            'lang' => $targetLang,
             'name' => 'Translated Term',
             'slug' => 'translated-term',
         ]);
 
         $this->assertIsArray($result);
         $this->assertSame('Translated Term', $result['name']);
-        $this->assertSame($targetLang, $result['language']);
+        $this->assertSame($targetLang, $result['lang']);
 
         // Verify Polylang translation link.
         $translations = pll_get_term_translations($term['term_id']);
@@ -57,10 +57,10 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
     {
         $term = wp_insert_term('Test Term', 'category');
 
-        $result = CreateTermTranslationAbility::execute([
-            'source_term_id' => $term['term_id'],
+        $result = (new CreateTermTranslationAbility)->execute([
+            'source_id' => $term['term_id'],
             'taxonomy' => 'category',
-            'language' => 'xx',
+            'lang' => 'xx',
         ]);
 
         $this->assertWPError($result);

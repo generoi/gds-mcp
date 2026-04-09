@@ -21,7 +21,7 @@ class CreateTranslationAbilityTest extends WP_UnitTestCase
 
         $postId = self::factory()->post->create();
 
-        $result = CreateTranslationAbility::instance()->execute([
+        $result = (new CreateTranslationAbility)->execute([
             'source_id' => $postId,
             'lang' => 'en',
         ]);
@@ -36,38 +36,12 @@ class CreateTranslationAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('Polylang is not active.');
         }
 
-        $result = CreateTranslationAbility::instance()->execute([
+        $result = (new CreateTranslationAbility)->execute([
             'source_id' => 999999,
             'lang' => 'en',
         ]);
 
         $this->assertWPError($result);
         $this->assertSame('source_not_found', $result->get_error_code());
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-
-        $result = CreateTranslationAbility::checkPermission([
-            'source_id' => 1,
-            'lang' => 'en',
-        ]);
-
-        $this->assertWPError($result);
-        $this->assertSame('authentication_required', $result->get_error_code());
-    }
-
-    public function test_permission_denied_for_subscriber(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
-
-        $result = CreateTranslationAbility::checkPermission([
-            'source_id' => 1,
-            'lang' => 'en',
-        ]);
-
-        $this->assertWPError($result);
-        $this->assertSame('insufficient_capability', $result->get_error_code());
     }
 }

@@ -28,7 +28,7 @@ class QueryActivityLogIntegrationTest extends WP_UnitTestCase
 
     public function test_execute_returns_structure(): void
     {
-        $result = QueryActivityLogAbility::execute(['per_page' => 5]);
+        $result = (new QueryActivityLogAbility)->execute(['per_page' => 5]);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('entries', $result);
@@ -38,7 +38,7 @@ class QueryActivityLogIntegrationTest extends WP_UnitTestCase
 
     public function test_execute_filters_by_connector(): void
     {
-        $result = QueryActivityLogAbility::execute([
+        $result = (new QueryActivityLogAbility)->execute([
             'connector' => 'posts',
             'per_page' => 5,
         ]);
@@ -49,7 +49,7 @@ class QueryActivityLogIntegrationTest extends WP_UnitTestCase
 
     public function test_execute_respects_per_page(): void
     {
-        $result = QueryActivityLogAbility::execute(['per_page' => 1]);
+        $result = (new QueryActivityLogAbility)->execute(['per_page' => 1]);
 
         $this->assertIsArray($result);
         $this->assertLessThanOrEqual(1, count($result['entries']));

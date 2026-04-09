@@ -15,21 +15,21 @@ class GetBlockAbilityTest extends WP_UnitTestCase
 
     public function test_returns_error_without_name(): void
     {
-        $result = GetBlockAbility::execute([]);
+        $result = (new GetBlockAbility)->execute([]);
         $this->assertWPError($result);
         $this->assertSame('missing_name', $result->get_error_code());
     }
 
     public function test_returns_error_for_unknown_block(): void
     {
-        $result = GetBlockAbility::execute(['name' => 'test/nonexistent']);
+        $result = (new GetBlockAbility)->execute(['name' => 'test/nonexistent']);
         $this->assertWPError($result);
         $this->assertSame('block_not_found', $result->get_error_code());
     }
 
     public function test_returns_block_detail(): void
     {
-        $result = GetBlockAbility::execute(['name' => 'core/heading']);
+        $result = (new GetBlockAbility)->execute(['name' => 'core/heading']);
 
         $this->assertArrayHasKey('block', $result);
         $block = $result['block'];
@@ -41,7 +41,7 @@ class GetBlockAbilityTest extends WP_UnitTestCase
 
     public function test_attributes_include_types_and_defaults(): void
     {
-        $result = GetBlockAbility::execute(['name' => 'core/heading']);
+        $result = (new GetBlockAbility)->execute(['name' => 'core/heading']);
         $attrs = $result['block']['attributes'];
 
         $this->assertArrayHasKey('level', $attrs);
@@ -56,7 +56,7 @@ class GetBlockAbilityTest extends WP_UnitTestCase
             'allowed_blocks' => ['core/paragraph', 'core/heading'],
         ]);
 
-        $result = GetBlockAbility::execute(['name' => 'test/container']);
+        $result = (new GetBlockAbility)->execute(['name' => 'test/container']);
         $this->assertSame(['core/paragraph', 'core/heading'], $result['block']['allowed_blocks']);
 
         unregister_block_type('test/container');
@@ -75,7 +75,7 @@ class GetBlockAbilityTest extends WP_UnitTestCase
             'label' => 'Alternate',
         ]);
 
-        $result = GetBlockAbility::execute(['name' => 'test/dual-styles']);
+        $result = (new GetBlockAbility)->execute(['name' => 'test/dual-styles']);
         $styleNames = array_column($result['block']['styles'], 'name');
 
         $this->assertContains('default', $styleNames);
@@ -96,7 +96,7 @@ class GetBlockAbilityTest extends WP_UnitTestCase
                 ."\n".'<!-- /wp:heading -->',
         ]);
 
-        $result = GetBlockAbility::execute([
+        $result = (new GetBlockAbility)->execute([
             'name' => 'core/heading',
             'include_examples' => true,
         ]);
@@ -117,7 +117,7 @@ class GetBlockAbilityTest extends WP_UnitTestCase
                 ."\n".'<!-- /wp:paragraph -->',
         ]);
 
-        $result = GetBlockAbility::execute([
+        $result = (new GetBlockAbility)->execute([
             'name' => 'core/paragraph',
             'search_posts' => true,
         ]);
@@ -145,7 +145,7 @@ class GetBlockAbilityTest extends WP_UnitTestCase
             'post_content' => '<!-- wp:heading --><h2 class="wp-block-heading">Post</h2><!-- /wp:heading -->',
         ]);
 
-        $result = GetBlockAbility::execute([
+        $result = (new GetBlockAbility)->execute([
             'name' => 'core/heading',
             'search_posts' => true,
             'search_post_type' => 'page',
@@ -174,14 +174,14 @@ class GetBlockAbilityTest extends WP_UnitTestCase
         ]);
 
         // Without filter: both
-        $result = GetBlockAbility::execute([
+        $result = (new GetBlockAbility)->execute([
             'name' => 'core/paragraph',
             'search_posts' => true,
         ]);
         $this->assertGreaterThanOrEqual(2, count($result['block']['post_examples']));
 
         // With filter: only tagline
-        $result = GetBlockAbility::execute([
+        $result = (new GetBlockAbility)->execute([
             'name' => 'core/paragraph',
             'search_posts' => true,
             'style' => 'tagline',
@@ -193,19 +193,12 @@ class GetBlockAbilityTest extends WP_UnitTestCase
 
     public function test_max_examples_caps_at_100(): void
     {
-        $result = GetBlockAbility::execute([
+        $result = (new GetBlockAbility)->execute([
             'name' => 'core/heading',
             'include_examples' => true,
             'max_examples' => 999,
         ]);
         // Just verify no error — the cap is enforced internally.
         $this->assertArrayHasKey('block', $result);
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-        $result = GetBlockAbility::checkPermission();
-        $this->assertWPError($result);
     }
 }

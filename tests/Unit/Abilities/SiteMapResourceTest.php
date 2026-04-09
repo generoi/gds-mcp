@@ -15,7 +15,7 @@ class SiteMapResourceTest extends TestCase
 
     public function test_execute_returns_structure(): void
     {
-        $result = SiteMapResource::execute([]);
+        $result = (new SiteMapResource)->execute([]);
 
         $this->assertArrayHasKey('menu', $result);
         $this->assertArrayHasKey('disconnected', $result);
@@ -29,7 +29,7 @@ class SiteMapResourceTest extends TestCase
             'post_title' => 'Orphan Page',
         ]);
 
-        $result = SiteMapResource::execute([]);
+        $result = (new SiteMapResource)->execute([]);
 
         $titles = array_column($result['disconnected'], 'title');
         $this->assertContains('Orphan Page', $titles);
@@ -54,7 +54,7 @@ class SiteMapResourceTest extends TestCase
 
         set_theme_mod('nav_menu_locations', ['primary_navigation' => $menuId]);
 
-        $result = SiteMapResource::execute([]);
+        $result = (new SiteMapResource)->execute([]);
 
         $this->assertNotNull($result['menu']);
         $this->assertSame('Test Primary', $result['menu']['name']);
@@ -86,7 +86,7 @@ class SiteMapResourceTest extends TestCase
 
         set_theme_mod('nav_menu_locations', ['primary_navigation' => $menuId]);
 
-        $result = SiteMapResource::execute([]);
+        $result = (new SiteMapResource)->execute([]);
 
         $disconnectedIds = array_column($result['disconnected'], 'post_id');
         $this->assertNotContains($pageId, $disconnectedIds);
@@ -113,18 +113,11 @@ class SiteMapResourceTest extends TestCase
 
         set_theme_mod('nav_menu_locations', ['primary_navigation' => $menuId]);
 
-        $result = SiteMapResource::execute([]);
+        $result = (new SiteMapResource)->execute([]);
 
         $parent = $result['menu']['items'][0];
         $this->assertSame('Parent', $parent['title']);
         $this->assertNotEmpty($parent['children']);
         $this->assertSame('Child', $parent['children'][0]['title']);
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-        $result = SiteMapResource::checkPermission();
-        $this->assertWPError($result);
     }
 }

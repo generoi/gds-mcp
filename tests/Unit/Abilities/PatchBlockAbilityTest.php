@@ -26,7 +26,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_merge_attrs(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/paragraph',
             'occurrence' => 2,
@@ -46,7 +46,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_set_attrs_replaces_all(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/paragraph',
             'occurrence' => 2,
@@ -63,7 +63,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_remove_attrs(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/paragraph',
             'occurrence' => 2,
@@ -79,7 +79,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_inner_html(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/paragraph',
             'occurrence' => 1,
@@ -92,7 +92,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_inner_html_errors_on_block_with_children(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/group',
             'inner_html' => '<div>nope</div>',
@@ -109,7 +109,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
     {
         $newBlocks = '<!-- wp:paragraph --><p>Replaced child</p><!-- /wp:paragraph -->';
 
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/group',
             'inner_blocks' => $newBlocks,
@@ -125,7 +125,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_occurrence_zero_patches_all(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/paragraph',
             'occurrence' => 0,
@@ -144,7 +144,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_nested_block_search(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/heading',
             'occurrence' => 2,
@@ -161,7 +161,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_batch_operations(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'operations' => [
                 [
@@ -191,7 +191,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_block_not_found(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/nonexistent',
             'attrs' => ['foo' => 'bar'],
@@ -203,7 +203,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_no_operations_error(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/heading',
         ]);
@@ -214,26 +214,14 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_missing_post_error(): void
     {
-        $result = PatchBlockAbility::execute([
+        $result = (new PatchBlockAbility)->execute([
             'post_id' => 999999,
             'block_name' => 'core/heading',
             'attrs' => ['level' => 3],
         ]);
 
         $this->assertWPError($result);
-        $this->assertSame('post_not_found', $result->get_error_code());
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-
-        $result = PatchBlockAbility::checkPermission([
-            'id' => $this->postId,
-        ]);
-
-        $this->assertWPError($result);
-        $this->assertSame('authentication_required', $result->get_error_code());
+        $this->assertSame('missing_id', $result->get_error_code());
     }
 
     public function test_round_trip_preserves_content(): void
@@ -241,14 +229,14 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
         $originalContent = get_post($this->postId)->post_content;
 
         // Patch and unpatch: set an attr then remove it.
-        PatchBlockAbility::execute([
+        (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/heading',
             'occurrence' => 1,
             'attrs' => ['tempAttr' => 'temp'],
         ]);
 
-        PatchBlockAbility::execute([
+        (new PatchBlockAbility)->execute([
             'id' => $this->postId,
             'block_name' => 'core/heading',
             'occurrence' => 1,

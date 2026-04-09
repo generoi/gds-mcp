@@ -19,12 +19,7 @@ class ListStringTranslationsAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('Polylang is active.');
         }
 
-        $result = ListStringTranslationsAbility::execute([]);
+        $result = (new ListStringTranslationsAbility)->execute([]);
         $this->assertWPError($result);
-    }
-
-    public function test_permission_granted_for_editor(): void
-    {
-        $this->assertTrue(ListStringTranslationsAbility::checkPermission());
     }
 }

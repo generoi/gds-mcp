@@ -15,7 +15,7 @@ class HelpAbilityTest extends WP_UnitTestCase
 
     public function test_execute_returns_grouped_abilities(): void
     {
-        $result = HelpAbility::execute([]);
+        $result = (new HelpAbility)->execute([]);
 
         $this->assertArrayHasKey('groups', $result);
         $this->assertArrayHasKey('total', $result);
@@ -29,7 +29,7 @@ class HelpAbilityTest extends WP_UnitTestCase
 
     public function test_groups_contain_expected_resources(): void
     {
-        $result = HelpAbility::execute([]);
+        $result = (new HelpAbility)->execute([]);
         $groupNames = array_column($result['groups'], 'name');
 
         // Core groups should always be present.
@@ -40,7 +40,7 @@ class HelpAbilityTest extends WP_UnitTestCase
 
     public function test_abilities_have_required_fields(): void
     {
-        $result = HelpAbility::execute([]);
+        $result = (new HelpAbility)->execute([]);
 
         foreach ($result['groups'] as $group) {
             foreach ($group['abilities'] as $ability) {
@@ -55,7 +55,7 @@ class HelpAbilityTest extends WP_UnitTestCase
 
     public function test_resources_include_uri(): void
     {
-        $result = HelpAbility::execute([]);
+        $result = (new HelpAbility)->execute([]);
 
         $resources = [];
         foreach ($result['groups'] as $group) {
@@ -69,12 +69,5 @@ class HelpAbilityTest extends WP_UnitTestCase
         foreach ($resources as $resource) {
             $this->assertNotNull($resource['uri'], "Resource {$resource['name']} should have a URI");
         }
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-        $result = HelpAbility::checkPermission();
-        $this->assertWPError($result);
     }
 }

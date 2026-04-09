@@ -34,7 +34,7 @@ class TranslationAuditIntegrationTest extends TestCase
             'post_title' => 'Untranslated Post',
         ]);
 
-        $result = TranslationAuditAbility::execute(['post_type' => 'post']);
+        $result = (new TranslationAuditAbility)->execute(['post_type' => 'post']);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('summary', $result);
@@ -52,7 +52,7 @@ class TranslationAuditIntegrationTest extends TestCase
 
     public function test_audit_returns_structure(): void
     {
-        $result = TranslationAuditAbility::execute([]);
+        $result = (new TranslationAuditAbility)->execute([]);
 
         $this->assertArrayHasKey('summary', $result);
         $this->assertArrayHasKey('total_posts', $result['summary']);

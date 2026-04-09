@@ -48,7 +48,7 @@ class AcfIntegrationTest extends WP_UnitTestCase
             'active' => true,
         ]);
 
-        $result = AcfFieldsResource::execute([]);
+        $result = (new AcfFieldsResource)->execute([]);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('field_groups', $result);

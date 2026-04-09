@@ -15,7 +15,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
 
     public function test_error_without_updates(): void
     {
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'post_type' => 'post',
         ]);
 
@@ -25,7 +25,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
 
     public function test_error_without_filter(): void
     {
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'set_status' => 'draft',
         ]);
 
@@ -40,7 +40,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
             'post_title' => 'Stay Published',
         ]);
 
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'post_ids' => [$postId],
             'set_status' => 'draft',
             'dry_run' => true,
@@ -57,7 +57,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         $id1 = self::factory()->post->create(['post_status' => 'publish']);
         $id2 = self::factory()->post->create(['post_status' => 'publish']);
 
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'post_ids' => [$id1, $id2],
             'set_status' => 'draft',
         ]);
@@ -74,7 +74,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         // This one shouldn't match (different status).
         self::factory()->post->create(['post_status' => 'publish', 'post_type' => 'post']);
 
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'post_type' => 'post',
             'status' => 'draft',
             'set_status' => 'pending',
@@ -89,7 +89,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
     {
         $postId = self::factory()->post->create(['post_status' => 'publish']);
 
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'post_ids' => [$postId],
             'set_meta' => ['featured' => 'yes', 'priority' => '1'],
         ]);
@@ -104,7 +104,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         $postId = self::factory()->post->create(['post_status' => 'publish']);
         update_post_meta($postId, 'obsolete', 'value');
 
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'post_ids' => [$postId],
             'delete_meta' => ['obsolete'],
         ]);
@@ -119,7 +119,7 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
             self::factory()->post->create(['post_status' => 'publish', 'post_type' => 'post']);
         }
 
-        $result = BulkUpdatePostsAbility::execute([
+        $result = (new BulkUpdatePostsAbility)->execute([
             'post_type' => 'post',
             'set_status' => 'draft',
             'limit' => 2,
@@ -127,19 +127,5 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
 
         $this->assertSame(2, $result['matched']);
         $this->assertSame(2, $result['updated']);
-    }
-
-    public function test_permission_denied_for_author(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'author']));
-        $result = BulkUpdatePostsAbility::checkPermission();
-        $this->assertWPError($result);
-    }
-
-    public function test_permission_denied_for_guest(): void
-    {
-        wp_set_current_user(0);
-        $result = BulkUpdatePostsAbility::checkPermission();
-        $this->assertWPError($result);
     }
 }

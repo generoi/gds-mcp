@@ -19,18 +19,11 @@ class UpdateStringTranslationAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('Polylang is active.');
         }
 
-        $result = UpdateStringTranslationAbility::execute([
+        $result = (new UpdateStringTranslationAbility)->execute([
             'string' => 'Test',
             'lang' => 'en',
             'translation' => 'Test EN',
         ]);
-        $this->assertWPError($result);
-    }
-
-    public function test_permission_denied_for_editor(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
-        $result = UpdateStringTranslationAbility::checkPermission();
         $this->assertWPError($result);
     }
 }

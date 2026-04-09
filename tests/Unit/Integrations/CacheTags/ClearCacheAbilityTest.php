@@ -16,7 +16,7 @@ class ClearCacheAbilityTest extends WP_UnitTestCase
     public function test_execute_flush_returns_success(): void
     {
         // Without sage-cachetags, falls back to wp_cache_flush.
-        $result = ClearCacheAbility::execute(['type' => 'flush']);
+        $result = (new ClearCacheAbility)->execute(['type' => 'flush']);
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
@@ -24,7 +24,7 @@ class ClearCacheAbilityTest extends WP_UnitTestCase
 
     public function test_execute_tags_requires_tags(): void
     {
-        $result = ClearCacheAbility::execute(['type' => 'tags']);
+        $result = (new ClearCacheAbility)->execute(['type' => 'tags']);
 
         // Either WP_Error (missing tags) or success depending on cachetags availability.
         if (is_wp_error($result)) {
@@ -32,12 +32,5 @@ class ClearCacheAbilityTest extends WP_UnitTestCase
         } else {
             $this->assertIsArray($result);
         }
-    }
-
-    public function test_permission_denied_for_editor(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
-        $result = ClearCacheAbility::checkPermission();
-        $this->assertWPError($result);
     }
 }

@@ -24,7 +24,7 @@ final class UpdateStringTranslationAbility
                         'type' => 'string',
                         'description' => 'The original (source) string value to translate. Must match exactly.',
                     ],
-                    'language' => [
+                    'lang' => [
                         'type' => 'string',
                         'description' => 'Target language slug (e.g. fi, en, sv).',
                     ],
@@ -33,14 +33,14 @@ final class UpdateStringTranslationAbility
                         'description' => 'The translated string value.',
                     ],
                 ],
-                'required' => ['string', 'language', 'translation'],
+                'required' => ['string', 'lang', 'translation'],
                 'additionalProperties' => false,
             ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'string' => ['type' => 'string'],
-                    'language' => ['type' => 'string'],
+                    'lang' => ['type' => 'string'],
                     'translation' => ['type' => 'string'],
                     'previous' => ['type' => ['string', 'null']],
                 ],
@@ -65,7 +65,7 @@ final class UpdateStringTranslationAbility
         }
 
         $string = $input['string'] ?? '';
-        $language = $input['language'] ?? '';
+        $language = $input['lang'] ?? '';
         $translation = $input['translation'] ?? '';
 
         if (empty($string) || empty($language) || empty($translation)) {
@@ -100,7 +100,7 @@ final class UpdateStringTranslationAbility
 
         return [
             'string' => $string,
-            'language' => $language,
+            'lang' => $language,
             'translation' => $translation,
             'previous' => $previous,
         ];
