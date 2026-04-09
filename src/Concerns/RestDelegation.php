@@ -125,10 +125,11 @@ trait RestDelegation
      * Strips internal callbacks (sanitize_callback, validate_callback) that
      * aren't valid JSON Schema.
      *
-     * @param  string  $route  REST route (e.g. "/wp/v2/pages")
-     * @param  array   $extra  Additional properties to merge in
+     * @param  string  $route   REST route (e.g. "/wp/v2/pages")
+     * @param  array   $extra   Additional properties to merge in
+     * @param  string  $method  HTTP method to pull args for (GET, POST, DELETE)
      */
-    protected static function getRestInputSchema(string $route, array $extra = []): array
+    protected static function getRestInputSchema(string $route, array $extra = [], string $method = 'GET'): array
     {
         $server = rest_get_server();
         $routes = $server->get_routes();
@@ -142,11 +143,10 @@ trait RestDelegation
             ];
         }
 
-        // Find the GET (list) endpoint — first endpoint with GET method
         $args = [];
         foreach ($routeArgs as $endpoint) {
             $methods = $endpoint['methods'] ?? [];
-            if (isset($methods['GET']) || (is_string($methods) && str_contains($methods, 'GET'))) {
+            if (isset($methods[$method]) || (is_string($methods) && str_contains($methods, $method))) {
                 $args = $endpoint['args'] ?? [];
 
                 break;
@@ -166,5 +166,34 @@ trait RestDelegation
             'properties' => array_merge($properties, $extra),
             'additionalProperties' => true,
         ];
+    }
+
+    /**
+     * Get the output schema for a single REST item response.
+     */
+    protected static function getRestItemOutputSchema(string $route): array
+    {
+        $server = rest_get_server();
+        $routes = $server->get_routes();
+        $routeArgs = $routes[$route] ?? null;
+
+        if (! $routeArgs) {
+            return ['type' => 'object', 'additionalProperties' => true];
+        }
+
+        foreach ($routeArgs as $endpoint) {
+            if (! empty($endpoint['schema']) && is_callable($endpoint['schema'])) {
+                $schema = call_user_func($endpoint['schema']);
+                if (! empty($schema['properties'])) {
+                    return [
+                        'type' => 'object',
+                        'properties' => $schema['properties'],
+                        'additionalProperties' => true,
+                    ];
+                }
+            }
+        }
+
+        return ['type' => 'object', 'additionalProperties' => true];
     }
 }

@@ -45,10 +45,7 @@ class Plugin
         // Core -- always available
         Abilities\HelpAbility::register();
         Abilities\ListPostTypesAbility::register();
-        Abilities\CreatePostAbility::register();
-        Abilities\ReadPostAbility::register();
-        Abilities\ListPostsAbility::register();
-        Abilities\UpdatePostContentAbility::register();
+        Abilities\PostTypeAbility::registerAll();
         Abilities\SearchMediaAbility::register();
         Abilities\UploadMediaAbility::register();
         Abilities\ListMenusAbility::register();
@@ -58,7 +55,6 @@ class Plugin
         Abilities\DuplicatePostAbility::register();
         Abilities\BulkUpdatePostsAbility::register();
         Abilities\ManageRevisionsAbility::register();
-        Abilities\DeletePostAbility::register();
         Abilities\DeleteTermAbility::register();
         Abilities\DeleteMediaAbility::register();
         Abilities\RemoveMenuItemAbility::register();
