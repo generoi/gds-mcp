@@ -79,12 +79,9 @@ class Plugin
             }
         }
 
-        // Gravity Forms -- only if active
+        // Gravity Forms -- only if REST API is available
         if (class_exists('GFAPI')) {
-            Integrations\GravityForms\ListFormsAbility::register();
-            Integrations\GravityForms\GetFormAbility::register();
-            Integrations\GravityForms\GetFormEntriesAbility::register();
-            Integrations\GravityForms\CreateGravityFormAbility::register();
+            Integrations\GravityForms\GravityFormsAbility::register();
         }
 
         // Cache clearing -- via sage-cachetags (abstracts Kinsta, Fastly, etc.)
