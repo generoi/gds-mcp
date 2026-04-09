@@ -32,15 +32,26 @@ final class PostTypeAbility
      */
     public static function registerAll(): void
     {
-        $postTypes = get_post_types(['public' => true, 'show_in_rest' => true], 'objects');
+        $postTypes = get_post_types(['show_in_rest' => true], 'objects');
 
         foreach ($postTypes as $type) {
             $restBase = $type->rest_base ?: $type->name;
+
+            // Skip types with parameterized REST bases (e.g. font-faces nested under font-families)
+            if (str_contains($restBase, '(')) {
+                continue;
+            }
+
             $namespace = $type->rest_namespace ?? 'wp/v2';
             $route = "/{$namespace}/{$restBase}";
 
-            // Use plural label for the ability slug (pages, posts, products, etc.)
-            $slug = $restBase;
+            // Sanitize slug for ability name (lowercase alphanumeric + dashes only)
+            $slug = preg_replace('/[^a-z0-9-]/', '-', strtolower($restBase));
+            $slug = trim(preg_replace('/-+/', '-', $slug), '-');
+
+            if (! $slug) {
+                continue;
+            }
 
             $ability = new self($type->name, $route, $slug, $type->labels->name);
             $ability->register();
