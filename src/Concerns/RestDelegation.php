@@ -165,6 +165,7 @@ trait RestDelegation
 
         return [
             'type' => 'object',
+            'default' => new \stdClass,
             'properties' => $merged ?: new \stdClass,
             'additionalProperties' => true,
         ];

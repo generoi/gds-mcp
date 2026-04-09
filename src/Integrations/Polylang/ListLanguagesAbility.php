@@ -38,7 +38,7 @@ final class ListLanguagesAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $response = self::restGet('/pll/v1/languages', is_array($input) ? $input : []);
+        $response = self::restGet('/pll/v1/languages', (array) ($input ?? []));
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)

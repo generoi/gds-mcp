@@ -62,7 +62,7 @@ final class ClearCacheAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $type = $input['type'] ?? 'flush';
 
         if (! function_exists('app') || ! app()->bound(CacheTags::class)) {

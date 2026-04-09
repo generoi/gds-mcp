@@ -122,7 +122,7 @@ final class PatchBlockAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
 
         $postId = $input['id'] ?? 0;
         if (! $postId) {

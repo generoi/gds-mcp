@@ -84,7 +84,7 @@ final class ManageRevisionsAbility
 
     public function listRevisions(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $postId = $input['post_id'] ?? 0;
         unset($input['post_id']);
 
@@ -102,7 +102,7 @@ final class ManageRevisionsAbility
 
     public function readRevision(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $postId = $input['post_id'] ?? 0;
         $revisionId = $input['id'] ?? 0;
         unset($input['post_id'], $input['id']);
@@ -121,7 +121,7 @@ final class ManageRevisionsAbility
 
     public function restoreRevision(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $revisionId = (int) ($input['id'] ?? 0);
 
         $revision = wp_get_post_revision($revisionId);

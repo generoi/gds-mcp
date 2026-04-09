@@ -102,7 +102,7 @@ final class QueryActivityLogAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         if (! class_exists('WP_Stream\Plugin')) {
             return new WP_Error('stream_not_active', 'Stream plugin is not active.');
         }

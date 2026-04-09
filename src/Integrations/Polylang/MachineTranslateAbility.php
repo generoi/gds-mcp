@@ -68,7 +68,7 @@ final class MachineTranslateAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         if (! self::polylangAvailable()) {
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }

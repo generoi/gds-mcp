@@ -72,7 +72,7 @@ final class ManageRedirectsAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $action = $input['action'] ?? '';
         $provider = self::getProvider();
 

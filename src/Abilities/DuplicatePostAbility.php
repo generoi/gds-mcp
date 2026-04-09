@@ -57,7 +57,7 @@ final class DuplicatePostAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $sourceId = $input['id'] ?? 0;
         $source = get_post($sourceId);
 

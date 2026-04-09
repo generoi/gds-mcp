@@ -14,6 +14,7 @@ final class AcfFieldsResource
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
+                'default' => new \stdClass,
                 'properties' => new \stdClass,
                 'additionalProperties' => false,
             ],
@@ -46,7 +47,7 @@ final class AcfFieldsResource
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         if (! function_exists('acf_get_field_groups') || ! function_exists('acf_get_fields')) {
             return new WP_Error('acf_not_active', 'ACF Pro is not active.');
         }

@@ -16,6 +16,7 @@ final class SiteMapResource
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
+                'default' => new \stdClass,
                 'properties' => new \stdClass,
                 'additionalProperties' => false,
             ],
@@ -46,7 +47,7 @@ final class SiteMapResource
 
     public function execute(mixed $input = []): array
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $menu = self::getPrimaryMenu();
         $menuPageIds = [];
 

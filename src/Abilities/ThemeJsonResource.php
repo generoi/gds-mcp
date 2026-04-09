@@ -14,6 +14,7 @@ final class ThemeJsonResource
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
+                'default' => new \stdClass,
                 'properties' => new \stdClass,
                 'additionalProperties' => false,
             ],
@@ -40,7 +41,7 @@ final class ThemeJsonResource
 
     public function execute(mixed $input = []): array
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $merged = WP_Theme_JSON_Resolver::get_merged_data();
         $settings = $merged->get_settings();
 

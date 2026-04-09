@@ -152,7 +152,7 @@ final class TaxonomyAbility
 
     public function executeList(mixed $input = []): array|WP_Error
     {
-        $response = self::restGet($this->route, is_array($input) ? $input : []);
+        $response = self::restGet($this->route, (array) ($input ?? []));
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
@@ -161,7 +161,7 @@ final class TaxonomyAbility
 
     public function executeRead(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $id = $input['id'] ?? 0;
         unset($input['id']);
 
@@ -174,7 +174,7 @@ final class TaxonomyAbility
 
     public function executeCreate(mixed $input = []): array|WP_Error
     {
-        $response = self::restPost($this->route, is_array($input) ? $input : []);
+        $response = self::restPost($this->route, (array) ($input ?? []));
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
@@ -183,7 +183,7 @@ final class TaxonomyAbility
 
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $id = $input['id'] ?? 0;
         unset($input['id']);
 
@@ -196,7 +196,7 @@ final class TaxonomyAbility
 
     public function executeDelete(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $id = $input['id'] ?? 0;
 
         $request = new \WP_REST_Request('DELETE', "{$this->route}/{$id}");

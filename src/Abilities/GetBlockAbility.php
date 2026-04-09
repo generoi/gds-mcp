@@ -83,7 +83,7 @@ final class GetBlockAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $name = $input['name'] ?? null;
         $includeExamples = $input['include_examples'] ?? false;
         $searchPosts = $input['search_posts'] ?? false;

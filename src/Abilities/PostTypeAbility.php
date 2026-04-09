@@ -164,7 +164,7 @@ final class PostTypeAbility
 
     public function executeList(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
 
         $response = self::restGet($this->route, $input);
 
@@ -183,7 +183,7 @@ final class PostTypeAbility
 
     public function executeRead(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $id = $input['id'] ?? 0;
         unset($input['id']);
 
@@ -198,7 +198,7 @@ final class PostTypeAbility
 
     public function executeCreate(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
 
         // Handle ACF fields separately — REST API doesn't process them via update_field()
         $acfFields = $input['fields'] ?? null;
@@ -221,7 +221,7 @@ final class PostTypeAbility
 
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $id = $input['id'] ?? 0;
         unset($input['id']);
 
@@ -246,7 +246,7 @@ final class PostTypeAbility
 
     public function executeDelete(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $id = $input['id'] ?? 0;
         $force = $input['force'] ?? false;
 

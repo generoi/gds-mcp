@@ -58,7 +58,7 @@ final class HelpAbility
 
     public static function execute(mixed $input = []): array
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $groups = [];
         $total = 0;
 

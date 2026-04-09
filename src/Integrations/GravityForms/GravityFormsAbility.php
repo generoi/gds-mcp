@@ -78,7 +78,7 @@ final class GravityFormsAbility
 
     public function listForms(mixed $input = []): array|WP_Error
     {
-        $response = self::restGet('/gf/v2/forms', is_array($input) ? $input : []);
+        $response = self::restGet('/gf/v2/forms', (array) ($input ?? []));
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
@@ -87,7 +87,7 @@ final class GravityFormsAbility
 
     public function readForm(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $id = $input['id'] ?? 0;
         unset($input['id']);
 
@@ -100,7 +100,7 @@ final class GravityFormsAbility
 
     public function createForm(mixed $input = []): array|WP_Error
     {
-        $response = self::restPost('/gf/v2/forms', is_array($input) ? $input : []);
+        $response = self::restPost('/gf/v2/forms', (array) ($input ?? []));
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
@@ -109,7 +109,7 @@ final class GravityFormsAbility
 
     public function listEntries(mixed $input = []): array|WP_Error
     {
-        $input = is_array($input) ? $input : [];
+        $input = (array) ($input ?? []);
         $formId = $input['form_id'] ?? 0;
         unset($input['form_id']);
 
