@@ -100,4 +100,15 @@ class UpdatePostContentAbilityTest extends WP_UnitTestCase
         $this->assertWPError($result);
         $this->assertSame('authentication_required', $result->get_error_code());
     }
+
+    public function test_permission_accepts_non_array_input(): void
+    {
+        // WP core's invoke_callback can pass a string instead of array
+        // when the MCP adapter transforms/flattens the input schema.
+        $result = UpdatePostContentAbility::checkPermission('unexpected string');
+        $this->assertTrue($result);
+
+        $result = UpdatePostContentAbility::checkPermission(null);
+        $this->assertTrue($result);
+    }
 }
