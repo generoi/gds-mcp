@@ -105,8 +105,9 @@ final class BulkUpdatePostsAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $setStatus = $input['set_status'] ?? null;
         $setMeta = $input['set_meta'] ?? [];
         $deleteMeta = $input['delete_meta'] ?? [];

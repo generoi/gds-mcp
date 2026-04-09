@@ -68,8 +68,9 @@ final class BlockCatalogResource
      * Return the block catalog index. Use gds/blocks-get for full detail,
      * examples, and post search on individual blocks.
      */
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         $registry = WP_Block_Type_Registry::get_instance();
         $allBlocks = $registry->get_all_registered();
 

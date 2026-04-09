@@ -38,10 +38,6 @@ final class HelpAbility
             'label' => 'GDS MCP Help',
             'description' => 'Get a grouped summary of all available tools and resources. Start here to discover what you can do.',
             'category' => 'gds-content',
-            'input_schema' => [
-                'type' => 'object',
-                'additionalProperties' => false,
-            ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
@@ -72,8 +68,9 @@ final class HelpAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         $groups = [];
         $total = 0;
 

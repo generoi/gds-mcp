@@ -78,8 +78,9 @@ final class ManageRevisionsAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $action = $input['action'] ?? '';
 
         return match ($action) {

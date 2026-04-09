@@ -88,8 +88,9 @@ final class CreateTermTranslationAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         if (! self::polylangAvailable() || ! function_exists('pll_set_term_language')) {
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }

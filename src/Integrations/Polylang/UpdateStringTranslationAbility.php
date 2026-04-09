@@ -71,8 +71,9 @@ final class UpdateStringTranslationAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         if (! self::polylangAvailable() || ! class_exists('PLL_MO')) {
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }

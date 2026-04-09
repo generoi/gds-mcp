@@ -105,8 +105,9 @@ final class CreatePostAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $postData = [
             'post_type' => $input['post_type'] ?? 'page',
             'post_title' => $input['post_title'] ?? '',

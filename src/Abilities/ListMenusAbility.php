@@ -15,10 +15,6 @@ final class ListMenusAbility
             'label' => 'List Menus',
             'description' => 'List all navigation menus with their language, locations, and item count. With Polylang, each language has its own menu — always verify you are editing the correct language\'s menu before adding items.',
             'category' => 'gds-content',
-            'input_schema' => [
-                'type' => 'object',
-                'additionalProperties' => false,
-            ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
@@ -65,8 +61,9 @@ final class ListMenusAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         // Get registered locations.
         $registeredLocations = get_registered_nav_menus();
 

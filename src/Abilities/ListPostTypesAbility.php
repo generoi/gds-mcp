@@ -69,8 +69,9 @@ final class ListPostTypesAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         $publicOnly = $input['public_only'] ?? false;
 
         $args = $publicOnly ? ['public' => true] : ['show_in_rest' => true];

@@ -5,11 +5,11 @@ namespace GeneroWP\MCP\Tests\Unit\Abilities;
 use WP_UnitTestCase;
 
 /**
- * Verify all ability checkPermission methods accept non-array input.
+ * Verify all ability checkPermission and execute methods accept non-array input.
  *
  * WP core's WP_Ability::invoke_callback() can pass a string or null
  * instead of an array when the MCP adapter transforms the input schema.
- * All checkPermission methods must handle this gracefully.
+ * All callbacks must handle this gracefully.
  */
 class PermissionCallbackTypeTest extends WP_UnitTestCase
 {
@@ -37,7 +37,36 @@ class PermissionCallbackTypeTest extends WP_UnitTestCase
         $this->assertNotInstanceOf(\TypeError::class, $result);
     }
 
+    /**
+     * @dataProvider executeClassProvider
+     */
+    public function test_execute_accepts_string_input(string $class): void
+    {
+        $result = $class::execute('unexpected string');
+        // Should return WP_Error (missing required fields) or array, not throw TypeError
+        $this->assertTrue(is_array($result) || is_wp_error($result));
+    }
+
+    /**
+     * @dataProvider executeClassProvider
+     */
+    public function test_execute_accepts_null_input(string $class): void
+    {
+        $result = $class::execute(null);
+        $this->assertTrue(is_array($result) || is_wp_error($result));
+    }
+
+    public static function executeClassProvider(): array
+    {
+        return self::findClassesWithMethod('execute');
+    }
+
     public static function abilityClassProvider(): array
+    {
+        return self::findClassesWithMethod('checkPermission');
+    }
+
+    private static function findClassesWithMethod(string $method): array
     {
         $classes = [];
         $srcDir = dirname(__DIR__, 3).'/src';
@@ -53,11 +82,10 @@ class PermissionCallbackTypeTest extends WP_UnitTestCase
                 }
 
                 $content = file_get_contents($file->getPathname());
-                if (! preg_match('/function checkPermission\(/', $content)) {
+                if (! preg_match("/function {$method}\\(/", $content)) {
                     continue;
                 }
 
-                // Extract FQCN from namespace + class name.
                 if (preg_match('/namespace\s+([\w\\\\]+);/', $content, $ns)
                     && preg_match('/class\s+(\w+)/', $content, $cn)) {
                     $fqcn = $ns[1].'\\'.$cn[1];

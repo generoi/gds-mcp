@@ -53,8 +53,9 @@ final class ThemeJsonResource
         return true;
     }
 
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         $merged = WP_Theme_JSON_Resolver::get_merged_data();
         $settings = $merged->get_settings();
 

@@ -98,8 +98,9 @@ final class CreateTranslationAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         if (! self::polylangAvailable()) {
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }

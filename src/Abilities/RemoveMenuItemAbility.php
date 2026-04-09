@@ -57,8 +57,9 @@ final class RemoveMenuItemAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $menuItemId = (int) ($input['menu_item_id'] ?? 0);
 
         $menuItem = get_post($menuItemId);

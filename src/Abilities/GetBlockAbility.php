@@ -95,8 +95,9 @@ final class GetBlockAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $name = $input['name'] ?? null;
         $includeExamples = $input['include_examples'] ?? false;
         $searchPosts = $input['search_posts'] ?? false;

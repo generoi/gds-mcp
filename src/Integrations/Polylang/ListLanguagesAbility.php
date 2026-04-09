@@ -75,8 +75,9 @@ final class ListLanguagesAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         if (! self::polylangAvailable() || ! function_exists('PLL') || ! PLL()) {
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }

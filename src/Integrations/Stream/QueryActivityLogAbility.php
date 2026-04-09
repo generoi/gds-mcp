@@ -114,8 +114,9 @@ final class QueryActivityLogAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         if (! class_exists('WP_Stream\Plugin')) {
             return new WP_Error('stream_not_active', 'Stream plugin is not active.');
         }

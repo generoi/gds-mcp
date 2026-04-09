@@ -87,8 +87,9 @@ final class UploadMediaAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $url = $input['url'] ?? '';
 
         if (empty($url) || ! filter_var($url, FILTER_VALIDATE_URL)) {

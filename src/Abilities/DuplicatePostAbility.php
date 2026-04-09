@@ -79,8 +79,9 @@ final class DuplicatePostAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $sourceId = $input['post_id'] ?? 0;
         $source = get_post($sourceId);
 

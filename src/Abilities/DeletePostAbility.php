@@ -65,8 +65,9 @@ final class DeletePostAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $postId = (int) ($input['post_id'] ?? 0);
         $force = $input['force'] ?? false;
 

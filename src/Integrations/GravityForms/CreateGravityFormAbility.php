@@ -84,8 +84,9 @@ final class CreateGravityFormAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         if (! class_exists('GFAPI')) {
             return new WP_Error('gravity_forms_not_active', 'Gravity Forms is not active.');
         }

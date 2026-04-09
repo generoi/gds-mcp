@@ -74,8 +74,9 @@ final class ReadPostAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $post = get_post($input['post_id'] ?? 0);
 
         if (! $post) {

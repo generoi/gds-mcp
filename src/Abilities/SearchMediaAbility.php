@@ -89,8 +89,9 @@ final class SearchMediaAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         $queryArgs = [
             'post_type' => 'attachment',
             'post_status' => 'inherit',

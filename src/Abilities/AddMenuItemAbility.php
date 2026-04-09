@@ -90,8 +90,9 @@ final class AddMenuItemAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         $menuId = $input['menu_id'] ?? 0;
         $menu = wp_get_nav_menu_object($menuId);
 

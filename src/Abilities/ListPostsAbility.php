@@ -102,8 +102,9 @@ final class ListPostsAbility
         return true;
     }
 
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         $perPage = min($input['per_page'] ?? 20, 100);
 
         $queryArgs = [

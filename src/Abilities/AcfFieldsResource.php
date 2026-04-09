@@ -58,8 +58,9 @@ final class AcfFieldsResource
         return true;
     }
 
-    public static function execute(?array $input = []): array|WP_Error
+    public static function execute(mixed $input = []): array|WP_Error
     {
+        $input = is_array($input) ? $input : [];
         if (! function_exists('acf_get_field_groups') || ! function_exists('acf_get_fields')) {
             return new WP_Error('acf_not_active', 'ACF Pro is not active.');
         }

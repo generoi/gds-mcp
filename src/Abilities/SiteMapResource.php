@@ -59,8 +59,9 @@ final class SiteMapResource
         return true;
     }
 
-    public static function execute(?array $input = []): array
+    public static function execute(mixed $input = []): array
     {
+        $input = is_array($input) ? $input : [];
         $menu = self::getPrimaryMenu();
         $menuPageIds = [];
 
