@@ -3,56 +3,46 @@
 namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Concerns\RestDelegation;
 use WP_Error;
 
 final class DuplicatePostAbility
 {
     use PolylangAware;
+    use RestDelegation;
 
     public static function register(): void
     {
         HelpAbility::registerAbility('gds/posts-duplicate', [
             'label' => 'Duplicate Post',
-            'description' => 'Clone a post with its content, meta, and taxonomy terms. The duplicate is created as a draft with a "(Copy)" title suffix. Optionally assign a different language for multilingual workflows.',
+            'description' => 'Clone a post with its content, meta, and taxonomy terms. The duplicate is created as a draft with a "(Copy)" title suffix. Optionally assign a different language.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'post_id' => [
+                    'id' => [
                         'type' => 'integer',
                         'description' => 'The post ID to duplicate.',
                     ],
-                    'post_title' => [
+                    'title' => [
                         'type' => 'string',
                         'description' => 'Custom title for the duplicate. Defaults to original title with "(Copy)" suffix.',
                     ],
-                    'post_status' => [
+                    'status' => [
                         'type' => 'string',
                         'description' => 'Status for the duplicate.',
                         'default' => 'draft',
                         'enum' => ['draft', 'publish', 'pending', 'private'],
                     ],
-                    'language' => [
+                    'lang' => [
                         'type' => 'string',
                         'description' => 'Polylang language slug for the duplicate (e.g. fi, en, sv). Omit to inherit the source language.',
                     ],
                 ],
-                'required' => ['post_id'],
+                'required' => ['id'],
                 'additionalProperties' => false,
             ],
-            'output_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'id' => ['type' => 'integer'],
-                    'source_id' => ['type' => 'integer'],
-                    'title' => ['type' => 'string'],
-                    'status' => ['type' => 'string'],
-                    'post_type' => ['type' => 'string'],
-                    'url' => ['type' => 'string'],
-                    'edit_url' => ['type' => 'string'],
-                    'language' => ['type' => ['string', 'null']],
-                ],
-            ],
+            'output_schema' => ['type' => 'object', 'additionalProperties' => true],
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
@@ -68,18 +58,17 @@ final class DuplicatePostAbility
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = is_array($input) ? $input : [];
-        $sourceId = $input['post_id'] ?? 0;
+        $sourceId = $input['id'] ?? 0;
         $source = get_post($sourceId);
 
         if (! $source) {
             return new WP_Error('post_not_found', 'Source post not found.');
         }
 
-        $title = $input['post_title'] ?? $source->post_title.' (Copy)';
-        $status = $input['post_status'] ?? 'draft';
+        $title = $input['title'] ?? $source->post_title.' (Copy)';
+        $status = $input['status'] ?? 'draft';
 
-        // Create the duplicate.
-        $newPostData = [
+        $newId = wp_insert_post([
             'post_type' => $source->post_type,
             'post_title' => $title,
             'post_content' => $source->post_content,
@@ -89,56 +78,45 @@ final class DuplicatePostAbility
             'menu_order' => $source->menu_order,
             'comment_status' => $source->comment_status,
             'ping_status' => $source->ping_status,
-        ];
+        ], true);
 
-        $newId = wp_insert_post($newPostData, true);
         if (is_wp_error($newId)) {
             return $newId;
         }
 
-        // Copy public meta.
         self::copyMeta($sourceId, $newId);
-
-        // Copy taxonomy terms.
         self::copyTaxonomies($sourceId, $newId, $source->post_type);
 
-        // Copy featured image.
         $thumbnail = get_post_thumbnail_id($sourceId);
         if ($thumbnail) {
             set_post_thumbnail($newId, $thumbnail);
         }
 
-        // Set language.
         if (self::polylangAvailable()) {
-            $language = $input['language'] ?? self::getPostLanguage($sourceId);
-            if ($language) {
-                pll_set_post_language($newId, $language);
+            $lang = $input['lang'] ?? self::getPostLanguage($sourceId);
+            if ($lang) {
+                pll_set_post_language($newId, $lang);
             }
         }
 
-        $post = get_post($newId);
+        // Return canonical REST response
+        $route = self::getRestRoute($source->post_type);
+        if ($route) {
+            $response = self::restGet("{$route}/{$newId}");
+            if (! self::isRestError($response)) {
+                return (array) $response->get_data();
+            }
+        }
 
-        return [
-            'id' => $post->ID,
-            'source_id' => $sourceId,
-            'title' => $post->post_title,
-            'status' => $post->post_status,
-            'post_type' => $post->post_type,
-            'url' => get_permalink($post),
-            'edit_url' => get_edit_post_link($post->ID, 'raw'),
-            'language' => self::getPostLanguage($post->ID),
-        ];
+        // Fallback if no REST route
+        return ['id' => $newId, 'source_id' => $sourceId];
     }
 
-    /**
-     * Copy public post meta from source to target.
-     */
     private static function copyMeta(int $sourceId, int $targetId): void
     {
         $allMeta = get_post_meta($sourceId);
 
         foreach ($allMeta as $key => $values) {
-            // Skip private/internal meta.
             if (str_starts_with($key, '_')) {
                 continue;
             }
@@ -149,13 +127,9 @@ final class DuplicatePostAbility
         }
     }
 
-    /**
-     * Copy taxonomy terms from source to target.
-     */
     private static function copyTaxonomies(int $sourceId, int $targetId, string $postType): void
     {
         $taxonomies = get_object_taxonomies($postType, 'names');
-        // Exclude Polylang internal taxonomies — language is set separately.
         $taxonomies = array_diff($taxonomies, ['language', 'post_translations', 'term_language', 'term_translations']);
 
         foreach ($taxonomies as $taxonomy) {
@@ -164,8 +138,7 @@ final class DuplicatePostAbility
                 continue;
             }
 
-            $termIds = array_column($terms, 'term_id');
-            wp_set_object_terms($targetId, $termIds, $taxonomy);
+            wp_set_object_terms($targetId, array_column($terms, 'term_id'), $taxonomy);
         }
     }
 }

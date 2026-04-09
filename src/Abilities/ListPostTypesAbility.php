@@ -2,8 +2,6 @@
 
 namespace GeneroWP\MCP\Abilities;
 
-use WP_Error;
-
 final class ListPostTypesAbility
 {
     public static function register(): void

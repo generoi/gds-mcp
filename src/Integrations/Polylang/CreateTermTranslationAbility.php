@@ -23,7 +23,7 @@ final class CreateTermTranslationAbility
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'source_term_id' => [
+                    'source_id' => [
                         'type' => 'integer',
                         'description' => 'The source term ID to create a translation of.',
                     ],
@@ -31,7 +31,7 @@ final class CreateTermTranslationAbility
                         'type' => 'string',
                         'description' => 'Taxonomy slug (e.g. category, product_brand).',
                     ],
-                    'language' => [
+                    'lang' => [
                         'type' => 'string',
                         'description' => 'Target language slug (e.g. fi, en, sv).',
                     ],
@@ -48,7 +48,7 @@ final class CreateTermTranslationAbility
                         'description' => 'Translated term description.',
                     ],
                 ],
-                'required' => ['source_term_id', 'taxonomy', 'language'],
+                'required' => ['source_id', 'taxonomy', 'lang'],
                 'additionalProperties' => false,
             ],
             'output_schema' => [
@@ -58,8 +58,8 @@ final class CreateTermTranslationAbility
                     'name' => ['type' => 'string'],
                     'slug' => ['type' => 'string'],
                     'taxonomy' => ['type' => 'string'],
-                    'language' => ['type' => 'string'],
-                    'source_term_id' => ['type' => 'integer'],
+                    'lang' => ['type' => 'string'],
+                    'source_id' => ['type' => 'integer'],
                 ],
             ],
             'permission_callback' => '__return_true',
@@ -81,9 +81,9 @@ final class CreateTermTranslationAbility
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }
 
-        $sourceTermId = $input['source_term_id'] ?? 0;
+        $sourceTermId = $input['source_id'] ?? 0;
         $taxonomy = $input['taxonomy'] ?? '';
-        $language = $input['language'] ?? '';
+        $language = $input['lang'] ?? '';
 
         $sourceTerm = get_term($sourceTermId, $taxonomy);
         if (! $sourceTerm || is_wp_error($sourceTerm)) {
@@ -154,8 +154,8 @@ final class CreateTermTranslationAbility
             'name' => $newTerm->name,
             'slug' => $newTerm->slug,
             'taxonomy' => $taxonomy,
-            'language' => $language,
-            'source_term_id' => $sourceTermId,
+            'lang' => $language,
+            'source_id' => $sourceTermId,
         ];
     }
 }

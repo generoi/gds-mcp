@@ -2,8 +2,6 @@
 
 namespace GeneroWP\MCP\Abilities;
 
-use WP_Error;
-
 final class CssVarsResource
 {
     public static function register(): void
@@ -41,6 +39,7 @@ final class CssVarsResource
     public function execute(mixed $input = []): array
     {
         $input = is_array($input) ? $input : [];
+
         return ['variables' => ThemeJsonResource::extractCssCustomProperties()];
     }
 }

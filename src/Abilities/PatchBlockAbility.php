@@ -62,7 +62,7 @@ final class PatchBlockAbility
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'post_id' => [
+                    'id' => [
                         'type' => 'integer',
                         'description' => 'The post ID containing the block(s) to patch.',
                     ],
@@ -82,14 +82,14 @@ final class PatchBlockAbility
                         'description' => 'Array of patch operations. Each needs block_name + at least one patch field. All applied in one parse/serialize round-trip.',
                     ],
                 ],
-                'required' => ['post_id'],
+                'required' => ['id'],
                 'additionalProperties' => false,
             ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'success' => ['type' => 'boolean'],
-                    'post_id' => ['type' => 'integer'],
+                    'id' => ['type' => 'integer'],
                     'results' => [
                         'type' => 'array',
                         'items' => [
@@ -124,9 +124,9 @@ final class PatchBlockAbility
     {
         $input = is_array($input) ? $input : [];
 
-        $postId = $input['post_id'] ?? 0;
+        $postId = $input['id'] ?? 0;
         if (! $postId) {
-            return new WP_Error('missing_post_id', 'post_id is required.');
+            return new WP_Error('missing_id', 'id is required.');
         }
 
         $post = get_post($postId);
@@ -189,7 +189,7 @@ final class PatchBlockAbility
 
         return [
             'success' => true,
-            'post_id' => $postId,
+            'id' => $postId,
             'results' => $results,
             'total_patched' => $totalPatched,
             'content' => $updated->post_content,
@@ -199,8 +199,6 @@ final class PatchBlockAbility
 
     /**
      * Normalize input into an array of operations.
-     *
-     * @return array|WP_Error
      */
     private static function normalizeOperations(array $input): array|WP_Error
     {
@@ -297,7 +295,7 @@ final class PatchBlockAbility
         });
 
         if ($patchedCount === 0 && $error === null) {
-            return new WP_Error('block_not_found', "No '{$blockName}' block found" . ($occurrence > 1 ? " (occurrence #{$occurrence})" : ''));
+            return new WP_Error('block_not_found', "No '{$blockName}' block found".($occurrence > 1 ? " (occurrence #{$occurrence})" : ''));
         }
 
         return $error;

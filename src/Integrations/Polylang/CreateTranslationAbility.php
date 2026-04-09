@@ -4,11 +4,13 @@ namespace GeneroWP\MCP\Integrations\Polylang;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Concerns\RestDelegation;
 use WP_Error;
 
 final class CreateTranslationAbility
 {
     use PolylangAware;
+    use RestDelegation;
 
     public static function register(): void
     {
@@ -19,54 +21,41 @@ final class CreateTranslationAbility
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'source_post_id' => [
+                    'source_id' => [
                         'type' => 'integer',
                         'description' => 'The post ID to create a translation of.',
                     ],
-                    'language' => [
+                    'lang' => [
                         'type' => 'string',
                         'description' => 'Target language slug (e.g. fi, en, sv).',
                     ],
-                    'post_title' => [
+                    'title' => [
                         'type' => 'string',
                         'description' => 'Translated title. Defaults to source title.',
                     ],
-                    'post_content' => [
+                    'content' => [
                         'type' => 'string',
                         'description' => 'Translated content (raw block markup). Defaults to source content.',
                     ],
-                    'post_excerpt' => [
+                    'excerpt' => [
                         'type' => 'string',
                         'description' => 'Translated excerpt. Defaults to source excerpt.',
                     ],
-                    'post_status' => [
+                    'status' => [
                         'type' => 'string',
                         'description' => 'Status for the new post.',
                         'default' => 'draft',
                         'enum' => ['draft', 'publish', 'pending', 'private'],
                     ],
-                    'post_name' => [
+                    'slug' => [
                         'type' => 'string',
                         'description' => 'URL slug for the new post. Auto-generated if omitted.',
                     ],
                 ],
-                'required' => ['source_post_id', 'language'],
+                'required' => ['source_id', 'lang'],
                 'additionalProperties' => false,
             ],
-            'output_schema' => [
-                'type' => 'object',
-                'properties' => [
-                    'id' => ['type' => 'integer'],
-                    'title' => ['type' => 'string'],
-                    'status' => ['type' => 'string'],
-                    'language' => ['type' => 'string'],
-                    'url' => ['type' => 'string'],
-                    'edit_url' => ['type' => 'string'],
-                    'source_post_id' => ['type' => 'integer'],
-                    'parent_id' => ['type' => 'integer'],
-                    'parent_resolved' => ['type' => 'boolean'],
-                ],
-            ],
+            'output_schema' => ['type' => 'object', 'additionalProperties' => true],
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
@@ -86,8 +75,8 @@ final class CreateTranslationAbility
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }
 
-        $sourceId = $input['source_post_id'] ?? 0;
-        $language = $input['language'] ?? '';
+        $sourceId = $input['source_id'] ?? 0;
+        $language = $input['lang'] ?? '';
 
         $source = get_post($sourceId);
         if (! $source) {
@@ -119,14 +108,14 @@ final class CreateTranslationAbility
         // Build the new post data, defaulting to source content.
         $postData = [
             'post_type' => $source->post_type,
-            'post_title' => $input['post_title'] ?? $source->post_title,
-            'post_content' => $input['post_content'] ?? $source->post_content,
-            'post_excerpt' => $input['post_excerpt'] ?? $source->post_excerpt,
-            'post_status' => $input['post_status'] ?? 'draft',
+            'title' => $input['title'] ?? $source->post_title,
+            'content' => $input['content'] ?? $source->post_content,
+            'excerpt' => $input['excerpt'] ?? $source->post_excerpt,
+            'status' => $input['status'] ?? 'draft',
         ];
 
-        if (isset($input['post_name'])) {
-            $postData['post_name'] = $input['post_name'];
+        if (isset($input['slug'])) {
+            $postData['slug'] = $input['slug'];
         }
 
         // Resolve parent hierarchy.
@@ -178,18 +167,15 @@ final class CreateTranslationAbility
             }
         }
 
-        $newPost = get_post($newId);
+        // Return canonical REST response
+        $route = self::getRestRoute($source->post_type);
+        if ($route) {
+            $response = self::restGet("{$route}/{$newId}");
+            if (! self::isRestError($response)) {
+                return (array) $response->get_data();
+            }
+        }
 
-        return [
-            'id' => $newPost->ID,
-            'title' => $newPost->post_title,
-            'status' => $newPost->post_status,
-            'language' => $language,
-            'url' => get_permalink($newPost),
-            'edit_url' => get_edit_post_link($newPost->ID, 'raw'),
-            'source_post_id' => $sourceId,
-            'parent_id' => (int) $newPost->post_parent,
-            'parent_resolved' => $parentResolved,
-        ];
+        return ['id' => $newId, 'source_id' => $sourceId];
     }
 }

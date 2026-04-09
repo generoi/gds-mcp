@@ -58,7 +58,7 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
         // Update translation.
         $updateResult = UpdateStringTranslationAbility::execute([
             'string' => $testString,
-            'language' => $targetLang,
+            'lang' => $targetLang,
             'translation' => 'Translated: '.$testString,
         ]);
 

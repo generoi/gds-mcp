@@ -21,9 +21,9 @@ class CreateTranslationAbilityTest extends WP_UnitTestCase
 
         $postId = self::factory()->post->create();
 
-        $result = CreateTranslationAbility::execute([
-            'source_post_id' => $postId,
-            'language' => 'en',
+        $result = CreateTranslationAbility::instance()->execute([
+            'source_id' => $postId,
+            'lang' => 'en',
         ]);
 
         $this->assertWPError($result);
@@ -36,9 +36,9 @@ class CreateTranslationAbilityTest extends WP_UnitTestCase
             $this->markTestSkipped('Polylang is not active.');
         }
 
-        $result = CreateTranslationAbility::execute([
-            'source_post_id' => 999999,
-            'language' => 'en',
+        $result = CreateTranslationAbility::instance()->execute([
+            'source_id' => 999999,
+            'lang' => 'en',
         ]);
 
         $this->assertWPError($result);
@@ -50,8 +50,8 @@ class CreateTranslationAbilityTest extends WP_UnitTestCase
         wp_set_current_user(0);
 
         $result = CreateTranslationAbility::checkPermission([
-            'source_post_id' => 1,
-            'language' => 'en',
+            'source_id' => 1,
+            'lang' => 'en',
         ]);
 
         $this->assertWPError($result);
@@ -63,8 +63,8 @@ class CreateTranslationAbilityTest extends WP_UnitTestCase
         wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
 
         $result = CreateTranslationAbility::checkPermission([
-            'source_post_id' => 1,
-            'language' => 'en',
+            'source_id' => 1,
+            'lang' => 'en',
         ]);
 
         $this->assertWPError($result);

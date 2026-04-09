@@ -4,7 +4,6 @@ namespace GeneroWP\MCP\Abilities;
 
 use WP_Block_Type;
 use WP_Block_Type_Registry;
-use WP_Error;
 
 final class BlockCatalogResource
 {

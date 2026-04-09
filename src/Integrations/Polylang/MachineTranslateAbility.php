@@ -26,11 +26,11 @@ final class MachineTranslateAbility
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'post_id' => [
+                    'id' => [
                         'type' => 'integer',
                         'description' => 'The source post ID to translate. Required unless string_group is provided.',
                     ],
-                    'language' => [
+                    'lang' => [
                         'type' => 'string',
                         'description' => 'Target language slug (e.g. fi, en, sv).',
                     ],
@@ -39,7 +39,7 @@ final class MachineTranslateAbility
                         'description' => 'Translate registered Polylang strings instead of a post. Pass the group name (e.g. "WordPress", "ACF") or empty string for all groups. Use gds/strings-list to see available groups.',
                     ],
                 ],
-                'required' => ['language'],
+                'required' => ['lang'],
                 'additionalProperties' => false,
             ],
             'output_schema' => [
@@ -47,7 +47,7 @@ final class MachineTranslateAbility
                 'properties' => [
                     'source_id' => ['type' => 'integer'],
                     'translation_id' => ['type' => 'integer'],
-                    'language' => ['type' => 'string'],
+                    'lang' => ['type' => 'string'],
                     'title' => ['type' => 'string'],
                     'status' => ['type' => 'string'],
                     'url' => ['type' => 'string'],
@@ -77,7 +77,7 @@ final class MachineTranslateAbility
             return new WP_Error('machine_translation_not_available', 'Polylang Pro machine translation module is not available.');
         }
 
-        $language = $input['language'] ?? '';
+        $language = $input['lang'] ?? '';
 
         // Validate target language.
         $targetLang = \PLL()->model->get_language($language);
@@ -108,7 +108,7 @@ final class MachineTranslateAbility
             return self::translateStrings($input['string_group'], $targetLang, $service, $language);
         }
 
-        $postId = $input['post_id'] ?? 0;
+        $postId = $input['id'] ?? 0;
         if (! $postId) {
             return new WP_Error('missing_input', 'Provide post_id or string_group. For terms, use gds/translations-create-term instead.');
         }
@@ -148,7 +148,7 @@ final class MachineTranslateAbility
             'type' => 'post',
             'source_id' => $postId,
             'translation_id' => $translationId,
-            'language' => $language,
+            'lang' => $language,
             'title' => $translatedPost ? $translatedPost->post_title : '',
             'status' => $translatedPost ? $translatedPost->post_status : '',
             'url' => $translatedPost ? get_permalink($translatedPost) : '',
@@ -188,7 +188,7 @@ final class MachineTranslateAbility
         return [
             'type' => 'strings',
             'group' => $group ?: '(all)',
-            'language' => $language,
+            'lang' => $language,
             'count' => count($sources),
             'service' => $service->get_name(),
         ];

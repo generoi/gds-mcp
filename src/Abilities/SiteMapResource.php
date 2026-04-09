@@ -3,7 +3,6 @@
 namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Concerns\PolylangAware;
-use WP_Error;
 
 final class SiteMapResource
 {

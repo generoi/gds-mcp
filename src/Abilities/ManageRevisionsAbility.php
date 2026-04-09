@@ -70,9 +70,9 @@ final class ManageRevisionsAbility
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'revision_id' => ['type' => 'integer', 'description' => 'The revision ID to restore.'],
+                    'id' => ['type' => 'integer', 'description' => 'The revision ID to restore.'],
                 ],
-                'required' => ['revision_id'],
+                'required' => ['id'],
                 'additionalProperties' => false,
             ],
             'output_schema' => ['type' => 'object', 'additionalProperties' => true],
@@ -122,7 +122,7 @@ final class ManageRevisionsAbility
     public function restoreRevision(mixed $input = []): array|WP_Error
     {
         $input = is_array($input) ? $input : [];
-        $revisionId = (int) ($input['revision_id'] ?? 0);
+        $revisionId = (int) ($input['id'] ?? 0);
 
         $revision = wp_get_post_revision($revisionId);
         if (! $revision) {
@@ -139,15 +139,18 @@ final class ManageRevisionsAbility
             return new WP_Error('restore_failed', 'Failed to restore revision.');
         }
 
-        $post = get_post($revision->post_parent);
+        // Return the restored post via REST
+        $parentId = $revision->post_parent;
+        $post = get_post($parentId);
+        $route = self::getRestRoute($post->post_type);
+        if ($route) {
+            $response = self::restGet("{$route}/{$parentId}");
+            if (! self::isRestError($response)) {
+                return (array) $response->get_data();
+            }
+        }
 
-        return [
-            'post_id' => $post->ID,
-            'title' => $post->post_title,
-            'revision_id' => $revisionId,
-            'revision_date' => $revision->post_modified_gmt,
-            'restored' => true,
-        ];
+        return ['id' => $parentId, 'restored_from_revision' => $revisionId];
     }
 
     private function getRevisionRoute(int $postId): string|WP_Error

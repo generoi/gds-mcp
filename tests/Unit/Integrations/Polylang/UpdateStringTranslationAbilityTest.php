@@ -21,7 +21,7 @@ class UpdateStringTranslationAbilityTest extends WP_UnitTestCase
 
         $result = UpdateStringTranslationAbility::execute([
             'string' => 'Test',
-            'language' => 'en',
+            'lang' => 'en',
             'translation' => 'Test EN',
         ]);
         $this->assertWPError($result);

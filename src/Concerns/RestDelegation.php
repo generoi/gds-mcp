@@ -80,7 +80,7 @@ trait RestDelegation
      * it in a list response structure with total/pages.
      *
      * @param  string  $route  REST route (e.g. "/wp/v2/pages")
-     * @param  array   $extra  Additional item properties to merge in
+     * @param  array  $extra  Additional item properties to merge in
      */
     protected static function getRestListOutputSchema(string $route, array $extra = []): array
     {
@@ -125,8 +125,8 @@ trait RestDelegation
      * Strips internal callbacks (sanitize_callback, validate_callback) that
      * aren't valid JSON Schema.
      *
-     * @param  string  $route   REST route (e.g. "/wp/v2/pages")
-     * @param  array   $extra   Additional properties to merge in
+     * @param  string  $route  REST route (e.g. "/wp/v2/pages")
+     * @param  array  $extra  Additional properties to merge in
      * @param  string  $method  HTTP method to pull args for (GET, POST, DELETE)
      */
     protected static function getRestInputSchema(string $route, array $extra = [], string $method = 'GET'): array

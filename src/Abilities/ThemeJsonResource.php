@@ -2,7 +2,6 @@
 
 namespace GeneroWP\MCP\Abilities;
 
-use WP_Error;
 use WP_Theme_JSON_Resolver;
 
 final class ThemeJsonResource

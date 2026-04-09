@@ -2,8 +2,6 @@
 
 namespace GeneroWP\MCP\Abilities;
 
-use WP_Error;
-
 /**
  * Returns a grouped summary of all available GDS MCP abilities.
  * Use this as the starting point to discover what tools are available.
@@ -46,7 +44,7 @@ final class HelpAbility
                     'tip' => ['type' => 'string'],
                 ],
             ],
-            'permission_callback' => [self::class, 'checkPermission'],
+            'permission_callback' => '__return_true',
             'execute_callback' => [self::class, 'execute'],
             'meta' => [
                 'annotations' => [
@@ -56,16 +54,6 @@ final class HelpAbility
                 ],
             ],
         ]);
-    }
-
-    public static function checkPermission(mixed $input = []): bool|WP_Error
-    {
-        $input = is_array($input) ? $input : [];
-        if (! is_user_logged_in()) {
-            return new WP_Error('authentication_required', 'User must be authenticated.');
-        }
-
-        return true;
     }
 
     public static function execute(mixed $input = []): array

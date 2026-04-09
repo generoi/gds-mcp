@@ -21,9 +21,9 @@ class CreateTermTranslationAbilityTest extends WP_UnitTestCase
 
         $term = wp_insert_term('Test', 'category');
         $result = CreateTermTranslationAbility::execute([
-            'source_term_id' => $term['term_id'],
+            'source_id' => $term['term_id'],
             'taxonomy' => 'category',
-            'language' => 'en',
+            'lang' => 'en',
         ]);
 
         $this->assertWPError($result);

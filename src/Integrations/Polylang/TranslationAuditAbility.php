@@ -24,7 +24,7 @@ final class TranslationAuditAbility
                         'type' => 'string',
                         'description' => 'Post type to audit. Omit to audit all public post types.',
                     ],
-                    'language' => [
+                    'lang' => [
                         'type' => 'string',
                         'description' => 'Filter to a specific target language (e.g. "en" to find content missing English translations).',
                     ],
@@ -106,7 +106,7 @@ final class TranslationAuditAbility
 
         $languages = self::getAllLanguages();
         $languageSlugs = array_column($languages, 'slug');
-        $targetLanguage = $input['language'] ?? null;
+        $targetLanguage = $input['lang'] ?? null;
         $status = $input['status'] ?? 'publish';
 
         // Determine post types to audit.
@@ -161,8 +161,7 @@ final class TranslationAuditAbility
 
                 if (empty($missingLangs)) {
                     $fullyTranslated++;
-                } elseif (count($missingLangs) < count($targetLanguage ? [1] : $languageSlugs) - (count($translations) > 0 ? 0 : 1)) {
-                    // Has some but not all translations.
+                } elseif (count($missingLangs) > 0 && count($missingLangs) < count($languageSlugs)) {
                     $partiallyTranslated++;
                 }
 

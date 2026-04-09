@@ -29,7 +29,7 @@ final class BulkUpdatePostsAbility
                         'type' => 'string',
                         'description' => 'Filter posts by current status (used when post_ids is not set).',
                     ],
-                    'language' => [
+                    'lang' => [
                         'type' => 'string',
                         'description' => 'Polylang language slug to filter by (used when post_ids is not set).',
                     ],
@@ -189,7 +189,7 @@ final class BulkUpdatePostsAbility
         ];
 
         if (function_exists('pll_get_post_language')) {
-            $queryArgs['lang'] = $input['language'] ?? '';
+            $queryArgs['lang'] = $input['lang'] ?? '';
         }
 
         $query = new WP_Query($queryArgs);

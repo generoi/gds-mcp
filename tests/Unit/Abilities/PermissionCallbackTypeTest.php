@@ -22,7 +22,7 @@ class PermissionCallbackTypeTest extends WP_UnitTestCase
     /**
      * @dataProvider abilityClassProvider
      */
-    public function test_checkPermission_accepts_string_input(string $class): void
+    public function test_check_permission_accepts_string_input(string $class): void
     {
         $result = $class::checkPermission('unexpected string');
         $this->assertNotInstanceOf(\TypeError::class, $result);
@@ -31,7 +31,7 @@ class PermissionCallbackTypeTest extends WP_UnitTestCase
     /**
      * @dataProvider abilityClassProvider
      */
-    public function test_checkPermission_accepts_null_input(string $class): void
+    public function test_check_permission_accepts_null_input(string $class): void
     {
         $result = $class::checkPermission(null);
         $this->assertNotInstanceOf(\TypeError::class, $result);
