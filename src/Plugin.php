@@ -66,6 +66,7 @@ class Plugin
         Abilities\ManageMenuAbility::register();
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
+        Abilities\PatchBlockAbility::register();
         Abilities\SiteMapResource::register();
         Abilities\ThemeJsonResource::register();
         Abilities\CssVarsResource::register();
