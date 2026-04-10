@@ -2,47 +2,64 @@
 
 namespace GeneroWP\MCP\Abilities;
 
-use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
 
 final class PatchBlockAbility
 {
-    use PolylangAware;
-
-    private const OPERATION_FIELDS = ['block_name', 'occurrence', 'attrs', 'set_attrs', 'remove_attrs', 'inner_html', 'inner_blocks', 'search_depth'];
+    private const OPERATION_FIELDS = [
+        'action', 'block_name', 'occurrence', 'attrs', 'set_attrs',
+        'remove_attrs', 'inner_html', 'inner_blocks', 'search_depth',
+        'position', 'markup',
+    ];
 
     private const OPERATION_SCHEMA = [
         'type' => 'object',
         'properties' => [
+            'action' => [
+                'type' => 'string',
+                'description' => 'Operation type: "patch" (default), "insert", or "delete".',
+                'enum' => ['patch', 'insert', 'delete'],
+                'default' => 'patch',
+            ],
             'block_name' => [
                 'type' => 'string',
-                'description' => 'Block name to find (e.g. "gds/card", "core/heading").',
+                'description' => 'Block name to find (e.g. "gds/card", "core/heading"). For insert: the reference block.',
             ],
             'occurrence' => [
                 'type' => 'integer',
-                'description' => 'Which occurrence to patch (1-based). Default: 1. Use 0 to patch ALL occurrences.',
+                'description' => 'Which occurrence to target (1-based). Default: 1. Use 0 for ALL (patch/delete only).',
                 'default' => 1,
             ],
             'attrs' => [
                 'type' => 'object',
-                'description' => 'Attributes to merge into the block (existing keys preserved, provided keys override).',
+                'description' => 'Patch: merge attributes (existing preserved, provided override).',
             ],
             'set_attrs' => [
                 'type' => 'object',
-                'description' => 'Replace ALL block attributes with these (not merged).',
+                'description' => 'Patch: replace ALL attributes.',
             ],
             'remove_attrs' => [
                 'type' => 'array',
                 'items' => ['type' => 'string'],
-                'description' => 'Attribute keys to remove.',
+                'description' => 'Patch: attribute keys to remove.',
             ],
             'inner_html' => [
                 'type' => 'string',
-                'description' => 'Replace innerHTML (leaf blocks without inner blocks only).',
+                'description' => 'Patch: replace innerHTML (leaf blocks only).',
             ],
             'inner_blocks' => [
                 'type' => 'string',
-                'description' => 'Replace inner blocks with new block markup (parsed via parse_blocks).',
+                'description' => 'Patch: replace inner blocks with new block markup.',
+            ],
+            'position' => [
+                'type' => 'string',
+                'description' => 'Insert: where to insert relative to the target block. "before", "after" (default), "prepend" (first child), "append" (last child).',
+                'enum' => ['before', 'after', 'prepend', 'append'],
+                'default' => 'after',
+            ],
+            'markup' => [
+                'type' => 'string',
+                'description' => 'Insert: block markup to insert (parsed via parse_blocks).',
             ],
             'search_depth' => [
                 'type' => 'integer',
@@ -57,29 +74,22 @@ final class PatchBlockAbility
     {
         HelpAbility::registerAbility('gds/blocks-patch', [
             'label' => 'Patch Block',
-            'description' => 'Update specific blocks within a post without replacing the full post_content. Finds blocks by name (+ occurrence) and patches attributes and/or inner content. Supports single or batch operations — one parse/serialize round-trip per call.',
+            'description' => 'Modify, insert, or delete blocks within a post. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Supports batch operations.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'id' => [
                         'type' => 'integer',
-                        'description' => 'The post ID containing the block(s) to patch.',
+                        'description' => 'The post ID containing the block(s).',
                     ],
-                    // Single operation fields (convenience — same as operations[0]).
-                    'block_name' => self::OPERATION_SCHEMA['properties']['block_name'],
-                    'occurrence' => self::OPERATION_SCHEMA['properties']['occurrence'],
-                    'attrs' => self::OPERATION_SCHEMA['properties']['attrs'],
-                    'set_attrs' => self::OPERATION_SCHEMA['properties']['set_attrs'],
-                    'remove_attrs' => self::OPERATION_SCHEMA['properties']['remove_attrs'],
-                    'inner_html' => self::OPERATION_SCHEMA['properties']['inner_html'],
-                    'inner_blocks' => self::OPERATION_SCHEMA['properties']['inner_blocks'],
-                    'search_depth' => self::OPERATION_SCHEMA['properties']['search_depth'],
+                    // Single operation fields.
+                    ...array_map(fn ($p) => $p, self::OPERATION_SCHEMA['properties']),
                     // Batch operations.
                     'operations' => [
                         'type' => 'array',
                         'items' => self::OPERATION_SCHEMA,
-                        'description' => 'Array of patch operations. Each needs block_name + at least one patch field. All applied in one parse/serialize round-trip.',
+                        'description' => 'Array of operations. All applied in one parse/serialize round-trip.',
                     ],
                 ],
                 'required' => ['id'],
@@ -90,20 +100,8 @@ final class PatchBlockAbility
                 'properties' => [
                     'success' => ['type' => 'boolean'],
                     'id' => ['type' => 'integer'],
-                    'results' => [
-                        'type' => 'array',
-                        'items' => [
-                            'type' => 'object',
-                            'properties' => [
-                                'block_name' => ['type' => 'string'],
-                                'occurrence' => ['type' => 'integer'],
-                                'patched_count' => ['type' => 'integer'],
-                                'error' => ['type' => ['string', 'null']],
-                            ],
-                        ],
-                        'description' => 'Per-operation results.',
-                    ],
-                    'total_patched' => ['type' => 'integer'],
+                    'results' => ['type' => 'array'],
+                    'total_modified' => ['type' => 'integer'],
                     'content' => ['type' => 'string'],
                     'modified' => ['type' => 'string'],
                 ],
@@ -134,46 +132,48 @@ final class PatchBlockAbility
             return new WP_Error('post_not_found', 'Post not found.');
         }
 
-        // Normalize operations: support both single (top-level fields) and batch (operations array).
         $operations = self::normalizeOperations($input);
         if (is_wp_error($operations)) {
             return $operations;
         }
 
-        // Parse blocks once.
         $blocks = parse_blocks($post->post_content);
 
-        // Apply each operation.
         $results = [];
-        $totalPatched = 0;
+        $totalModified = 0;
 
         foreach ($operations as $op) {
+            $action = $op['action'] ?? 'patch';
             $blockName = $op['block_name'];
             $occurrence = (int) ($op['occurrence'] ?? 1);
             $searchDepth = min((int) ($op['search_depth'] ?? 10), 50);
 
-            $patchedCount = 0;
-            $error = self::applyOperation($blocks, $blockName, $occurrence, $searchDepth, $op, $patchedCount);
+            $modifiedCount = 0;
+            $error = match ($action) {
+                'patch' => self::applyPatch($blocks, $blockName, $occurrence, $searchDepth, $op, $modifiedCount),
+                'insert' => self::applyInsert($blocks, $blockName, $occurrence, $searchDepth, $op, $modifiedCount),
+                'delete' => self::applyDelete($blocks, $blockName, $occurrence, $searchDepth, $modifiedCount),
+                default => new WP_Error('invalid_action', "Unknown action: {$action}"),
+            };
 
             $results[] = [
+                'action' => $action,
                 'block_name' => $blockName,
                 'occurrence' => $occurrence,
-                'patched_count' => $patchedCount,
+                'modified_count' => $modifiedCount,
                 'error' => $error ? $error->get_error_message() : null,
             ];
 
-            $totalPatched += $patchedCount;
+            $totalModified += $modifiedCount;
         }
 
-        if ($totalPatched === 0) {
-            // Check if all operations errored.
+        if ($totalModified === 0) {
             $allErrors = array_filter($results, fn ($r) => $r['error'] !== null);
             if (count($allErrors) === count($results)) {
-                return new WP_Error('all_operations_failed', 'No blocks were patched.', ['results' => $results]);
+                return new WP_Error('all_operations_failed', 'No blocks were modified.', ['results' => $results]);
             }
         }
 
-        // Serialize and save once.
         $newContent = serialize_blocks($blocks);
 
         $updateResult = wp_update_post([
@@ -191,46 +191,51 @@ final class PatchBlockAbility
             'success' => true,
             'id' => $postId,
             'results' => $results,
-            'total_patched' => $totalPatched,
+            'total_modified' => $totalModified,
             'content' => $updated->post_content,
             'modified' => $updated->post_modified_gmt,
         ];
     }
 
-    /**
-     * Normalize input into an array of operations.
-     */
     private static function normalizeOperations(array $input): array|WP_Error
     {
         $operations = [];
 
-        // Batch: operations array provided.
         if (! empty($input['operations']) && is_array($input['operations'])) {
             foreach ($input['operations'] as $i => $op) {
+                $op = (array) $op;
                 if (empty($op['block_name'])) {
                     return new WP_Error('missing_block_name', "operations[{$i}] is missing block_name.");
                 }
-                if (! self::hasPatchFields($op)) {
-                    return new WP_Error('no_patch', "operations[{$i}] has no patch fields (attrs, set_attrs, remove_attrs, inner_html, or inner_blocks).");
+                $action = $op['action'] ?? 'patch';
+                if ($action === 'patch' && ! self::hasPatchFields($op)) {
+                    return new WP_Error('no_patch', "operations[{$i}] has no patch fields.");
+                }
+                if ($action === 'insert' && empty($op['markup'])) {
+                    return new WP_Error('missing_markup', "operations[{$i}] insert requires markup.");
                 }
                 $operations[] = $op;
             }
         }
 
-        // Single: top-level block_name provided.
         if (! empty($input['block_name'])) {
             $singleOp = array_intersect_key($input, array_flip(self::OPERATION_FIELDS));
-            if (! self::hasPatchFields($singleOp)) {
-                if (empty($operations)) {
-                    return new WP_Error('no_patch', 'At least one patch field (attrs, set_attrs, remove_attrs, inner_html, or inner_blocks) must be provided.');
-                }
-            } else {
+            $action = $singleOp['action'] ?? 'patch';
+
+            if ($action === 'patch' && ! self::hasPatchFields($singleOp) && empty($operations)) {
+                return new WP_Error('no_patch', 'Patch requires at least one of: attrs, set_attrs, remove_attrs, inner_html, inner_blocks.');
+            }
+            if ($action === 'insert' && empty($singleOp['markup'])) {
+                return new WP_Error('missing_markup', 'Insert requires markup.');
+            }
+
+            if ($action !== 'patch' || self::hasPatchFields($singleOp)) {
                 $operations[] = $singleOp;
             }
         }
 
         if (empty($operations)) {
-            return new WP_Error('no_operations', 'Provide block_name with patch fields, or an operations array.');
+            return new WP_Error('no_operations', 'Provide block_name with action/patch fields, or an operations array.');
         }
 
         return $operations;
@@ -242,50 +247,40 @@ final class PatchBlockAbility
             || isset($op['inner_html']) || isset($op['inner_blocks']);
     }
 
-    /**
-     * Apply a single patch operation to the blocks tree.
-     */
-    private static function applyOperation(
+    // ── Patch ───────────────────────────────────────────────────────────────
+
+    private static function applyPatch(
         array &$blocks,
         string $blockName,
         int $occurrence,
         int $searchDepth,
         array $op,
-        int &$patchedCount,
+        int &$modifiedCount,
     ): ?WP_Error {
         $matchCount = 0;
         $error = null;
 
-        self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $patchedCount, $error, function (&$block) use ($op) {
+        self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($op) {
             if (isset($op['attrs'])) {
-                $block['attrs'] = array_merge($block['attrs'] ?? [], $op['attrs']);
+                $block['attrs'] = array_merge($block['attrs'] ?? [], (array) $op['attrs']);
             }
-
             if (isset($op['set_attrs'])) {
-                $block['attrs'] = $op['set_attrs'];
+                $block['attrs'] = (array) $op['set_attrs'];
             }
-
             if (isset($op['remove_attrs'])) {
                 foreach ($op['remove_attrs'] as $key) {
                     unset($block['attrs'][$key]);
                 }
             }
-
             if (isset($op['inner_html'])) {
                 if (! empty($block['innerBlocks'])) {
-                    return new WP_Error('has_inner_blocks', 'Cannot set inner_html on a block with inner blocks. Use inner_blocks instead.');
+                    return new WP_Error('has_inner_blocks', 'Cannot set inner_html on a block with inner blocks.');
                 }
                 $block['innerHTML'] = $op['inner_html'];
                 $block['innerContent'] = [$op['inner_html']];
             }
-
             if (isset($op['inner_blocks'])) {
-                $newInnerBlocks = parse_blocks($op['inner_blocks']);
-                $newInnerBlocks = array_values(array_filter(
-                    $newInnerBlocks,
-                    fn ($b) => $b['blockName'] !== null || trim($b['innerHTML'] ?? '') !== ''
-                ));
-
+                $newInnerBlocks = self::parseMarkup($op['inner_blocks']);
                 $block['innerBlocks'] = $newInnerBlocks;
                 $block['innerHTML'] = '';
                 $block['innerContent'] = array_fill(0, count($newInnerBlocks), null);
@@ -294,16 +289,165 @@ final class PatchBlockAbility
             return true;
         });
 
-        if ($patchedCount === 0 && $error === null) {
+        if ($modifiedCount === 0 && $error === null) {
             return new WP_Error('block_not_found', "No '{$blockName}' block found".($occurrence > 1 ? " (occurrence #{$occurrence})" : ''));
         }
 
         return $error;
     }
 
-    /**
-     * Recursively walk blocks and apply a callback to matching blocks.
-     */
+    // ── Insert ──────────────────────────────────────────────────────────────
+
+    private static function applyInsert(
+        array &$blocks,
+        string $blockName,
+        int $occurrence,
+        int $searchDepth,
+        array $op,
+        int &$modifiedCount,
+    ): ?WP_Error {
+        $position = $op['position'] ?? 'after';
+        $newBlocks = self::parseMarkup($op['markup'] ?? '');
+
+        if (empty($newBlocks)) {
+            return new WP_Error('empty_markup', 'Insert markup produced no blocks.');
+        }
+
+        $matchCount = 0;
+        $error = null;
+
+        if ($position === 'prepend' || $position === 'append') {
+            // Insert inside the target block's innerBlocks
+            self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($newBlocks, $position) {
+                if ($position === 'prepend') {
+                    $block['innerBlocks'] = array_merge($newBlocks, $block['innerBlocks'] ?? []);
+                } else {
+                    $block['innerBlocks'] = array_merge($block['innerBlocks'] ?? [], $newBlocks);
+                }
+                // Update innerContent to match
+                $block['innerHTML'] = '';
+                $block['innerContent'] = array_fill(0, count($block['innerBlocks']), null);
+
+                return true;
+            });
+        } else {
+            // Insert before/after the target block as a sibling
+            $inserted = self::insertSibling($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $newBlocks, $position);
+            if ($inserted) {
+                $modifiedCount = 1;
+            }
+        }
+
+        if ($modifiedCount === 0 && $error === null) {
+            return new WP_Error('block_not_found', "No '{$blockName}' block found for insert.");
+        }
+
+        return $error;
+    }
+
+    private static function insertSibling(
+        array &$blocks,
+        string $targetName,
+        int $occurrence,
+        int $maxDepth,
+        int $currentDepth,
+        int &$matchCount,
+        array $newBlocks,
+        string $position,
+    ): bool {
+        for ($i = 0; $i < count($blocks); $i++) {
+            if (($blocks[$i]['blockName'] ?? null) === $targetName) {
+                $matchCount++;
+                if ($matchCount === $occurrence || $occurrence === 0) {
+                    $insertAt = $position === 'before' ? $i : $i + 1;
+                    array_splice($blocks, $insertAt, 0, $newBlocks);
+
+                    return true;
+                }
+            }
+
+            if (! empty($blocks[$i]['innerBlocks']) && $currentDepth < $maxDepth) {
+                if (self::insertSibling($blocks[$i]['innerBlocks'], $targetName, $occurrence, $maxDepth, $currentDepth + 1, $matchCount, $newBlocks, $position)) {
+                    // Update parent's innerContent
+                    $blocks[$i]['innerHTML'] = '';
+                    $blocks[$i]['innerContent'] = array_fill(0, count($blocks[$i]['innerBlocks']), null);
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // ── Delete ──────────────────────────────────────────────────────────────
+
+    private static function applyDelete(
+        array &$blocks,
+        string $blockName,
+        int $occurrence,
+        int $searchDepth,
+        int &$modifiedCount,
+    ): ?WP_Error {
+        $matchCount = 0;
+        self::deleteBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount);
+
+        if ($modifiedCount === 0) {
+            return new WP_Error('block_not_found', "No '{$blockName}' block found to delete.");
+        }
+
+        return null;
+    }
+
+    private static function deleteBlocks(
+        array &$blocks,
+        string $targetName,
+        int $occurrence,
+        int $maxDepth,
+        int $currentDepth,
+        int &$matchCount,
+        int &$deletedCount,
+    ): void {
+        for ($i = count($blocks) - 1; $i >= 0; $i--) {
+            // Recurse into inner blocks first (depth-first)
+            if (! empty($blocks[$i]['innerBlocks']) && $currentDepth < $maxDepth) {
+                self::deleteBlocks($blocks[$i]['innerBlocks'], $targetName, $occurrence, $maxDepth, $currentDepth + 1, $matchCount, $deletedCount);
+
+                if ($occurrence > 0 && $deletedCount > 0) {
+                    return;
+                }
+
+                // Update parent's innerContent after child deletion
+                $blocks[$i]['innerHTML'] = '';
+                $blocks[$i]['innerContent'] = array_fill(0, count($blocks[$i]['innerBlocks']), null);
+            }
+
+            if (($blocks[$i]['blockName'] ?? null) === $targetName) {
+                $matchCount++;
+                if ($occurrence === 0 || $matchCount === $occurrence) {
+                    array_splice($blocks, $i, 1);
+                    $deletedCount++;
+
+                    if ($occurrence > 0) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static function parseMarkup(string $markup): array
+    {
+        $blocks = parse_blocks($markup);
+
+        return array_values(array_filter(
+            $blocks,
+            fn ($b) => $b['blockName'] !== null || trim($b['innerHTML'] ?? '') !== ''
+        ));
+    }
+
     private static function walkBlocks(
         array &$blocks,
         string $targetName,
@@ -311,7 +455,7 @@ final class PatchBlockAbility
         int $maxDepth,
         int $currentDepth,
         int &$matchCount,
-        int &$patchedCount,
+        int &$modifiedCount,
         ?WP_Error &$error,
         callable $callback,
     ): void {
@@ -326,7 +470,7 @@ final class PatchBlockAbility
 
                         return;
                     }
-                    $patchedCount++;
+                    $modifiedCount++;
 
                     if ($occurrence > 0 && $matchCount === $occurrence) {
                         return;
@@ -342,12 +486,12 @@ final class PatchBlockAbility
                     $maxDepth,
                     $currentDepth + 1,
                     $matchCount,
-                    $patchedCount,
+                    $modifiedCount,
                     $error,
                     $callback,
                 );
 
-                if ($error || ($occurrence > 0 && $patchedCount > 0)) {
+                if ($error || ($occurrence > 0 && $modifiedCount > 0)) {
                     return;
                 }
             }
