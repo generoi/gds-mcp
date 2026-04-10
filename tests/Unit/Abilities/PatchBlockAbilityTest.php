@@ -35,7 +35,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
-        $this->assertSame(1, $result['total_patched']);
+        $this->assertSame(1, $result['total_modified']);
 
         // Verify the second paragraph got the new attr merged with existing className.
         $blocks = parse_blocks(get_post($this->postId)->post_content);
@@ -133,7 +133,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
         ]);
 
         $this->assertTrue($result['success']);
-        $this->assertSame(2, $result['total_patched']);
+        $this->assertSame(2, $result['total_modified']);
 
         $blocks = parse_blocks(get_post($this->postId)->post_content);
         $paragraphs = array_values(array_filter($blocks, fn ($b) => $b['blockName'] === 'core/paragraph'));
@@ -183,7 +183,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
         $this->assertTrue($result['success']);
         $this->assertCount(3, $result['results']);
-        $this->assertSame(3, $result['total_patched']);
+        $this->assertSame(3, $result['total_modified']);
 
         $content = get_post($this->postId)->post_content;
         $this->assertStringContainsString('Batch updated', $content);
