@@ -28,9 +28,7 @@ trait RestDelegation
     {
         $request = new WP_REST_Request('POST', $route);
         $request->set_header('Content-Type', 'application/json');
-        foreach ($body as $key => $value) {
-            $request->set_param($key, $value);
-        }
+        $request->set_body_params($body);
 
         return rest_do_request($request);
     }
@@ -118,12 +116,13 @@ trait RestDelegation
     }
 
     /**
-     * Get the input schema for a REST route's GET endpoint.
+     * Get the input schema for a REST route endpoint.
      *
      * Pulls parameter definitions from the registered REST route and converts
-     * them to a JSON Schema suitable for the Abilities API input_schema.
-     * Strips internal callbacks (sanitize_callback, validate_callback) that
-     * aren't valid JSON Schema.
+     * them to a JSON Schema. Keeps only type, description, default, and enum.
+     * Collects required fields into a proper JSON Schema required array.
+     *
+     * Results are cached in a transient to avoid recomputing on every request.
      *
      * @param  string  $route  REST route (e.g. "/wp/v2/pages")
      * @param  array  $extra  Additional properties to merge in
@@ -131,6 +130,12 @@ trait RestDelegation
      */
     protected static function getRestInputSchema(string $route, array $extra = [], string $method = 'GET'): array
     {
+        $cacheKey = 'gds_mcp_input_schema_'.md5($route.$method.serialize($extra));
+        $cached = get_transient($cacheKey);
+        if ($cached !== false) {
+            return $cached;
+        }
+
         $server = rest_get_server();
         $routes = $server->get_routes();
         $routeArgs = $routes[$route] ?? null;
@@ -153,22 +158,36 @@ trait RestDelegation
             }
         }
 
-        // Convert REST args to JSON Schema properties, stripping PHP callbacks
         $properties = [];
-        $internalKeys = ['sanitize_callback', 'validate_callback', 'required'];
+        $required = [];
+        $allowedKeys = ['type', 'description', 'default', 'enum', 'items', 'format'];
 
-        foreach ($args as $name => $schema) {
-            $properties[$name] = array_diff_key($schema, array_flip($internalKeys));
+        foreach ($args as $name => $def) {
+            $properties[$name] = array_intersect_key($def, array_flip($allowedKeys));
+            // Ensure type is always present
+            if (! isset($properties[$name]['type'])) {
+                $properties[$name]['type'] = 'string';
+            }
+            if (! empty($def['required'])) {
+                $required[] = $name;
+            }
         }
 
         $merged = array_merge($properties, $extra);
 
-        return [
+        $schema = [
             'type' => 'object',
-            'default' => new \stdClass,
-            'properties' => $merged ?: new \stdClass,
+            'properties' => $merged,
             'additionalProperties' => true,
         ];
+
+        if ($required) {
+            $schema['required'] = $required;
+        }
+
+        set_transient($cacheKey, $schema, DAY_IN_SECONDS);
+
+        return $schema;
     }
 
     /**
