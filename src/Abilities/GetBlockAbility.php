@@ -27,12 +27,12 @@ final class GetBlockAbility
                     'include_examples' => [
                         'type' => 'boolean',
                         'description' => 'Include example markup extracted from the block demo page.',
-                        'default' => false,
+                        'default' => true,
                     ],
                     'search_posts' => [
                         'type' => 'boolean',
                         'description' => 'Search published posts/pages for real-world usage examples of the block.',
-                        'default' => false,
+                        'default' => true,
                     ],
                     'search_post_type' => [
                         'type' => 'string',
@@ -85,8 +85,8 @@ final class GetBlockAbility
     {
         $input = (array) ($input ?? []);
         $name = $input['name'] ?? null;
-        $includeExamples = $input['include_examples'] ?? false;
-        $searchPosts = $input['search_posts'] ?? false;
+        $includeExamples = $input['include_examples'] ?? true;
+        $searchPosts = $input['search_posts'] ?? true;
         $searchPostType = $input['search_post_type'] ?? null;
         $style = $input['style'] ?? null;
         $maxExamples = min((int) ($input['max_examples'] ?? 10), 100);
