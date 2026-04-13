@@ -102,6 +102,10 @@ final class QueryActivityLogAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
+        if (! current_user_can('manage_options')) {
+            return new WP_Error('forbidden', 'You do not have permission to view the activity log.', ['status' => 403]);
+        }
+
         $input = (array) ($input ?? []);
         if (! class_exists('WP_Stream\Plugin')) {
             return new WP_Error('stream_not_active', 'Stream plugin is not active.');

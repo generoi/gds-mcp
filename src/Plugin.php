@@ -31,7 +31,12 @@ class Plugin
     public static function clearSchemaCache(): void
     {
         global $wpdb;
-        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient%gds_mcp_input_schema%'");
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
+                $wpdb->esc_like('_transient_gds_mcp_input_schema').'%'
+            )
+        );
     }
 
     public function registerCategory(): void

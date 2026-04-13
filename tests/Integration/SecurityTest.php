@@ -190,7 +190,7 @@ class SecurityTest extends AbilityTestCase
 
     // ── Redirect abilities ────────────────────────────────────────
 
-    public function test_create_redirect_requires_publish_pages(): void
+    public function test_redirects_blocked_for_subscriber(): void
     {
         if (! function_exists('srm_create_redirect') && ! class_exists('Red_Item') && ! defined('WPSEO_VERSION')) {
             $this->markTestSkipped('No redirect plugin active.');
@@ -198,10 +198,62 @@ class SecurityTest extends AbilityTestCase
 
         wp_set_current_user($this->subscriberId);
 
+        // Both list and create should be blocked
+        $this->assertAbilityError('gds/redirects-manage', [
+            'action' => 'list',
+        ], 'forbidden');
+
         $this->assertAbilityError('gds/redirects-manage', [
             'action' => 'create',
             'from' => '/test-redirect',
             'to' => '/destination',
+        ], 'forbidden');
+    }
+
+    // ── Cache clearing ────────────────────────────────────────────
+
+    public function test_cache_clear_requires_manage_options(): void
+    {
+        if (! class_exists(\Genero\Sage\CacheTags\CacheTags::class)) {
+            $this->markTestSkipped('sage-cachetags not active.');
+        }
+
+        wp_set_current_user($this->subscriberId);
+
+        $this->assertAbilityError('gds/cache-clear', [
+            'type' => 'flush',
+        ], 'forbidden');
+    }
+
+    // ── Activity log ──────────────────────────────────────────────
+
+    public function test_activity_log_requires_manage_options(): void
+    {
+        if (! class_exists(\WP_Stream\Plugin::class)) {
+            $this->markTestSkipped('Stream not active.');
+        }
+
+        wp_set_current_user($this->subscriberId);
+
+        $this->assertAbilityError('gds/activity-query', [
+            'per_page' => 1,
+        ], 'forbidden');
+    }
+
+    // ── String translations ───────────────────────────────────────
+
+    public function test_update_string_translation_requires_manage_options(): void
+    {
+        if (! function_exists('pll_get_post_language')) {
+            $this->markTestSkipped('Polylang not active.');
+        }
+
+        wp_set_current_user($this->subscriberId);
+
+        $this->assertAbilityError('gds/strings-update', [
+            'string' => 'test',
+            'lang' => 'fi',
+            'translation' => 'testi',
         ], 'forbidden');
     }
 

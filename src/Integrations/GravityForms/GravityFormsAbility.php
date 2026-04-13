@@ -209,7 +209,7 @@ final class GravityFormsAbility
     public function listEntries(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $formId = $input['form_id'] ?? 0;
+        $formId = (int) ($input['form_id'] ?? 0);
         unset($input['form_id']);
 
         $response = self::restGet("/gf/v2/forms/{$formId}/entries", $input);

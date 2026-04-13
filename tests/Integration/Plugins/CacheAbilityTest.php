@@ -17,6 +17,9 @@ class CacheAbilityTest extends AbilityTestCase
         if (! class_exists(CacheTags::class)) {
             $this->markTestSkipped('sage-cachetags is not active.');
         }
+
+        // Cache clearing requires manage_options (admin).
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
     }
 
     public function test_cache_clear_registered(): void
