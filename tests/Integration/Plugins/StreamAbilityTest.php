@@ -16,6 +16,9 @@ class StreamAbilityTest extends AbilityTestCase
         if (! class_exists(\WP_Stream\Plugin::class)) {
             $this->markTestSkipped('Stream is not active.');
         }
+
+        // Activity log requires manage_options (admin).
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
     }
 
     public function test_activity_query_registered(): void

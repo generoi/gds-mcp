@@ -80,8 +80,8 @@ final class ManageRedirectsAbility
             return new WP_Error('no_redirect_plugin', 'No supported redirect plugin found.');
         }
 
-        if ($action === 'create' && ! current_user_can('publish_pages')) {
-            return new \WP_Error('forbidden', 'You do not have permission to create redirects.', ['status' => 403]);
+        if (! current_user_can('edit_others_posts')) {
+            return new \WP_Error('forbidden', 'You do not have permission to manage redirects.', ['status' => 403]);
         }
 
         return match ($action) {

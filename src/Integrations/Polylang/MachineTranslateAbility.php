@@ -105,12 +105,20 @@ final class MachineTranslateAbility
 
         // Dispatch to the right translation type.
         if (isset($input['string_group'])) {
+            if (! current_user_can('manage_options')) {
+                return new WP_Error('forbidden', 'You do not have permission to manage string translations.', ['status' => 403]);
+            }
+
             return self::translateStrings($input['string_group'], $targetLang, $service, $language);
         }
 
         $postId = (int) ($input['id'] ?? 0);
         if (! $postId) {
             return new WP_Error('missing_input', 'Provide post_id or string_group. For terms, use gds/translations-create-term instead.');
+        }
+
+        if (! current_user_can('edit_post', $postId)) {
+            return new WP_Error('forbidden', 'You do not have permission to translate this post.', ['status' => 403]);
         }
 
         return self::translatePost($postId, $targetLang, $service, $language);

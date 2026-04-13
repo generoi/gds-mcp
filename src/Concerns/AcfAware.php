@@ -20,7 +20,12 @@ trait AcfAware
         }
 
         foreach ($fields as $key => $value) {
-            update_field($key, $value, $postId);
+            // Only allow registered ACF field keys/names — reject arbitrary meta.
+            $fieldObj = acf_get_field($key);
+            if (! $fieldObj) {
+                continue;
+            }
+            update_field($fieldObj['key'], $value, $postId);
         }
     }
 }

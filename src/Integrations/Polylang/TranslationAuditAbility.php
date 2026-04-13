@@ -127,7 +127,7 @@ final class TranslationAuditAbility
             $query = new WP_Query([
                 'post_type' => $postType,
                 'post_status' => $status,
-                'posts_per_page' => -1,
+                'posts_per_page' => 2000,
                 'fields' => 'ids',
                 'lang' => '', // Disable Polylang's automatic language filtering.
             ]);

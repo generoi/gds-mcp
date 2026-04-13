@@ -62,6 +62,10 @@ final class ClearCacheAbility
 
     public function execute(mixed $input = []): array|WP_Error
     {
+        if (! current_user_can('manage_options')) {
+            return new WP_Error('forbidden', 'You do not have permission to clear the cache.', ['status' => 403]);
+        }
+
         $input = (array) ($input ?? []);
         $type = $input['type'] ?? 'flush';
 
