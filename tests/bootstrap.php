@@ -1,5 +1,7 @@
 <?php
 
+use WP\MCP\Core\McpAdapter;
+
 /**
  * PHPUnit bootstrap file.
  */
@@ -65,9 +67,9 @@ tests_add_filter('muplugins_loaded', function () {
     $muPluginPath = $pluginsDir.'/../mu-plugins/gds-mcp-adapter.php';
     if (file_exists($muPluginPath)) {
         require_once $muPluginPath;
-    } elseif (class_exists(\WP\MCP\Core\McpAdapter::class)) {
+    } elseif (class_exists(McpAdapter::class)) {
         // In wp-env the mu-plugin doesn't exist — bootstrap the adapter inline.
-        \WP\MCP\Core\McpAdapter::instance();
+        McpAdapter::instance();
         add_filter('wp_register_ability_args', function (array $args, string $name): array {
             if (str_starts_with($name, 'gds/') || str_starts_with($name, 'core/')) {
                 $args['meta']['mcp']['public'] = true;

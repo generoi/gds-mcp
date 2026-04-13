@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Tests\Integration\Plugins;
 
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use WP_Stream\Plugin;
 
 /**
  * Integration tests for gds/activity-query through the Abilities API.
@@ -13,7 +14,7 @@ class StreamAbilityTest extends AbilityTestCase
     {
         parent::setUp();
 
-        if (! class_exists(\WP_Stream\Plugin::class)) {
+        if (! class_exists(Plugin::class)) {
             $this->markTestSkipped('Stream is not active.');
         }
 

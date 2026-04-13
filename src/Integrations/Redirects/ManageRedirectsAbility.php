@@ -81,13 +81,13 @@ final class ManageRedirectsAbility
         }
 
         if (! current_user_can('edit_others_posts')) {
-            return new \WP_Error('forbidden', 'You do not have permission to manage redirects.', ['status' => 403]);
+            return new WP_Error('forbidden', 'You do not have permission to manage redirects.', ['status' => 403]);
         }
 
         return match ($action) {
             'list' => $provider::list(),
             'create' => self::handleCreate($provider, $input),
-            default => new \WP_Error('invalid_action', 'Action must be list or create.'),
+            default => new WP_Error('invalid_action', 'Action must be list or create.'),
         };
     }
 

@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Tests\Integration\Polylang;
 
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Factory;
 
 /**
  * Integration tests for Polylang abilities through the Abilities API.
@@ -234,7 +235,7 @@ class PolylangAbilityTest extends AbilityTestCase
 
     public function test_machine_translate_registered_if_pro(): void
     {
-        if (class_exists(\WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Factory::class)) {
+        if (class_exists(Factory::class)) {
             $this->assertAbilityRegistered('gds/translations-machine');
         } else {
             $this->assertFalse(wp_has_ability('gds/translations-machine'));
