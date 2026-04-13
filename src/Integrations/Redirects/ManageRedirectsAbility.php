@@ -80,10 +80,14 @@ final class ManageRedirectsAbility
             return new WP_Error('no_redirect_plugin', 'No supported redirect plugin found.');
         }
 
+        if ($action === 'create' && ! current_user_can('publish_pages')) {
+            return new \WP_Error('forbidden', 'You do not have permission to create redirects.', ['status' => 403]);
+        }
+
         return match ($action) {
             'list' => $provider::list(),
             'create' => self::handleCreate($provider, $input),
-            default => new WP_Error('invalid_action', 'Action must be list or create.'),
+            default => new \WP_Error('invalid_action', 'Action must be list or create.'),
         };
     }
 

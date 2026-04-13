@@ -124,7 +124,7 @@ final class PatchBlockAbility
     {
         $input = (array) ($input ?? []);
 
-        $postId = $input['id'] ?? 0;
+        $postId = (int) ($input['id'] ?? 0);
         if (! $postId) {
             return new WP_Error('missing_id', 'id is required.');
         }
@@ -132,6 +132,10 @@ final class PatchBlockAbility
         $post = get_post($postId);
         if (! $post) {
             return new WP_Error('post_not_found', 'Post not found.');
+        }
+
+        if (! current_user_can('edit_post', $postId)) {
+            return new WP_Error('forbidden', 'You do not have permission to edit this post.', ['status' => 403]);
         }
 
         $operations = self::normalizeOperations($input);

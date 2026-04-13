@@ -200,7 +200,7 @@ final class PostTypeAbility
     public function executeRead(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         unset($input['id']);
 
         $response = self::restGet("{$this->route}/{$id}", $input);
@@ -238,7 +238,7 @@ final class PostTypeAbility
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
         $input = self::normalizeInput((array) ($input ?? []));
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         unset($input['id']);
 
         // Handle ACF fields separately
@@ -263,7 +263,7 @@ final class PostTypeAbility
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         $force = $input['force'] ?? false;
 
         $request = new \WP_REST_Request('DELETE', "{$this->route}/{$id}");

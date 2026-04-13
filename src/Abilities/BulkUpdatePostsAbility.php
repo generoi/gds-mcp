@@ -127,10 +127,16 @@ final class BulkUpdatePostsAbility
                 }
 
                 foreach ($setMeta as $key => $value) {
+                    if (is_protected_meta($key, 'post')) {
+                        continue;
+                    }
                     update_post_meta($post->ID, $key, $value);
                 }
 
                 foreach ($deleteMeta as $key) {
+                    if (is_protected_meta($key, 'post')) {
+                        continue;
+                    }
                     delete_post_meta($post->ID, $key);
                 }
 

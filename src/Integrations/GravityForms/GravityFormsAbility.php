@@ -136,7 +136,7 @@ final class GravityFormsAbility
     public function readForm(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         unset($input['id']);
 
         $response = self::restGet("/gf/v2/forms/{$id}", $input);

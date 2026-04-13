@@ -175,7 +175,7 @@ final class GenericTaxonomyAbility
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         unset($input['taxonomy'], $input['id']);
 
         $response = self::restGet("{$route}/{$id}", $input);
@@ -208,7 +208,7 @@ final class GenericTaxonomyAbility
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         unset($input['taxonomy'], $input['id']);
 
         $response = self::restPost("{$route}/{$id}", $input);
@@ -225,7 +225,7 @@ final class GenericTaxonomyAbility
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         $force = $input['force'] ?? false;
 
         $request = new \WP_REST_Request('DELETE', "{$route}/{$id}");

@@ -207,7 +207,7 @@ final class GenericPostTypeAbility
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         unset($input['type'], $input['id']);
 
         $response = self::restGet("{$route}/{$id}", $input);
@@ -252,7 +252,7 @@ final class GenericPostTypeAbility
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
 
         $acfFields = $input['fields'] ?? null;
         unset($input['type'], $input['id'], $input['fields']);
@@ -279,7 +279,7 @@ final class GenericPostTypeAbility
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
-        $id = $input['id'] ?? 0;
+        $id = (int) ($input['id'] ?? 0);
         $force = $input['force'] ?? false;
 
         $request = new \WP_REST_Request('DELETE', "{$route}/{$id}");

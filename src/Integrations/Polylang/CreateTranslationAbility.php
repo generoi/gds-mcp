@@ -75,12 +75,21 @@ final class CreateTranslationAbility
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }
 
-        $sourceId = $input['source_id'] ?? 0;
+        $sourceId = (int) ($input['source_id'] ?? 0);
         $language = $input['lang'] ?? '';
 
         $source = get_post($sourceId);
         if (! $source) {
             return new WP_Error('source_not_found', 'Source post not found.');
+        }
+
+        if (! current_user_can('edit_post', $sourceId)) {
+            return new WP_Error('forbidden', 'You do not have permission to read this post.', ['status' => 403]);
+        }
+
+        $typeObj = get_post_type_object($source->post_type);
+        if (! $typeObj || ! current_user_can($typeObj->cap->create_posts)) {
+            return new WP_Error('forbidden', 'You do not have permission to create posts of this type.', ['status' => 403]);
         }
 
         // Validate language.

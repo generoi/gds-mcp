@@ -58,11 +58,20 @@ final class DuplicatePostAbility
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $sourceId = $input['id'] ?? 0;
+        $sourceId = (int) ($input['id'] ?? 0);
         $source = get_post($sourceId);
 
         if (! $source) {
             return new WP_Error('post_not_found', 'Source post not found.');
+        }
+
+        if (! current_user_can('edit_post', $sourceId)) {
+            return new WP_Error('forbidden', 'You do not have permission to read this post.', ['status' => 403]);
+        }
+
+        $typeObj = get_post_type_object($source->post_type);
+        if (! $typeObj || ! current_user_can($typeObj->cap->create_posts)) {
+            return new WP_Error('forbidden', 'You do not have permission to create posts of this type.', ['status' => 403]);
         }
 
         $title = $input['title'] ?? $source->post_title.' (Copy)';
