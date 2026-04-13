@@ -45,10 +45,13 @@ tests_add_filter('muplugins_loaded', function () {
 
     require dirname(__DIR__).'/gds-mcp.php';
 
-    // Load MCP adapter if available (needed for integration tests).
+    // Load MCP adapter if available (needed for protocol-level tests).
     $mcpAdapterPaths = [
         dirname(__DIR__).'/vendor/wordpress/mcp-adapter/mcp-adapter.php',
         dirname(__DIR__, 5).'/vendor/wordpress/mcp-adapter/mcp-adapter.php',
+        $pluginsDir.'/trunk/mcp-adapter.php',                  // wp-env GitHub trunk zip
+        $pluginsDir.'/mcp-adapter-trunk/mcp-adapter.php',   // wp-env GitHub zip (alt)
+        $pluginsDir.'/mcp-adapter/mcp-adapter.php',         // wp-env regular plugin
     ];
     foreach ($mcpAdapterPaths as $path) {
         if (file_exists($path)) {
@@ -58,10 +61,20 @@ tests_add_filter('muplugins_loaded', function () {
         }
     }
 
-    // Load the MCP adapter bootstrap mu-plugin.
+    // Load the MCP adapter bootstrap mu-plugin (exposes gds/* as public MCP tools).
     $muPluginPath = $pluginsDir.'/../mu-plugins/gds-mcp-adapter.php';
     if (file_exists($muPluginPath)) {
         require_once $muPluginPath;
+    } elseif (class_exists(\WP\MCP\Core\McpAdapter::class)) {
+        // In wp-env the mu-plugin doesn't exist — bootstrap the adapter inline.
+        \WP\MCP\Core\McpAdapter::instance();
+        add_filter('wp_register_ability_args', function (array $args, string $name): array {
+            if (str_starts_with($name, 'gds/') || str_starts_with($name, 'core/')) {
+                $args['meta']['mcp']['public'] = true;
+            }
+
+            return $args;
+        }, 10, 2);
     }
 });
 

@@ -52,34 +52,19 @@ jobs:
       - name: Start wp-env
         run: npx @wordpress/env start
 
-      # Install real free plugins from wordpress.org.
+      # Install free plugins from wordpress.org + MCP adapter from GitHub releases.
       - name: Install integration plugins
         run: |
           npx @wordpress/env run tests-cli wp plugin install \
             polylang wordpress-seo safe-redirect-manager redirection stream advanced-custom-fields \
             --activate
+          # MCP adapter (not on wordpress.org yet)
+          npx @wordpress/env run tests-cli wp plugin install \
+            https://github.com/WordPress/mcp-adapter/releases/download/v0.4.1/mcp-adapter.zip \
+            --activate
 
       - name: Activate gds-mcp
         run: npx @wordpress/env run tests-cli wp plugin activate gds-mcp
-
-      # Polylang needs languages configured to function.
-      # Free Polylang has no WP-CLI commands, so use wp eval.
-      - name: Configure Polylang languages
-        run: |
-          npx @wordpress/env run tests-cli wp eval '
-            if (!function_exists("pll_the_languages")) exit;
-            $languages = include ABSPATH . "wp-content/plugins/polylang/settings/languages.php";
-            $model = PLL()->model;
-            foreach ([
-              ["name" => "English", "slug" => "en", "locale" => "en_US"],
-              ["name" => "Finnish", "slug" => "fi", "locale" => "fi"],
-              ["name" => "Swedish", "slug" => "sv", "locale" => "sv_SE"],
-            ] as $lang) {
-              if ($model->get_language($lang["slug"])) continue;
-              $defaults = isset($languages[$lang["locale"]]) ? $languages[$lang["locale"]] : [];
-              $model->add_language(array_merge($defaults, $lang));
-            }
-          '
 
       - name: Run PHPUnit
         run: npx @wordpress/env run tests-cli --env-cwd=wp-content/plugins/gds-mcp vendor/bin/phpunit
