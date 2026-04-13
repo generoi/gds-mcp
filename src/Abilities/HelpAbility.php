@@ -112,7 +112,7 @@ final class HelpAbility
     private static function extractGroup(string $suffix): string
     {
         $knownGroups = [
-            'posts', 'post-types', 'media', 'menus', 'terms',
+            'content', 'terms', 'posts', 'post-types', 'media', 'menus',
             'translations', 'strings', 'languages', 'forms',
             'seo', 'redirects', 'cache', 'activity',
             'blocks', 'design', 'acf', 'site',

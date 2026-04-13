@@ -33,9 +33,9 @@ class HelpAbilityTest extends WP_UnitTestCase
         $groupNames = array_column($result['groups'], 'name');
 
         // Core groups should always be present.
-        $this->assertContains('posts', $groupNames);
-        $this->assertContains('media', $groupNames);
-        $this->assertContains('menus', $groupNames);
+        $this->assertContains('content', $groupNames);
+        $this->assertContains('terms', $groupNames);
+        $this->assertContains('blocks', $groupNames);
     }
 
     public function test_abilities_have_required_fields(): void
