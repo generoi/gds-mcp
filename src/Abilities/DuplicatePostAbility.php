@@ -104,7 +104,7 @@ final class DuplicatePostAbility
         if ($route) {
             $response = self::restGet("{$route}/{$newId}");
             if (! self::isRestError($response)) {
-                return (array) $response->get_data();
+                return self::restResponseData($response);
             }
         }
 

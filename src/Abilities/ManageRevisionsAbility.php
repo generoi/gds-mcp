@@ -97,7 +97,7 @@ final class ManageRevisionsAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : array_map(fn ($item) => (array) $item, $response->get_data());
+            : self::restResponseData($response);
     }
 
     public function readRevision(mixed $input = []): array|WP_Error
@@ -116,7 +116,7 @@ final class ManageRevisionsAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 
     public function restoreRevision(mixed $input = []): array|WP_Error
@@ -146,7 +146,7 @@ final class ManageRevisionsAbility
         if ($route) {
             $response = self::restGet("{$route}/{$parentId}");
             if (! self::isRestError($response)) {
-                return (array) $response->get_data();
+                return self::restResponseData($response);
             }
         }
 

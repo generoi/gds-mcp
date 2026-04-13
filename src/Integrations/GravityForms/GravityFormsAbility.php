@@ -82,7 +82,7 @@ final class GravityFormsAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 
     public function readForm(mixed $input = []): array|WP_Error
@@ -95,7 +95,7 @@ final class GravityFormsAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 
     public function createForm(mixed $input = []): array|WP_Error
@@ -104,7 +104,7 @@ final class GravityFormsAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 
     public function listEntries(mixed $input = []): array|WP_Error
@@ -117,6 +117,6 @@ final class GravityFormsAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 }

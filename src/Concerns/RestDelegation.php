@@ -28,6 +28,7 @@ trait RestDelegation
     {
         $request = new WP_REST_Request('POST', $route);
         $request->set_header('Content-Type', 'application/json');
+
         $request->set_body_params($body);
 
         return rest_do_request($request);
@@ -52,6 +53,14 @@ trait RestDelegation
     /**
      * Check if a REST response indicates an error.
      */
+    /**
+     * Deep-convert REST response data to arrays (handles nested stdClass).
+     */
+    protected static function restResponseData(WP_REST_Response $response): array
+    {
+        return json_decode(json_encode($response->get_data()), true) ?? [];
+    }
+
     protected static function isRestError(WP_REST_Response $response): bool
     {
         return $response->get_status() >= 400;
@@ -62,7 +71,7 @@ trait RestDelegation
      */
     protected static function restErrorToWpError(WP_REST_Response $response): WP_Error
     {
-        $data = $response->get_data();
+        $data = self::restResponseData($response);
 
         return new WP_Error(
             $data['code'] ?? 'rest_error',
@@ -160,7 +169,7 @@ trait RestDelegation
 
         $properties = [];
         $required = [];
-        $allowedKeys = ['type', 'description', 'default', 'enum', 'items', 'format'];
+        $allowedKeys = ['type', 'description', 'enum', 'items', 'format'];
 
         foreach ($args as $name => $def) {
             $properties[$name] = array_intersect_key($def, array_flip($allowedKeys));
@@ -170,6 +179,17 @@ trait RestDelegation
             }
             if (! empty($def['required'])) {
                 $required[] = $name;
+            }
+        }
+
+        // Allow LLMs to send plain strings for title/content/excerpt.
+        // The REST schema defines these as type:object ({raw, rendered}),
+        // but normalizeInput() in PostTypeAbility wraps strings before dispatch.
+        foreach (['title', 'content', 'excerpt'] as $field) {
+            if (isset($properties[$field]) && ($properties[$field]['type'] ?? '') === 'object') {
+                $properties[$field]['type'] = ['string', 'object'];
+                $properties[$field]['description'] = ($properties[$field]['description'] ?? '')
+                    .' Accepts a plain string or {raw: "..."} object.';
             }
         }
 

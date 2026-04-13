@@ -14,8 +14,8 @@ final class AcfFieldsResource
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
-                'default' => new \stdClass,
-                'properties' => new \stdClass,
+                'default' => [],
+                'properties' => [],
                 'additionalProperties' => false,
             ],
             'output_schema' => [
