@@ -71,7 +71,7 @@ final class PostTypeAbility
     {
         HelpAbility::registerAbility("gds/{$this->slug}-list", [
             'label' => "List {$this->label}",
-            'description' => "Search and filter {$this->label}. Delegates to the WordPress REST API — accepts all standard REST parameters.",
+            'description' => "Search and filter {$this->label}. Use _fields to limit response size (e.g. \"id,title,slug,status\"). Use per_page (max 100), orderby, order, search, status params to filter.",
             'category' => 'gds-content',
             'input_schema' => self::getRestInputSchema($this->route),
             'output_schema' => self::getRestListOutputSchema($this->route),
@@ -106,7 +106,7 @@ final class PostTypeAbility
     {
         HelpAbility::registerAbility("gds/{$this->slug}-create", [
             'label' => "Create {$this->label}",
-            'description' => "Create a new item in {$this->label}. Delegates to the WordPress REST API.",
+            'description' => "Create a new item in {$this->label}. Fields are plain strings: title=\"My Title\", content=\"<p>Body</p>\", status=\"draft\"|\"publish\". Both title and content are required (non-empty).",
             'category' => 'gds-content',
             'input_schema' => self::getRestInputSchema($this->route, method: 'POST'),
             'output_schema' => self::getRestItemOutputSchema($this->route),
@@ -120,7 +120,7 @@ final class PostTypeAbility
     {
         HelpAbility::registerAbility("gds/{$this->slug}-update", [
             'label' => "Update {$this->label}",
-            'description' => "Update an existing item in {$this->label}. Delegates to the WordPress REST API.",
+            'description' => "Update an existing item in {$this->label}. Requires id. Fields are plain strings: title=\"New Title\", content=\"<p>New body</p>\", status=\"publish\". Only include fields you want to change.",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -162,6 +162,22 @@ final class PostTypeAbility
 
     // ── Execute methods ─────────────────────────────────────────────────────
 
+    /**
+     * Normalize input so LLMs can send plain strings for title/content/excerpt.
+     * The REST API schema defines these as type:object ({raw:"...", rendered:"..."}),
+     * but LLMs naturally send plain strings. We wrap them for compatibility.
+     */
+    private static function normalizeInput(array $input): array
+    {
+        foreach (['title', 'content', 'excerpt'] as $field) {
+            if (isset($input[$field]) && is_string($input[$field])) {
+                $input[$field] = ['raw' => $input[$field]];
+            }
+        }
+
+        return $input;
+    }
+
     public function executeList(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -175,7 +191,7 @@ final class PostTypeAbility
         $headers = $response->get_headers();
 
         return [
-            'posts' => array_map(fn ($item) => (array) $item, $response->get_data()),
+            'posts' => self::restResponseData($response),
             'total' => (int) ($headers['X-WP-Total'] ?? 0),
             'pages' => (int) ($headers['X-WP-TotalPages'] ?? 0),
         ];
@@ -193,12 +209,12 @@ final class PostTypeAbility
             return self::restErrorToWpError($response);
         }
 
-        return (array) $response->get_data();
+        return self::restResponseData($response);
     }
 
     public function executeCreate(mixed $input = []): array|WP_Error
     {
-        $input = (array) ($input ?? []);
+        $input = self::normalizeInput((array) ($input ?? []));
 
         // Handle ACF fields separately — REST API doesn't process them via update_field()
         $acfFields = $input['fields'] ?? null;
@@ -210,7 +226,7 @@ final class PostTypeAbility
             return self::restErrorToWpError($response);
         }
 
-        $data = (array) $response->get_data();
+        $data = self::restResponseData($response);
 
         if ($acfFields && is_array($acfFields)) {
             self::updateAcfFields($data['id'], $acfFields);
@@ -221,7 +237,7 @@ final class PostTypeAbility
 
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
-        $input = (array) ($input ?? []);
+        $input = self::normalizeInput((array) ($input ?? []));
         $id = $input['id'] ?? 0;
         unset($input['id']);
 
@@ -235,7 +251,7 @@ final class PostTypeAbility
             return self::restErrorToWpError($response);
         }
 
-        $data = (array) $response->get_data();
+        $data = self::restResponseData($response);
 
         if ($acfFields && is_array($acfFields)) {
             self::updateAcfFields($data['id'], $acfFields);
@@ -259,6 +275,6 @@ final class PostTypeAbility
             return self::restErrorToWpError($response);
         }
 
-        return (array) $response->get_data();
+        return self::restResponseData($response);
     }
 }

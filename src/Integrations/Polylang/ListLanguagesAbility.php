@@ -42,6 +42,6 @@ final class ListLanguagesAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : array_map(fn ($item) => (array) $item, $response->get_data());
+            : self::restResponseData($response);
     }
 }
