@@ -2,7 +2,9 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use WP_Block_Type_Registry;
 use WP_Error;
+use WP_HTML_Tag_Processor;
 
 final class PatchBlockAbility
 {
@@ -45,7 +47,7 @@ final class PatchBlockAbility
             ],
             'inner_html' => [
                 'type' => 'string',
-                'description' => 'Patch: replace innerHTML (leaf blocks only).',
+                'description' => 'Patch: replace innerHTML (leaf blocks only). Use this together with attrs to keep rendered HTML in sync with block attributes.',
             ],
             'inner_blocks' => [
                 'type' => 'string',
@@ -74,7 +76,7 @@ final class PatchBlockAbility
     {
         HelpAbility::registerAbility('gds/blocks-patch', [
             'label' => 'Patch Block',
-            'description' => 'Modify, insert, or delete blocks within a post. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Supports batch operations.',
+            'description' => 'Modify, insert, or delete blocks within a post. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Supports batch operations. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -260,9 +262,11 @@ final class PatchBlockAbility
         $matchCount = 0;
         $error = null;
 
-        self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($op) {
+        self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($op, $blockName) {
+            $oldAttrs = $block['attrs'] ?? [];
+
             if (isset($op['attrs'])) {
-                $block['attrs'] = array_merge($block['attrs'] ?? [], (array) $op['attrs']);
+                $block['attrs'] = array_merge($oldAttrs, (array) $op['attrs']);
             }
             if (isset($op['set_attrs'])) {
                 $block['attrs'] = (array) $op['set_attrs'];
@@ -272,6 +276,13 @@ final class PatchBlockAbility
                     unset($block['attrs'][$key]);
                 }
             }
+
+            // Auto-sync: when attrs change, update innerHTML using the block type's
+            // attribute source definitions (selector + attribute from block.json).
+            if (isset($op['attrs']) || isset($op['set_attrs'])) {
+                self::syncAttrsToInnerHtml($block, $oldAttrs, $blockName);
+            }
+
             if (isset($op['inner_html'])) {
                 if (! empty($block['innerBlocks'])) {
                     return new WP_Error('has_inner_blocks', 'Cannot set inner_html on a block with inner blocks.');
@@ -437,6 +448,134 @@ final class PatchBlockAbility
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /**
+     * Sync changed block attrs into innerHTML using the block type's attribute
+     * source definitions. Only updates attrs that have source: "attribute" in
+     * block.json — these define an exact selector + HTML attribute mapping.
+     *
+     * Uses WP_HTML_Tag_Processor for safe, spec-compliant HTML modification.
+     */
+    private static function syncAttrsToInnerHtml(array &$block, array $oldAttrs, string $blockName): void
+    {
+        $blockType = WP_Block_Type_Registry::get_instance()->get_registered($blockName);
+        if (! $blockType) {
+            return;
+        }
+
+        // Dynamic (server-rendered) blocks have no saved HTML — nothing to sync.
+        if ($blockType->render_callback || ! empty($blockType->render)) {
+            return;
+        }
+
+        $attrDefs = $blockType->attributes ?? [];
+        $newAttrs = $block['attrs'] ?? [];
+        $html = $block['innerHTML'] ?? '';
+
+        if (! $html || ! trim($html)) {
+            return;
+        }
+
+        $modified = false;
+
+        foreach ($newAttrs as $key => $newValue) {
+            $def = $attrDefs[$key] ?? null;
+            if (! $def || ! is_array($def)) {
+                continue;
+            }
+
+            // Only handle source: "attribute" (maps to a specific HTML attribute)
+            $source = $def['source'] ?? null;
+            if ($source !== 'attribute') {
+                continue;
+            }
+
+            $selector = $def['selector'] ?? null;
+            $htmlAttr = $def['attribute'] ?? null;
+            if (! $selector || ! $htmlAttr || ! is_string($newValue)) {
+                continue;
+            }
+
+            $oldValue = $oldAttrs[$key] ?? null;
+            if ($oldValue === $newValue) {
+                continue;
+            }
+
+            // Use WP_HTML_Tag_Processor to find the element and update the attribute
+            $processor = new WP_HTML_Tag_Processor($html);
+
+            // The selector is typically a simple tag name (a, img, div) or class (.wp-block-button__link)
+            // WP_HTML_Tag_Processor::next_tag() accepts tag name or class queries
+            $query = self::selectorToQuery($selector);
+            if (! $query) {
+                continue;
+            }
+
+            while ($processor->next_tag($query)) {
+                $current = $processor->get_attribute($htmlAttr);
+                // Only update if it matches the old value (or old was null/unset)
+                if ($current === $oldValue || ($oldValue === null && $current !== null)) {
+                    $processor->set_attribute($htmlAttr, $newValue);
+                    $modified = true;
+                }
+            }
+
+            if ($modified) {
+                $html = $processor->get_updated_html();
+            }
+        }
+
+        if (! $modified) {
+            return;
+        }
+
+        $oldHtml = $block['innerHTML'];
+        $block['innerHTML'] = $html;
+
+        // Update innerContent to match
+        foreach ($block['innerContent'] as &$content) {
+            if (is_string($content) && $content === $oldHtml) {
+                $content = $html;
+            }
+        }
+    }
+
+    /**
+     * Convert a CSS selector (from block.json) to a WP_HTML_Tag_Processor query.
+     * Supports: tag names (a, img, div), class selectors (.classname),
+     * and tag.class combinations (a.wp-block-button__link).
+     *
+     * @return array|null Query array for next_tag(), or null if unsupported.
+     */
+    private static function selectorToQuery(string $selector): ?array
+    {
+        $selector = trim($selector);
+
+        // Simple tag: "a", "img", "div"
+        if (preg_match('/^[a-z][a-z0-9]*$/i', $selector)) {
+            return ['tag_name' => strtoupper($selector)];
+        }
+
+        // Class only: ".wp-block-button__link"
+        if (preg_match('/^\.([a-zA-Z0-9_-]+)$/', $selector, $m)) {
+            return ['class_name' => $m[1]];
+        }
+
+        // Tag + class: "a.wp-block-button__link"
+        if (preg_match('/^([a-z][a-z0-9]*)\.([a-zA-Z0-9_-]+)$/i', $selector, $m)) {
+            return ['tag_name' => strtoupper($m[1]), 'class_name' => $m[2]];
+        }
+
+        // Descendant selectors or complex selectors — not supported by Tag Processor
+        // Fall back: just use the last segment
+        $parts = preg_split('/\s+/', $selector);
+        $last = end($parts);
+        if ($last !== $selector) {
+            return self::selectorToQuery($last);
+        }
+
+        return null;
+    }
 
     private static function parseMarkup(string $markup): array
     {

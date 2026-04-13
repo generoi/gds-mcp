@@ -156,7 +156,7 @@ final class TaxonomyAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : array_map(fn ($item) => (array) $item, $response->get_data());
+            : self::restResponseData($response);
     }
 
     public function executeRead(mixed $input = []): array|WP_Error
@@ -169,7 +169,7 @@ final class TaxonomyAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 
     public function executeCreate(mixed $input = []): array|WP_Error
@@ -178,7 +178,7 @@ final class TaxonomyAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 
     public function executeUpdate(mixed $input = []): array|WP_Error
@@ -191,7 +191,7 @@ final class TaxonomyAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 
     public function executeDelete(mixed $input = []): array|WP_Error
@@ -206,6 +206,6 @@ final class TaxonomyAbility
 
         return self::isRestError($response)
             ? self::restErrorToWpError($response)
-            : (array) $response->get_data();
+            : self::restResponseData($response);
     }
 }

@@ -146,11 +146,15 @@ final class GetBlockAbility
             $detail['allowed_blocks'] = $blockType->allowed_blocks;
         }
 
-        if ($blockType->is_dynamic()) {
-            $detail['is_dynamic'] = true;
+        $isDynamic = $blockType->is_dynamic();
+        $detail['is_dynamic'] = $isDynamic;
+        if ($isDynamic) {
+            $detail['rendering'] = 'Server-rendered (PHP). No saved HTML — blocks-patch attrs are sufficient, no need to update inner_html.';
+        } else {
+            $detail['rendering'] = 'Static (JS save). Has saved HTML — blocks-patch auto-syncs attrs that have a source definition to the HTML. Use inner_html for other HTML changes.';
         }
 
-        // Attributes with types and defaults.
+        // Attributes with types, defaults, and source mappings.
         $attributes = [];
         foreach (($blockType->attributes ?? []) as $key => $schema) {
             $attr = ['type' => $schema['type'] ?? 'string'];
@@ -159,6 +163,16 @@ final class GetBlockAbility
             }
             if (isset($schema['enum'])) {
                 $attr['enum'] = $schema['enum'];
+            }
+            // Include source info — tells how this attr maps to HTML
+            if (isset($schema['source'])) {
+                $attr['source'] = $schema['source'];
+                if (isset($schema['selector'])) {
+                    $attr['selector'] = $schema['selector'];
+                }
+                if (isset($schema['attribute'])) {
+                    $attr['html_attribute'] = $schema['attribute'];
+                }
             }
             $attributes[$key] = $attr;
         }

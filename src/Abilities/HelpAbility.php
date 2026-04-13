@@ -17,14 +17,16 @@ final class HelpAbility
      */
     public static function registerAbility(string $name, array $args): void
     {
-        // Ensure empty properties serializes as JSON {} not [] for rest_validate_value_from_schema().
-        if (isset($args['input_schema']['properties']) && $args['input_schema']['properties'] === []) {
-            $args['input_schema']['properties'] = new \stdClass;
-        }
-
         // Provide a default so null input normalizes to an empty object.
+        //
+        // IMPORTANT: Use plain PHP arrays [] for schema properties/defaults, NOT
+        // stdClass or (object)[]. WordPress core's rest_validate_value_from_schema()
+        // does array access ($args['properties'][$property]) which crashes on stdClass.
+        // The MCP adapter and LLM consumers handle the [] → {} JSON serialization
+        // at their own boundary (e.g. AbilitiesToolProvider casts empty properties
+        // to (object)[] before sending to the Anthropic API).
         if (isset($args['input_schema']['type']) && $args['input_schema']['type'] === 'object' && ! array_key_exists('default', $args['input_schema'])) {
-            $args['input_schema']['default'] = new \stdClass;
+            $args['input_schema']['default'] = [];
         }
 
         wp_register_ability($name, $args);

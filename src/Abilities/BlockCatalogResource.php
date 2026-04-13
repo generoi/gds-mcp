@@ -41,6 +41,6 @@ final class BlockCatalogResource
             return [];
         }
 
-        return array_map(fn ($item) => (array) $item, $response->get_data());
+        return self::restResponseData($response);
     }
 }
