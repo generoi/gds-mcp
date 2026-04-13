@@ -108,7 +108,7 @@ final class MachineTranslateAbility
             return self::translateStrings($input['string_group'], $targetLang, $service, $language);
         }
 
-        $postId = $input['id'] ?? 0;
+        $postId = (int) ($input['id'] ?? 0);
         if (! $postId) {
             return new WP_Error('missing_input', 'Provide post_id or string_group. For terms, use gds/translations-create-term instead.');
         }

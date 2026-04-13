@@ -81,13 +81,18 @@ final class CreateTermTranslationAbility
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }
 
-        $sourceTermId = $input['source_id'] ?? 0;
+        $sourceTermId = (int) ($input['source_id'] ?? 0);
         $taxonomy = $input['taxonomy'] ?? '';
         $language = $input['lang'] ?? '';
 
         $sourceTerm = get_term($sourceTermId, $taxonomy);
         if (! $sourceTerm || is_wp_error($sourceTerm)) {
             return new WP_Error('term_not_found', 'Source term not found.');
+        }
+
+        $taxObj = get_taxonomy($taxonomy);
+        if (! $taxObj || ! current_user_can($taxObj->cap->edit_terms)) {
+            return new WP_Error('forbidden', 'You do not have permission to manage terms in this taxonomy.', ['status' => 403]);
         }
 
         // Validate language.

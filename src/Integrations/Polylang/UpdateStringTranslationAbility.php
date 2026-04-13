@@ -64,6 +64,10 @@ final class UpdateStringTranslationAbility
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }
 
+        if (! current_user_can('manage_options')) {
+            return new WP_Error('forbidden', 'You do not have permission to manage string translations.', ['status' => 403]);
+        }
+
         $string = $input['string'] ?? '';
         $language = $input['lang'] ?? '';
         $translation = $input['translation'] ?? '';

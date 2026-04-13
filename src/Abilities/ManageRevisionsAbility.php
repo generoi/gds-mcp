@@ -85,7 +85,7 @@ final class ManageRevisionsAbility
     public function listRevisions(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $postId = $input['post_id'] ?? 0;
+        $postId = (int) ($input['post_id'] ?? 0);
         unset($input['post_id']);
 
         $route = $this->getRevisionRoute($postId);
@@ -103,8 +103,8 @@ final class ManageRevisionsAbility
     public function readRevision(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $postId = $input['post_id'] ?? 0;
-        $revisionId = $input['id'] ?? 0;
+        $postId = (int) ($input['post_id'] ?? 0);
+        $revisionId = (int) ($input['id'] ?? 0);
         unset($input['post_id'], $input['id']);
 
         $route = $this->getRevisionRoute($postId);
@@ -127,6 +127,10 @@ final class ManageRevisionsAbility
         $revision = wp_get_post_revision($revisionId);
         if (! $revision) {
             return new WP_Error('revision_not_found', 'Revision not found.');
+        }
+
+        if (! current_user_can('edit_post', $revision->post_parent)) {
+            return new WP_Error('forbidden', 'You do not have permission to edit this post.', ['status' => 403]);
         }
 
         if (! function_exists('wp_restore_post_revision')) {
