@@ -19,7 +19,19 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
             $this->markTestSkipped('Polylang is not active.');
         }
 
-        PLL()->model->clean_languages_cache();
+        // Ensure languages exist (WP_UnitTestCase rollback removes them).
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        foreach ([
+            ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0],
+            ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1],
+        ] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->update_default_lang('en');
+        $model->clean_languages_cache();
     }
 
     public function test_creates_term_translation_and_links(): void

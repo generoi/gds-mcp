@@ -24,10 +24,11 @@ class AbilityTestCase extends TestCase
         // REST server must be initialized for REST-delegating abilities.
         rest_get_server();
 
-        // Set Polylang current language to prevent null errors in
-        // Polylang Pro's REST response filter during tests.
+        // Set Polylang current language and reset caches to prevent
+        // stale state between tests.
         if (function_exists('PLL') && PLL()) {
             if (isset(PLL()->model)) {
+                PLL()->model->clean_languages_cache();
                 $lang = PLL()->model->get_language('en');
                 if ($lang) {
                     PLL()->curlang = $lang;

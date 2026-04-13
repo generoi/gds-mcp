@@ -19,8 +19,19 @@ class CreateTranslationIntegrationTest extends TestCase
             $this->markTestSkipped('Polylang is not active.');
         }
 
-        // Reset Polylang's language cache between tests.
-        PLL()->model->clean_languages_cache();
+        // Ensure languages exist (WP_UnitTestCase rollback removes them).
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        foreach ([
+            ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0],
+            ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1],
+        ] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->update_default_lang('en');
+        $model->clean_languages_cache();
     }
 
     public function test_creates_translation_and_links_via_polylang(): void

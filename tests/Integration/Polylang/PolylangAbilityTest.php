@@ -16,6 +16,22 @@ class PolylangAbilityTest extends AbilityTestCase
         if (! function_exists('pll_get_post_language')) {
             $this->markTestSkipped('Polylang is not active.');
         }
+
+        // Ensure languages exist (WP_UnitTestCase rollback may remove them).
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+
+        foreach ([
+            ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0],
+            ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1],
+            ['name' => 'Swedish', 'slug' => 'sv', 'locale' => 'sv_SE', 'term_group' => 2],
+        ] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->update_default_lang('en');
+        $model->clean_languages_cache();
     }
 
     /**
@@ -139,6 +155,10 @@ class PolylangAbilityTest extends AbilityTestCase
         $this->assertNotEquals($sourceId, $result['id']);
         $this->assertSame('draft', $result['status']);
 
+        // Clear Polylang's object cache so we see the updated translations.
+        clean_post_cache($sourceId);
+        clean_post_cache($result['id']);
+
         // Verify linked via Polylang
         $translations = pll_get_post_translations($sourceId);
         $this->assertArrayHasKey('fi', $translations);
@@ -161,28 +181,22 @@ class PolylangAbilityTest extends AbilityTestCase
             'post_content' => 'Some content.',
         ]);
 
-        // Create first translation
-        $fiId = self::factory()->post->create([
-            'post_type' => 'post',
-            'post_status' => 'draft',
-            'post_title' => 'Existing Finnish',
-        ]);
-        pll_set_post_language($fiId, 'fi');
-        pll_save_post_translations([
-            'en' => $sourceId,
-            'fi' => $fiId,
-        ]);
-
-        // Try to create a second Finnish translation
-        $result = $this->executeAbility('gds/translations-create', [
+        // Create first translation via the ability itself.
+        $first = $this->executeAbility('gds/translations-create', [
             'source_id' => $sourceId,
             'lang' => 'fi',
+            'title' => 'First Finnish',
         ]);
+        $this->assertIsArray($first, 'First translation should succeed.');
+        clean_post_cache($sourceId);
 
-        $this->assertWPError($result);
-        $this->assertSame('translation_exists', $result->get_error_code());
+        // Try to create a second Finnish translation — should fail.
+        $this->assertAbilityError('gds/translations-create', [
+            'source_id' => $sourceId,
+            'lang' => 'fi',
+        ], 'translation_exists');
 
-        wp_delete_post($fiId, true);
+        wp_delete_post($first['id'], true);
     }
 
     public function test_create_translation_rejects_invalid_language(): void
