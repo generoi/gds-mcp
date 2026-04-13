@@ -154,9 +154,7 @@ final class TaxonomyAbility
     {
         $response = self::restGet($this->route, (array) ($input ?? []));
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function executeRead(mixed $input = []): array|WP_Error
@@ -167,18 +165,14 @@ final class TaxonomyAbility
 
         $response = self::restGet("{$this->route}/{$id}", $input);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function executeCreate(mixed $input = []): array|WP_Error
     {
         $response = self::restPost($this->route, (array) ($input ?? []));
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function executeUpdate(mixed $input = []): array|WP_Error
@@ -189,9 +183,7 @@ final class TaxonomyAbility
 
         $response = self::restPost("{$this->route}/{$id}", $input);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function executeDelete(mixed $input = []): array|WP_Error
@@ -204,8 +196,6 @@ final class TaxonomyAbility
 
         $response = rest_do_request($request);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 }

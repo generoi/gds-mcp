@@ -128,9 +128,7 @@ final class GravityFormsAbility
     {
         $response = self::restGet('/gf/v2/forms', (array) ($input ?? []));
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function readForm(mixed $input = []): array|WP_Error
@@ -141,9 +139,7 @@ final class GravityFormsAbility
 
         $response = self::restGet("/gf/v2/forms/{$id}", $input);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function createForm(mixed $input = []): array|WP_Error
@@ -201,9 +197,7 @@ final class GravityFormsAbility
 
         $response = self::restPost('/gf/v2/forms', $input);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function listEntries(mixed $input = []): array|WP_Error
@@ -214,8 +208,6 @@ final class GravityFormsAbility
 
         $response = self::restGet("/gf/v2/forms/{$formId}/entries", $input);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 }

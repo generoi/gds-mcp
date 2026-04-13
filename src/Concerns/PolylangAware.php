@@ -21,6 +21,26 @@ trait PolylangAware
     }
 
     /**
+     * Validate a language slug against registered Polylang languages.
+     *
+     * @return \WP_Error|null  WP_Error if invalid, null if valid.
+     */
+    protected static function validateLanguage(string $language): ?\WP_Error
+    {
+        $validLanguages = array_column(self::getAllLanguages(), 'slug');
+
+        if (! in_array($language, $validLanguages, true)) {
+            return new \WP_Error('invalid_language', sprintf(
+                'Invalid language "%s". Valid languages: %s',
+                $language,
+                implode(', ', $validLanguages)
+            ));
+        }
+
+        return null;
+    }
+
+    /**
      * Get all active languages.
      *
      * @return array<array{slug: string, name: string}>

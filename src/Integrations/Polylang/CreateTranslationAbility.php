@@ -4,12 +4,14 @@ namespace GeneroWP\MCP\Integrations\Polylang;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Concerns\PostCopying;
 use GeneroWP\MCP\Concerns\RestDelegation;
 use WP_Error;
 
 final class CreateTranslationAbility
 {
     use PolylangAware;
+    use PostCopying;
     use RestDelegation;
 
     public static function register(): void
@@ -92,14 +94,9 @@ final class CreateTranslationAbility
             return new WP_Error('forbidden', 'You do not have permission to create posts of this type.', ['status' => 403]);
         }
 
-        // Validate language.
-        $validLanguages = array_column(self::getAllLanguages(), 'slug');
-        if (! in_array($language, $validLanguages, true)) {
-            return new WP_Error('invalid_language', sprintf(
-                'Invalid language "%s". Valid languages: %s',
-                $language,
-                implode(', ', $validLanguages)
-            ));
+        $langError = self::validateLanguage($language);
+        if ($langError) {
+            return $langError;
         }
 
         // Check if translation already exists.
@@ -152,29 +149,8 @@ final class CreateTranslationAbility
         $translations[$language] = $newId;
         pll_save_post_translations($translations);
 
-        // Copy public post meta from source.
-        $allMeta = get_post_meta($sourceId);
-        foreach ($allMeta as $key => $values) {
-            if (str_starts_with($key, '_')) {
-                continue;
-            }
-            foreach ($values as $value) {
-                add_post_meta($newId, $key, maybe_unserialize($value));
-            }
-        }
-
-        // Copy taxonomy terms from source.
-        $taxonomies = get_object_taxonomies($source->post_type, 'names');
-        foreach ($taxonomies as $taxonomy) {
-            // Skip Polylang's internal language/translation taxonomies.
-            if (in_array($taxonomy, ['language', 'post_translations'], true)) {
-                continue;
-            }
-            $terms = wp_get_object_terms($sourceId, $taxonomy, ['fields' => 'ids']);
-            if (! empty($terms) && ! is_wp_error($terms)) {
-                wp_set_object_terms($newId, $terms, $taxonomy);
-            }
-        }
+        self::copyPostMeta($sourceId, $newId);
+        self::copyPostTaxonomies($sourceId, $newId, $source->post_type);
 
         // Return canonical REST response
         $route = self::getRestRoute($source->post_type);
