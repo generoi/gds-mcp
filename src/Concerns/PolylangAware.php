@@ -23,7 +23,7 @@ trait PolylangAware
     /**
      * Validate a language slug against registered Polylang languages.
      *
-     * @return \WP_Error|null  WP_Error if invalid, null if valid.
+     * @return \WP_Error|null WP_Error if invalid, null if valid.
      */
     protected static function validateLanguage(string $language): ?\WP_Error
     {

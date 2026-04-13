@@ -2,7 +2,9 @@
 
 namespace GeneroWP\MCP\Tests\Integration;
 
+use Genero\Sage\CacheTags\CacheTags;
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use WP_Stream\Plugin;
 
 /**
  * Security tests verifying capability checks on write operations.
@@ -214,7 +216,7 @@ class SecurityTest extends AbilityTestCase
 
     public function test_cache_clear_requires_manage_options(): void
     {
-        if (! class_exists(\Genero\Sage\CacheTags\CacheTags::class)) {
+        if (! class_exists(CacheTags::class)) {
             $this->markTestSkipped('sage-cachetags not active.');
         }
 
@@ -229,7 +231,7 @@ class SecurityTest extends AbilityTestCase
 
     public function test_activity_log_requires_manage_options(): void
     {
-        if (! class_exists(\WP_Stream\Plugin::class)) {
+        if (! class_exists(Plugin::class)) {
             $this->markTestSkipped('Stream not active.');
         }
 
