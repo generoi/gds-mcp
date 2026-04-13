@@ -22,6 +22,16 @@ class Plugin
     {
         add_action('wp_abilities_api_categories_init', [$this, 'registerCategory']);
         add_action('wp_abilities_api_init', [$this, 'registerAbilities']);
+
+        // Clear cached schemas when plugins change (abilities may differ)
+        add_action('activated_plugin', [self::class, 'clearSchemaCache']);
+        add_action('deactivated_plugin', [self::class, 'clearSchemaCache']);
+    }
+
+    public static function clearSchemaCache(): void
+    {
+        global $wpdb;
+        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient%gds_mcp_input_schema%'");
     }
 
     public function registerCategory(): void
