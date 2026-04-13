@@ -167,7 +167,7 @@ final class PostTypeAbility
      * The REST API schema defines these as type:object ({raw:"...", rendered:"..."}),
      * but LLMs naturally send plain strings. We wrap them for compatibility.
      */
-    private static function normalizeInput(array $input): array
+    public static function normalizeInput(array $input): array
     {
         foreach (['title', 'content', 'excerpt'] as $field) {
             if (isset($input[$field]) && is_string($input[$field])) {
