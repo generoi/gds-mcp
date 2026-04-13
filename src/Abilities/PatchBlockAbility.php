@@ -287,8 +287,24 @@ final class PatchBlockAbility
                 if (! empty($block['innerBlocks'])) {
                     return new WP_Error('has_inner_blocks', 'Cannot set inner_html on a block with inner blocks.');
                 }
-                $block['innerHTML'] = $op['inner_html'];
-                $block['innerContent'] = [$op['inner_html']];
+
+                $newHtml = $op['inner_html'];
+
+                // Failsafe: if the current innerHTML has HTML tags but the new
+                // value is plain text, the LLM likely forgot the wrapper markup.
+                // Reject to prevent destroying block structure.
+                $currentHasHtml = isset($block['innerHTML']) && preg_match('/<[a-z][\s\S]*>/i', $block['innerHTML']);
+                $newHasHtml = preg_match('/<[a-z][\s\S]*>/i', $newHtml);
+
+                if ($currentHasHtml && ! $newHasHtml && trim($newHtml) !== '') {
+                    return new WP_Error(
+                        'inner_html_missing_markup',
+                        'inner_html must include HTML tags. You passed plain text but the block expects full markup (e.g. \'<div class="wp-block-button"><a href="...">Text</a></div>\'). For URL changes, use attrs only — the HTML auto-syncs.',
+                    );
+                }
+
+                $block['innerHTML'] = $newHtml;
+                $block['innerContent'] = [$newHtml];
             }
             if (isset($op['inner_blocks'])) {
                 $newInnerBlocks = self::parseMarkup($op['inner_blocks']);
