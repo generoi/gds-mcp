@@ -52,10 +52,12 @@ class Plugin
             return;
         }
 
-        // REST-delegated CRUD for all post types and taxonomies
         Abilities\HelpAbility::register();
-        Abilities\PostTypeAbility::registerAll();
-        Abilities\TaxonomyAbility::registerAll();
+
+        // Generic CRUD: 10 tools (content-list/read/create/update/delete + terms-*)
+        // instead of 5 per type (150+ tools). Stays under OpenAI's 128 tool limit.
+        Abilities\GenericPostTypeAbility::register();
+        Abilities\GenericTaxonomyAbility::register();
 
         // Custom abilities (no REST equivalent)
         Abilities\DuplicatePostAbility::register();
