@@ -81,6 +81,16 @@ trait RestDelegation
     }
 
     /**
+     * Return REST response data or convert error to WP_Error.
+     */
+    protected static function restResponseOrError(WP_REST_Response $response): array|WP_Error
+    {
+        return self::isRestError($response)
+            ? self::restErrorToWpError($response)
+            : self::restResponseData($response);
+    }
+
+    /**
      * Get the output schema for a REST route's response.
      *
      * Pulls the item schema from the registered REST controller and wraps

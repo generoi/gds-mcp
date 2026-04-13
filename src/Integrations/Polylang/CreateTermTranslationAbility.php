@@ -95,14 +95,9 @@ final class CreateTermTranslationAbility
             return new WP_Error('forbidden', 'You do not have permission to manage terms in this taxonomy.', ['status' => 403]);
         }
 
-        // Validate language.
-        $validLanguages = array_column(self::getAllLanguages(), 'slug');
-        if (! in_array($language, $validLanguages, true)) {
-            return new WP_Error('invalid_language', sprintf(
-                'Invalid language "%s". Valid languages: %s',
-                $language,
-                implode(', ', $validLanguages)
-            ));
+        $langError = self::validateLanguage($language);
+        if ($langError) {
+            return $langError;
         }
 
         // Check if translation already exists.

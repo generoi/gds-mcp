@@ -95,9 +95,7 @@ final class ManageRevisionsAbility
 
         $response = self::restGet($route, $input);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function readRevision(mixed $input = []): array|WP_Error
@@ -114,9 +112,7 @@ final class ManageRevisionsAbility
 
         $response = self::restGet("{$route}/{$revisionId}", $input);
 
-        return self::isRestError($response)
-            ? self::restErrorToWpError($response)
-            : self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function restoreRevision(mixed $input = []): array|WP_Error

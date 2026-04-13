@@ -212,11 +212,7 @@ final class GenericPostTypeAbility
 
         $response = self::restGet("{$route}/{$id}", $input);
 
-        if (self::isRestError($response)) {
-            return self::restErrorToWpError($response);
-        }
-
-        return self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 
     public function executeCreate(mixed $input = []): array|WP_Error
@@ -287,10 +283,6 @@ final class GenericPostTypeAbility
 
         $response = rest_do_request($request);
 
-        if (self::isRestError($response)) {
-            return self::restErrorToWpError($response);
-        }
-
-        return self::restResponseData($response);
+        return self::restResponseOrError($response);
     }
 }

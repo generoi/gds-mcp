@@ -3,12 +3,14 @@
 namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Concerns\PostCopying;
 use GeneroWP\MCP\Concerns\RestDelegation;
 use WP_Error;
 
 final class DuplicatePostAbility
 {
     use PolylangAware;
+    use PostCopying;
     use RestDelegation;
 
     public static function register(): void
@@ -93,8 +95,8 @@ final class DuplicatePostAbility
             return $newId;
         }
 
-        self::copyMeta($sourceId, $newId);
-        self::copyTaxonomies($sourceId, $newId, $source->post_type);
+        self::copyPostMeta($sourceId, $newId);
+        self::copyPostTaxonomies($sourceId, $newId, $source->post_type);
 
         $thumbnail = get_post_thumbnail_id($sourceId);
         if ($thumbnail) {
@@ -119,35 +121,5 @@ final class DuplicatePostAbility
 
         // Fallback if no REST route
         return ['id' => $newId, 'source_id' => $sourceId];
-    }
-
-    private static function copyMeta(int $sourceId, int $targetId): void
-    {
-        $allMeta = get_post_meta($sourceId);
-
-        foreach ($allMeta as $key => $values) {
-            if (str_starts_with($key, '_')) {
-                continue;
-            }
-
-            foreach ($values as $value) {
-                add_post_meta($targetId, $key, maybe_unserialize($value));
-            }
-        }
-    }
-
-    private static function copyTaxonomies(int $sourceId, int $targetId, string $postType): void
-    {
-        $taxonomies = get_object_taxonomies($postType, 'names');
-        $taxonomies = array_diff($taxonomies, ['language', 'post_translations', 'term_language', 'term_translations']);
-
-        foreach ($taxonomies as $taxonomy) {
-            $terms = get_the_terms($sourceId, $taxonomy);
-            if (! $terms || is_wp_error($terms)) {
-                continue;
-            }
-
-            wp_set_object_terms($targetId, array_column($terms, 'term_id'), $taxonomy);
-        }
     }
 }

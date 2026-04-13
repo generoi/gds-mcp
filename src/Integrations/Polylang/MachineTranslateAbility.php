@@ -82,13 +82,7 @@ final class MachineTranslateAbility
         // Validate target language.
         $targetLang = \PLL()->model->get_language($language);
         if (! $targetLang) {
-            $validLanguages = array_column(self::getAllLanguages(), 'slug');
-
-            return new WP_Error('invalid_language', sprintf(
-                'Invalid language "%s". Valid languages: %s',
-                $language,
-                implode(', ', $validLanguages)
-            ));
+            return self::validateLanguage($language) ?? new WP_Error('invalid_language', "Invalid language: {$language}");
         }
 
         // Check machine translation is enabled and service is active.
