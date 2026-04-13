@@ -47,7 +47,7 @@ final class PatchBlockAbility
             ],
             'inner_html' => [
                 'type' => 'string',
-                'description' => 'Patch: replace innerHTML (leaf blocks only). Use this together with attrs to keep rendered HTML in sync with block attributes.',
+                'description' => 'Patch: replace the FULL innerHTML including HTML tags (leaf blocks only). Must include the complete inner markup, e.g. for a button: \'<div class="wp-block-button"><a class="wp-block-button__link" href="...">Text</a></div>\'. NEVER pass plain text — always include the wrapping HTML. Read the block first with content-read to see the current structure. For URL changes, prefer attrs only (auto-syncs to HTML for static blocks).',
             ],
             'inner_blocks' => [
                 'type' => 'string',
