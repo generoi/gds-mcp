@@ -108,14 +108,14 @@ final class CreateTranslationAbility
         // Build the new post data, defaulting to source content.
         $postData = [
             'post_type' => $source->post_type,
-            'title' => $input['title'] ?? $source->post_title,
-            'content' => $input['content'] ?? $source->post_content,
-            'excerpt' => $input['excerpt'] ?? $source->post_excerpt,
-            'status' => $input['status'] ?? 'draft',
+            'post_title' => $input['title'] ?? $source->post_title,
+            'post_content' => $input['content'] ?? $source->post_content,
+            'post_excerpt' => $input['excerpt'] ?? $source->post_excerpt,
+            'post_status' => $input['status'] ?? 'draft',
         ];
 
         if (isset($input['slug'])) {
-            $postData['slug'] = $input['slug'];
+            $postData['post_name'] = $input['slug'];
         }
 
         // Resolve parent hierarchy.

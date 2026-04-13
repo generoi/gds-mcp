@@ -48,6 +48,10 @@ final class HelpAbility
             'label' => 'GDS MCP Help',
             'description' => 'Get a grouped summary of all available tools and resources. Start here to discover what you can do.',
             'category' => 'gds-content',
+            'input_schema' => [
+                'type' => 'object',
+                'default' => [],
+            ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
