@@ -65,6 +65,7 @@ class Plugin
         Abilities\GenericTaxonomyAbility::register();
 
         // Custom abilities (no REST equivalent)
+        Abilities\MediaUploadAbility::register();
         Abilities\DuplicatePostAbility::register();
         Abilities\BulkUpdatePostsAbility::register();
         Abilities\ManageRevisionsAbility::register();
