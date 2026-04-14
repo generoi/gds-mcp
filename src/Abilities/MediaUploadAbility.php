@@ -116,9 +116,21 @@ final class MediaUploadAbility
         }
 
         // download_url() uses wp_safe_remote_get() which blocks private IPs.
-        $tmpFile = download_url($url);
+        // Timeout prevents slow-drip DoS; file size checked after download.
+        $tmpFile = download_url($url, 30);
         if (is_wp_error($tmpFile)) {
             return $tmpFile;
+        }
+
+        // Reject excessively large downloads (default WP upload limit or 50 MB).
+        $maxBytes = wp_max_upload_size() ?: 50 * 1024 * 1024;
+        if (filesize($tmpFile) > $maxBytes) {
+            @unlink($tmpFile);
+
+            return new WP_Error('file_too_large', sprintf(
+                'Downloaded file exceeds maximum upload size of %d MB.',
+                $maxBytes / 1024 / 1024
+            ));
         }
 
         // Derive filename from URL if not provided.
@@ -140,6 +152,16 @@ final class MediaUploadAbility
         $base64 = $input['base64'];
         if (str_contains($base64, ',')) {
             $base64 = substr($base64, strpos($base64, ',') + 1);
+        }
+
+        // Reject oversized base64 before allocating the decode buffer.
+        // Base64 encodes 3 bytes as 4 chars, so decoded size ≈ strlen * 3/4.
+        $maxBase64Len = (int) ceil(self::MAX_BASE64_BYTES * 4 / 3) + 4;
+        if (strlen($base64) > $maxBase64Len) {
+            return new WP_Error('file_too_large', sprintf(
+                'File exceeds maximum size of %d MB. Use the "url" parameter for large files.',
+                self::MAX_BASE64_BYTES / 1024 / 1024
+            ));
         }
 
         $decoded = base64_decode($base64, true);
@@ -185,18 +207,15 @@ final class MediaUploadAbility
             update_post_meta($attachmentId, '_wp_attachment_image_alt', sanitize_text_field($input['alt_text']));
         }
 
+        $postUpdate = ['ID' => $attachmentId];
         if (! empty($input['title'])) {
-            wp_update_post([
-                'ID' => $attachmentId,
-                'post_title' => sanitize_text_field($input['title']),
-            ]);
+            $postUpdate['post_title'] = sanitize_text_field($input['title']);
         }
-
         if (! empty($input['caption'])) {
-            wp_update_post([
-                'ID' => $attachmentId,
-                'post_excerpt' => sanitize_text_field($input['caption']),
-            ]);
+            $postUpdate['post_excerpt'] = sanitize_text_field($input['caption']);
+        }
+        if (count($postUpdate) > 1) {
+            wp_update_post($postUpdate);
         }
 
         return $this->formatResponse($attachmentId);
