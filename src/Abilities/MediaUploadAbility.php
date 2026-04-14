@@ -179,6 +179,7 @@ final class MediaUploadAbility
         $tmpFile = wp_tempnam($filename);
         // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
         file_put_contents($tmpFile, $decoded);
+        unset($decoded); // Free memory before sideload processing.
 
         return $this->sideloadAndRespond($tmpFile, $filename, $input);
     }
