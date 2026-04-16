@@ -63,15 +63,93 @@ class NavMenuItemsAbilityTest extends TestCase
 
     public function test_create_item_linked_to_archive(): void
     {
+        // Register a CPT with has_archive=true so we have a public archive.
+        register_post_type('gds_test_product', [
+            'public' => true,
+            'has_archive' => true,
+            'publicly_queryable' => true,
+            'rewrite' => ['slug' => 'gds-test-products'],
+        ]);
+
         $result = $this->ability->executeCreate([
             'menu_id' => $this->menuId,
-            'title' => 'Blog Archive',
-            'linked' => ['kind' => 'archive', 'post_type' => 'post'],
+            'title' => 'Products Archive',
+            'linked' => ['kind' => 'archive', 'post_type' => 'gds_test_product'],
+        ]);
+
+        $this->assertIsArray($result, is_wp_error($result) ? $result->get_error_message() : '');
+        $this->assertSame('archive', $result['linked']['kind']);
+        $this->assertSame('gds_test_product', $result['linked']['post_type']);
+        $this->assertSame('post_type_archive', get_post_meta($result['id'], '_menu_item_type', true));
+        $this->assertSame('gds_test_product', get_post_meta($result['id'], '_menu_item_object', true));
+
+        // Read round-trips correctly.
+        $read = $this->ability->executeRead(['id' => $result['id']]);
+        $this->assertSame('archive', $read['linked']['kind']);
+        $this->assertSame('gds_test_product', $read['linked']['post_type']);
+
+        unregister_post_type('gds_test_product');
+    }
+
+    public function test_create_archive_rejects_missing_post_type(): void
+    {
+        $result = $this->ability->executeCreate([
+            'menu_id' => $this->menuId,
+            'title' => 'Broken',
+            'linked' => ['kind' => 'archive'],
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('missing_archive_post_type', $result->get_error_code());
+    }
+
+    public function test_create_archive_rejects_unknown_post_type(): void
+    {
+        $result = $this->ability->executeCreate([
+            'menu_id' => $this->menuId,
+            'title' => 'Broken',
+            'linked' => ['kind' => 'archive', 'post_type' => 'not_a_real_post_type'],
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('invalid_archive_post_type', $result->get_error_code());
+    }
+
+    public function test_create_archive_rejects_post_type_without_archive(): void
+    {
+        // `page` has_archive=false by default — there's nowhere to link to.
+        $result = $this->ability->executeCreate([
+            'menu_id' => $this->menuId,
+            'title' => 'Pages archive',
+            'linked' => ['kind' => 'archive', 'post_type' => 'page'],
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('no_archive', $result->get_error_code());
+    }
+
+    public function test_update_to_archive_changes_linkage(): void
+    {
+        register_post_type('gds_test_product', [
+            'public' => true,
+            'has_archive' => true,
+            'publicly_queryable' => true,
+            'rewrite' => ['slug' => 'gds-test-products'],
+        ]);
+
+        // Start as a URL-linked item.
+        $itemId = $this->insertItem('Was URL');
+
+        $result = $this->ability->executeUpdate([
+            'id' => $itemId,
+            'linked' => ['kind' => 'archive', 'post_type' => 'gds_test_product'],
         ]);
 
         $this->assertIsArray($result);
-        $this->assertSame('archive', $result['linked']['kind']);
-        $this->assertSame('post_type_archive', get_post_meta($result['id'], '_menu_item_type', true));
+        $this->assertSame('post_type_archive', get_post_meta($itemId, '_menu_item_type', true));
+        $this->assertSame('gds_test_product', get_post_meta($itemId, '_menu_item_object', true));
+
+        unregister_post_type('gds_test_product');
     }
 
     public function test_create_item_linked_to_url(): void

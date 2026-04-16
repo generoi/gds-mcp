@@ -541,13 +541,39 @@ final class NavMenuItemsAbility
     private static function linkedFromArchive(array $linked): array|WP_Error
     {
         $postType = $linked['post_type'] ?? '';
-        if (! $postType || ! get_post_type_object($postType)) {
-            return new WP_Error('invalid_archive_post_type', 'linked.kind="archive" requires a valid linked.post_type.');
+        if (! $postType) {
+            return new WP_Error('missing_archive_post_type', 'linked.kind="archive" requires linked.post_type (e.g. "post", "product").');
+        }
+
+        $typeObject = get_post_type_object($postType);
+        if (! $typeObject) {
+            return new WP_Error(
+                'invalid_archive_post_type',
+                "No post type registered with slug '{$postType}'. Available: ".implode(', ', array_keys(get_post_types(['public' => true]))).'.',
+            );
+        }
+
+        if (empty($typeObject->has_archive)) {
+            return new WP_Error(
+                'no_archive',
+                "Post type '{$postType}' has no archive (has_archive=false) — no URL to link to. "
+                .'Use linked.kind="url" with a custom URL instead, or linked.kind="post" to link to a specific post.',
+            );
+        }
+
+        if (! $typeObject->publicly_queryable && ! $typeObject->public) {
+            return new WP_Error(
+                'non_public_archive',
+                "Post type '{$postType}' is not publicly queryable — its archive URL won't resolve on the frontend.",
+            );
         }
 
         return [
             'type' => 'post_type_archive',
             'object' => $postType,
+            // WP's REST menu-items controller computes `url` from object+type, but
+            // passing it explicitly avoids ambiguity on older WP versions.
+            'url' => get_post_type_archive_link($postType) ?: '',
         ];
     }
 
