@@ -559,6 +559,30 @@ class NavMenuItemsAbilityTest extends TestCase
         $this->assertSame('Child', $result['items'][0]['title']);
     }
 
+    public function test_list_filters_by_parent_item_id_with_tree_default(): void
+    {
+        // Regression: previously when parent_item_id was set AND tree=true
+        // (the default), buildTree looked for roots at parent_item_id=0 and
+        // returned empty items even though total was non-zero. The LLM on
+        // generogrowth hit this and wasted 6+ rounds of investigation.
+        $parent = $this->insertItem('Parent');
+        $this->insertItem('ChildA', ['menu-item-parent-id' => $parent]);
+        $this->insertItem('ChildB', ['menu-item-parent-id' => $parent]);
+        $this->insertItem('Top level sibling');
+
+        $result = $this->ability->executeList([
+            'menu_id' => $this->menuId,
+            'parent_item_id' => $parent,
+            // tree defaults to true
+        ]);
+
+        $this->assertCount(2, $result['items'], 'parent_item_id filter should still return the children when tree=true');
+        $titles = array_map(fn ($i) => $i['title'], $result['items']);
+        $this->assertContains('ChildA', $titles);
+        $this->assertContains('ChildB', $titles);
+        $this->assertNotContains('Top level sibling', $titles);
+    }
+
     public function test_read_non_menu_item_returns_error(): void
     {
         // Passing a regular post ID to `read` should fail cleanly.

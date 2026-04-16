@@ -255,8 +255,13 @@ final class NavMenuItemsAbility
             $transformed = array_values(array_filter($transformed, fn ($i) => $i['parent_item_id'] === $parentFilter));
         }
 
+        // When tree=true and a parent filter is set, treat that parent as
+        // the tree root so children show up. Without this the tree builder
+        // looks for roots at parent_item_id=0 and silently returns empty.
+        $treeRoot = $parentFilter !== null ? $parentFilter : 0;
+
         return [
-            'items' => $tree ? self::buildTree($transformed) : $transformed,
+            'items' => $tree ? self::buildTree($transformed, $treeRoot) : $transformed,
             'total' => count($transformed),
         ];
     }
@@ -648,8 +653,14 @@ final class NavMenuItemsAbility
         ];
     }
 
-    /** Build a nested tree from a flat list, keyed by parent_item_id. */
-    private static function buildTree(array $items): array
+    /**
+     * Build a nested tree from a flat list, keyed by parent_item_id.
+     *
+     * @param  int  $rootParentId  The parent_item_id whose children should become the tree roots.
+     *                             Defaults to 0 (top-level). Pass a specific parent ID when
+     *                             you've already filtered to its subtree.
+     */
+    private static function buildTree(array $items, int $rootParentId = 0): array
     {
         $byParent = [];
         foreach ($items as $item) {
@@ -663,7 +674,7 @@ final class NavMenuItemsAbility
             return $item;
         };
 
-        $roots = $byParent[0] ?? [];
+        $roots = $byParent[$rootParentId] ?? [];
 
         return array_map($attachChildren, $roots);
     }
