@@ -113,6 +113,7 @@ final class GenericPostTypeAbility
                     'status' => ['type' => 'string', 'enum' => ['draft', 'publish', 'private', 'pending', 'trash']],
                     'slug' => ['type' => 'string'],
                     'featured_media' => ['type' => 'integer'],
+                    'lang' => ['type' => 'string', 'description' => 'Language code (re-assigns Polylang language if set).'],
                 ],
                 'required' => ['type', 'id'],
             ],
@@ -142,6 +143,11 @@ final class GenericPostTypeAbility
 
     /**
      * Get available post types as slug => label.
+     *
+     * Excludes nav_menu_item — use NavMenuItemsAbility for menu items, which
+     * exposes a schema that treats the post/term/url linkage and menu_order
+     * positioning as first-class fields instead of colliding with the
+     * generic tool's `type` parameter.
      */
     private static function getAvailableTypes(): array
     {
@@ -151,10 +157,30 @@ final class GenericPostTypeAbility
             if (str_contains($restBase, '(')) {
                 continue;
             }
+            if ($type->name === 'nav_menu_item') {
+                continue;
+            }
             $types[$restBase] = $type->labels->singular_name;
         }
 
         return $types;
+    }
+
+    /**
+     * Return a redirect error if the LLM asks to act on menu items via the
+     * generic content-* tools. nav_menu_item has dedicated tools with a
+     * menu-aware schema.
+     */
+    private static function menuItemsRedirect(string $requested): ?WP_Error
+    {
+        if ($requested === 'menu-items' || $requested === 'nav_menu_item') {
+            return new WP_Error(
+                'use_nav_menu_items_tools',
+                'Menu items have dedicated tools. Use gds/nav-menu-items-list, -read, -create, -update, -delete, -move, or -reorder instead of gds/content-*.',
+            );
+        }
+
+        return null;
     }
 
     /**
@@ -180,6 +206,9 @@ final class GenericPostTypeAbility
     {
         $input = (array) ($input ?? []);
         $route = self::resolveRoute($input['type'] ?? '');
+        if ($redirect = self::menuItemsRedirect((string) ($input['type'] ?? ''))) {
+            return $redirect;
+        }
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
@@ -204,6 +233,9 @@ final class GenericPostTypeAbility
     {
         $input = (array) ($input ?? []);
         $route = self::resolveRoute($input['type'] ?? '');
+        if ($redirect = self::menuItemsRedirect((string) ($input['type'] ?? ''))) {
+            return $redirect;
+        }
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
@@ -219,12 +251,20 @@ final class GenericPostTypeAbility
     {
         $input = PostTypeAbility::normalizeInput((array) ($input ?? []));
         $route = self::resolveRoute($input['type'] ?? '');
+        if ($redirect = self::menuItemsRedirect((string) ($input['type'] ?? ''))) {
+            return $redirect;
+        }
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
 
         $acfFields = $input['fields'] ?? null;
-        unset($input['type'], $input['fields']);
+        $lang = $input['lang'] ?? null;
+        unset($input['type'], $input['fields'], $input['lang']);
+
+        if ($langError = self::validateLang($lang)) {
+            return $langError;
+        }
 
         $response = self::restPost($route, $input);
 
@@ -233,6 +273,10 @@ final class GenericPostTypeAbility
         }
 
         $data = self::restResponseData($response);
+
+        if ($lang && ! empty($data['id'])) {
+            self::assignLanguage((int) $data['id'], $lang);
+        }
 
         if ($acfFields && is_array($acfFields)) {
             self::updateAcfFields($data['id'], $acfFields);
@@ -245,13 +289,21 @@ final class GenericPostTypeAbility
     {
         $input = PostTypeAbility::normalizeInput((array) ($input ?? []));
         $route = self::resolveRoute($input['type'] ?? '');
+        if ($redirect = self::menuItemsRedirect((string) ($input['type'] ?? ''))) {
+            return $redirect;
+        }
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
         $id = (int) ($input['id'] ?? 0);
 
         $acfFields = $input['fields'] ?? null;
-        unset($input['type'], $input['id'], $input['fields']);
+        $lang = $input['lang'] ?? null;
+        unset($input['type'], $input['id'], $input['fields'], $input['lang']);
+
+        if ($langError = self::validateLang($lang)) {
+            return $langError;
+        }
 
         $response = self::restPost("{$route}/{$id}", $input);
 
@@ -261,6 +313,10 @@ final class GenericPostTypeAbility
 
         $data = self::restResponseData($response);
 
+        if ($lang && ! empty($data['id'])) {
+            self::assignLanguage((int) $data['id'], $lang);
+        }
+
         if ($acfFields && is_array($acfFields)) {
             self::updateAcfFields($data['id'], $acfFields);
         }
@@ -268,10 +324,49 @@ final class GenericPostTypeAbility
         return $data;
     }
 
+    /**
+     * Validate the provided `lang` against Polylang's configured languages.
+     * Returns a WP_Error if invalid, null if unset or valid. No-op when
+     * Polylang is inactive (lang is silently ignored in that case).
+     */
+    private static function validateLang(mixed $lang): ?WP_Error
+    {
+        if (! $lang) {
+            return null;
+        }
+        if (! function_exists('pll_languages_list')) {
+            return null;
+        }
+        $configured = pll_languages_list();
+        if (! in_array($lang, $configured, true)) {
+            return new WP_Error(
+                'invalid_lang',
+                'Unknown language "'.$lang.'". Configured: '.implode(', ', $configured).'.',
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * Assign a Polylang language term to a post. The REST API does not pick
+     * up `lang` in POST bodies, so we have to do this ourselves after create
+     * or update.
+     */
+    private static function assignLanguage(int $postId, string $lang): void
+    {
+        if (function_exists('pll_set_post_language')) {
+            pll_set_post_language($postId, $lang);
+        }
+    }
+
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
         $route = self::resolveRoute($input['type'] ?? '');
+        if ($redirect = self::menuItemsRedirect((string) ($input['type'] ?? ''))) {
+            return $redirect;
+        }
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }

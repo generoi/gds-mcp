@@ -149,10 +149,13 @@ trait RestDelegation
      */
     protected static function getRestInputSchema(string $route, array $extra = [], string $method = 'GET'): array
     {
+        $useCache = ! (defined('WP_DEBUG') && WP_DEBUG);
         $cacheKey = 'gds_mcp_input_schema_'.md5($route.$method.serialize($extra));
-        $cached = get_transient($cacheKey);
-        if ($cached !== false) {
-            return $cached;
+        if ($useCache) {
+            $cached = get_transient($cacheKey);
+            if ($cached !== false) {
+                return $cached;
+            }
         }
 
         $server = rest_get_server();
@@ -215,7 +218,9 @@ trait RestDelegation
             $schema['required'] = $required;
         }
 
-        set_transient($cacheKey, $schema, DAY_IN_SECONDS);
+        if ($useCache) {
+            set_transient($cacheKey, $schema, DAY_IN_SECONDS);
+        }
 
         return $schema;
     }
