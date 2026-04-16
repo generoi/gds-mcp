@@ -77,7 +77,10 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-create', [
             'label' => 'Create Content',
-            'description' => "Create a new post/page/CPT. Available types: {$typeDesc}. Fields are plain strings: title=\"My Title\", content=\"<p>Body</p>\", status=\"draft\"|\"publish\". Both title and content are required (non-empty).",
+            'description' => "Create a new post/page/CPT. Available types: {$typeDesc}. Fields are plain strings: title=\"My Title\", content=\"<p>Body</p>\", status=\"draft\"|\"publish\". Both title and content are required (non-empty)."
+                ."\n\nMultilingual note: pass `lang` to assign a Polylang language to the new post. This creates a STANDALONE post in that language — it is NOT linked to other languages. "
+                .'To create multiple linked translations of the same page: either use gds/translations-create (source post + target lang, links automatically), or create each with this tool then call gds/translations-link to connect them.'
+                ."\n\nFor menu items, use gds/nav-menu-items-* instead — they have a dedicated schema that handles the post/term/url linkage and menu_order positioning.",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

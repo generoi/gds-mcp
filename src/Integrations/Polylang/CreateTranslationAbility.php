@@ -18,7 +18,10 @@ final class CreateTranslationAbility
     {
         HelpAbility::registerAbility('gds/translations-create', [
             'label' => 'Create Translation',
-            'description' => 'Create a translated post linked via Polylang. Copies source content, meta, and taxonomy terms. For machine translation, use gds/translations-machine. For term translations, use gds/translations-create-term.',
+            'description' => 'Create a translated post linked via Polylang. Copies source content, meta, and taxonomy terms. '
+                .'Use this when you have an existing post and want to fork it into another language — the new post is automatically linked so the language switcher works.'
+                ."\n\nIf you already created the translations separately (via gds/content-create with different `lang` values), use gds/translations-link to connect them instead."
+                ."\n\nRelated: gds/translations-machine (machine translation), gds/translations-create-term (for taxonomy terms).",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
