@@ -555,13 +555,23 @@ class NavMenuItemsAbilityTest extends TestCase
 
     private function skipIfPolylangNotReady(): void
     {
-        if (! function_exists('pll_get_post_language') || ! function_exists('pll_languages_list')) {
+        if (! function_exists('pll_set_post_language') || ! function_exists('pll_languages_list')) {
             $this->markTestSkipped('Polylang not active in this environment.');
         }
-        $configured = pll_languages_list();
-        if (! in_array('fi', $configured, true) || ! in_array('en', $configured, true)) {
-            $this->markTestSkipped('Polylang test needs both en and fi languages configured. Got: '.implode(',', $configured));
+
+        // WP_UnitTestCase rollback removes language terms; re-add them each test.
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        foreach ([
+            ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0],
+            ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1],
+        ] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
         }
+        $model->update_default_lang('en');
+        $model->clean_languages_cache();
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

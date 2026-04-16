@@ -97,7 +97,9 @@ final class NavMenuItemsAbility
                 ."\n  - {kind: \"archive\", post_type: \"post\"} — link to a post-type archive"
                 ."\n  - {kind: \"url\", url: \"https://…\"} — plain URL link"
                 ."\nUse `position` (1-indexed within the parent\'s children) to insert at a specific spot; "
-                .'siblings are shifted down automatically. Omit for append.',
+                .'siblings are shifted down automatically. Omit for append.'
+                ."\n\nMultilingual note: menu items have NO `lang` field — they inherit language from the menu they belong to. "
+                .'Each language has its own menu (discover them via gds/terms-list taxonomy=nav_menu). To add the same link to several languages, call this tool once per language menu with that language\'s translated page as `linked.post_id`.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

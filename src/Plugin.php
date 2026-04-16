@@ -85,6 +85,7 @@ class Plugin
         if (function_exists('pll_get_post_language')) {
             Integrations\Polylang\ListLanguagesAbility::register();
             Integrations\Polylang\CreateTranslationAbility::register();
+            Integrations\Polylang\LinkTranslationsAbility::register();
             Integrations\Polylang\CreateTermTranslationAbility::register();
             Integrations\Polylang\TranslationAuditAbility::register();
             Integrations\Polylang\ListStringTranslationsAbility::register();
