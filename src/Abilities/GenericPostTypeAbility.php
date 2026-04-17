@@ -246,8 +246,9 @@ final class GenericPostTypeAbility
         unset($input['type'], $input['id']);
 
         $response = self::restGet("{$route}/{$id}", $input);
+        $data = self::restResponseOrError($response);
 
-        return self::restResponseOrError($response);
+        return is_wp_error($data) ? $data : self::enrichPostUrls($data);
     }
 
     public function executeCreate(mixed $input = []): array|WP_Error
@@ -285,7 +286,7 @@ final class GenericPostTypeAbility
             self::updateAcfFields($data['id'], $acfFields);
         }
 
-        return $data;
+        return self::enrichPostUrls($data);
     }
 
     public function executeUpdate(mixed $input = []): array|WP_Error
@@ -322,6 +323,31 @@ final class GenericPostTypeAbility
 
         if ($acfFields && is_array($acfFields)) {
             self::updateAcfFields($data['id'], $acfFields);
+        }
+
+        return self::enrichPostUrls($data);
+    }
+
+    /**
+     * Add edit_url and preview_url to a post response so the LLM can
+     * provide correct links regardless of post type or status.
+     */
+    private static function enrichPostUrls(array $data): array
+    {
+        $id = (int) ($data['id'] ?? 0);
+        if (! $id) {
+            return $data;
+        }
+
+        $data['edit_url'] = admin_url("post.php?post={$id}&action=edit");
+
+        $post = get_post($id);
+        if ($post) {
+            $data['preview_url'] = get_preview_post_link($post) ?: add_query_arg([
+                'post_type' => $post->post_type,
+                'p' => $id,
+                'preview' => 'true',
+            ], home_url('/'));
         }
 
         return $data;

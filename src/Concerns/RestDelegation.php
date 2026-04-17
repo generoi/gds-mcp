@@ -58,7 +58,47 @@ trait RestDelegation
      */
     protected static function restResponseData(WP_REST_Response $response): array
     {
-        return json_decode(json_encode($response->get_data()), true) ?? [];
+        $data = json_decode(json_encode($response->get_data()), true) ?? [];
+
+        return self::stripBloatedFields($data);
+    }
+
+    /**
+     * Remove fields that are large and useless for AI operations.
+     * yoast_head alone can be 10-50k chars per item (full SEO meta HTML).
+     */
+    private static function stripBloatedFields(array $data): array
+    {
+        $strip = ['yoast_head', 'yoast_head_json'];
+
+        // Single item
+        foreach ($strip as $key) {
+            unset($data[$key]);
+        }
+
+        // List of items (e.g. terms-list, content-list)
+        if (array_is_list($data)) {
+            foreach ($data as &$item) {
+                if (is_array($item)) {
+                    foreach ($strip as $key) {
+                        unset($item[$key]);
+                    }
+                }
+            }
+        }
+
+        // Nested posts array (content-list response)
+        if (isset($data['posts']) && is_array($data['posts'])) {
+            foreach ($data['posts'] as &$post) {
+                if (is_array($post)) {
+                    foreach ($strip as $key) {
+                        unset($post[$key]);
+                    }
+                }
+            }
+        }
+
+        return $data;
     }
 
     protected static function isRestError(WP_REST_Response $response): bool
