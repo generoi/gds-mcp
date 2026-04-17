@@ -199,7 +199,6 @@ final class WebFetchAbility
         return array_merge($hosts, (array) get_option(self::TRUSTED_HOSTS_OPTION, []));
     }
 
-
     /**
      * Persist a host to the trusted list when the user clicks
      * "Approve & trust" in the approval UI.
