@@ -76,6 +76,7 @@ class Plugin
         Abilities\SiteMapResource::register();
         Abilities\ThemeJsonResource::register();
         Abilities\WebFetchAbility::register();
+        Abilities\MailSendAbility::register();
 
         // ACF -- only if active
         if (function_exists('acf_get_field_groups')) {
