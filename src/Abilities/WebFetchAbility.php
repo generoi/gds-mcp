@@ -36,7 +36,7 @@ final class WebFetchAbility
                 'properties' => [
                     'url' => [
                         'type' => 'string',
-                        'description' => 'Full URL to fetch (http or https).',
+                        'description' => 'Full https:// URL to fetch (plain http is not allowed).',
                     ],
                     'max_length' => [
                         'type' => 'integer',
@@ -86,16 +86,20 @@ final class WebFetchAbility
         }
 
         $scheme = wp_parse_url($url, PHP_URL_SCHEME);
-        if (! in_array($scheme, ['http', 'https'], true)) {
-            return new WP_Error('invalid_scheme', 'URL must use http or https scheme.');
+        if ($scheme !== 'https') {
+            return new WP_Error('invalid_scheme', 'URL must use https. Plain http is not allowed.');
+        }
+
+        $host = wp_parse_url($url, PHP_URL_HOST);
+        if (! $host) {
+            return new WP_Error('invalid_host', 'URL has no host component.');
         }
 
         // Defense-in-depth SSRF check: if the host is a literal IP, reject
         // private/reserved/loopback ranges directly. wp_safe_remote_get does
         // this too, but link-local (169.254/16, AWS metadata) has leaked
         // through in some WP versions. Belt + suspenders.
-        $host = wp_parse_url($url, PHP_URL_HOST);
-        if ($host && filter_var($host, FILTER_VALIDATE_IP)) {
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
             $isPublic = filter_var(
                 $host,
                 FILTER_VALIDATE_IP,
@@ -104,6 +108,18 @@ final class WebFetchAbility
             if (! $isPublic) {
                 return new WP_Error('ssrf_blocked', 'Private or reserved IP addresses are not allowed.');
             }
+        }
+
+        // Optional allowlist. Sites that want to restrict which external
+        // hosts the LLM can reach can add the filter returning an array of
+        // allowed hostnames (exact match) or patterns like '*.example.com'.
+        // Returning null (the default) means no restriction beyond SSRF.
+        $allowlist = apply_filters('gds-mcp/web_fetch_allowed_hosts', null);
+        if (is_array($allowlist) && ! self::hostMatchesAllowlist($host, $allowlist)) {
+            return new WP_Error(
+                'host_not_allowed',
+                sprintf('Host "%s" is not in the allowlist.', $host)
+            );
         }
 
         // wp_safe_remote_get blocks requests to private IP ranges (SSRF defense).
@@ -192,40 +208,89 @@ final class WebFetchAbility
     }
 
     /**
-     * Strip HTML to readable text. Drops scripts/styles/nav/footer, preserves
-     * headings (as `## …`) and links (as `[text](url)`) inline.
+     * Check whether a host matches any entry in the allowlist.
+     * Entries may be exact hostnames or wildcards like "*.example.com".
+     */
+    private static function hostMatchesAllowlist(string $host, array $allowlist): bool
+    {
+        $host = strtolower($host);
+        foreach ($allowlist as $allowed) {
+            $allowed = strtolower(trim((string) $allowed));
+            if ($allowed === '') {
+                continue;
+            }
+            if ($allowed === $host) {
+                return true;
+            }
+            // Wildcard: *.example.com matches foo.example.com and bar.baz.example.com
+            if (str_starts_with($allowed, '*.')) {
+                $suffix = substr($allowed, 1); // ".example.com"
+                if (str_ends_with($host, $suffix)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Strip HTML to readable markdown-ish text. Extracts main content area
+     * (<main>, <article>) if present, drops scripts/styles/chrome, preserves
+     * headings, links, lists, and images as inline markdown.
      */
     private static function htmlToText(string $html): string
     {
-        // Remove noisy non-content blocks first.
+        // Extract the main content area if present — pages wrapping content
+        // in <main> or <article> get much cleaner output.
+        if (preg_match('#<(main|article)\b[^>]*>(.*?)</\1>#is', $html, $main)) {
+            $html = $main[2];
+        }
+
+        // Remove noisy non-content blocks.
         $html = preg_replace(
-            '#<(script|style|noscript|iframe|nav|footer|header|aside)\b[^>]*>.*?</\1>#is',
+            '#<(script|style|noscript|iframe|svg|form|button|nav|footer|header|aside)\b[^>]*>.*?</\1>#is',
             ' ',
             $html
         ) ?? $html;
 
+        // Strip HTML comments (often large in WP output — Yoast SEO etc.).
+        $html = preg_replace('#<!--.*?-->#s', '', $html) ?? $html;
+
         // Convert headings to markdown-style.
         $html = preg_replace_callback(
             '#<h([1-6])[^>]*>(.*?)</h\1>#is',
-            fn ($m) => "\n\n".str_repeat('#', (int) $m[1]).' '.wp_strip_all_tags($m[2])."\n\n",
+            fn ($m) => "\n\n".str_repeat('#', (int) $m[1]).' '.trim(wp_strip_all_tags($m[2]))."\n\n",
             $html
         ) ?? $html;
 
         // Convert links.
         $html = preg_replace_callback(
             '#<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>#is',
-            fn ($m) => '['.wp_strip_all_tags($m[2]).']('.$m[1].')',
+            fn ($m) => '['.trim(wp_strip_all_tags($m[2])).']('.$m[1].')',
             $html
         ) ?? $html;
 
+        // Convert images to markdown.
+        $html = preg_replace_callback(
+            '#<img\b[^>]*src=["\']([^"\']+)["\'][^>]*(?:alt=["\']([^"\']*)["\'])?[^>]*/?>#is',
+            fn ($m) => '![' . ($m[2] ?? '') . '](' . $m[1] . ')',
+            $html
+        ) ?? $html;
+
+        // Convert list items to bullets.
+        $html = preg_replace('#<li\b[^>]*>#i', "\n- ", $html) ?? $html;
+
         // Paragraphs / line breaks.
-        $html = str_ireplace(['<br>', '<br/>', '<br />', '</p>', '</li>', '</div>'], "\n", $html);
+        $html = str_ireplace(['<br>', '<br/>', '<br />', '</p>', '</div>', '</li>'], "\n", $html);
 
         $text = wp_strip_all_tags($html);
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         // Collapse excessive whitespace.
         $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
         $text = preg_replace('/[ \t]+/', ' ', $text) ?? $text;
+        // Tidy bullet lines.
+        $text = preg_replace('/\n +- /', "\n- ", $text) ?? $text;
 
         return trim($text);
     }
