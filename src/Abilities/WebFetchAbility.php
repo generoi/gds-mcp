@@ -43,6 +43,10 @@ final class WebFetchAbility
                         'enum' => ['markdown', 'text', 'html'],
                         'description' => 'Output format. "markdown" (default): main content extracted, HTML → markdown with headings/links/lists. "text": plain text with all tags stripped. "html": raw HTML (truncated) — use when you need <head>, meta tags, nav structure, form fields, etc.',
                     ],
+                    'xpath' => [
+                        'type' => 'string',
+                        'description' => 'Optional XPath to narrow output to specific element(s). Concatenates outerHTML of all matches. Examples: "//footer//a" (all footer links), "//nav[@class=\'primary\']//li" (primary nav items), "//head/meta", "//main//h2", "//article//a[contains(@href, \'case/\')]".',
+                    ],
                     'max_length' => [
                         'type' => 'integer',
                         'description' => 'Truncate returned content to this many characters (default 20000, max 100000).',
@@ -87,6 +91,7 @@ final class WebFetchAbility
         $format = in_array($input['format'] ?? '', ['markdown', 'text', 'html'], true)
             ? $input['format']
             : 'markdown';
+        $xpathExpr = trim((string) ($input['xpath'] ?? ''));
         $maxLength = min(100000, max(500, (int) ($input['max_length'] ?? 20000)));
 
         if ($url === '') {
@@ -164,6 +169,17 @@ final class WebFetchAbility
         $title = '';
         if ($isHtml) {
             $title = self::extractTitle($body);
+
+            // If an XPath is given, narrow the HTML to matching elements
+            // before format conversion. Concatenates outerHTML of matches.
+            if ($xpathExpr !== '') {
+                $narrowed = self::applyXPath($body, $xpathExpr);
+                if (is_wp_error($narrowed)) {
+                    return $narrowed;
+                }
+                $body = $narrowed;
+            }
+
             $content = match ($format) {
                 'html' => $body,
                 'text' => self::htmlToPlainText($body),
@@ -247,6 +263,53 @@ final class WebFetchAbility
     }
 
     /**
+     * Apply an XPath expression to an HTML document and return the
+     * concatenated outerHTML of matching elements. Capped at 500 nodes
+     * and 1 MB total output to protect memory.
+     */
+    private static function applyXPath(string $html, string $xpathExpr): string|WP_Error
+    {
+        $dom = new \DOMDocument;
+        $prev = libxml_use_internal_errors(true);
+        // LIBXML_NONET + LIBXML_NOENT = 0 blocks network fetches and entity
+        // expansion (XXE defense). loadHTML doesn't load external DTDs by
+        // default, but being explicit is cheap.
+        $dom->loadHTML(
+            '<?xml encoding="UTF-8"?>'.$html,
+            LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_NONET
+        );
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
+
+        $xpath = new \DOMXPath($dom);
+        $nodes = @$xpath->query($xpathExpr);
+
+        if ($nodes === false) {
+            return new WP_Error('invalid_xpath', sprintf('Invalid XPath expression: "%s".', $xpathExpr));
+        }
+
+        if ($nodes->length === 0) {
+            return '';
+        }
+
+        $maxNodes = 500;
+        $maxBytes = 1024 * 1024; // 1 MB cap
+        $out = '';
+        $count = 0;
+        foreach ($nodes as $node) {
+            if ($count++ >= $maxNodes) {
+                break;
+            }
+            $out .= $dom->saveHTML($node)."\n";
+            if (strlen($out) >= $maxBytes) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * Strip all HTML to plain text (no markdown syntax). Simpler than
      * htmlToText — used when format=text.
      */
@@ -279,7 +342,8 @@ final class WebFetchAbility
         $prev = libxml_use_internal_errors(true);
         // LIBXML_NOERROR and LIBXML_NOWARNING suppress parse errors — pages
         // in the wild have malformed HTML, libxml recovers gracefully.
-        $dom->loadHTML($source, LIBXML_NOERROR | LIBXML_NOWARNING);
+        // LIBXML_NONET blocks network fetches (XXE / external DTD defense).
+        $dom->loadHTML($source, LIBXML_NOERROR | LIBXML_NOWARNING | LIBXML_NONET);
         libxml_clear_errors();
         libxml_use_internal_errors($prev);
 
