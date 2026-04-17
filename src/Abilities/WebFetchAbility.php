@@ -38,11 +38,13 @@ final class WebFetchAbility
         add_filter('gds-assistant/tool_requires_approval', [self::class, 'maybeSkipApproval'], 10, 3);
         add_action('gds-assistant/approve_with_trust', [self::class, 'trustHost']);
 
-        // Populate the trusted-hosts list. Each source is its own filter
-        // callback so downstream code can cleanly remove any of them via
-        // remove_filter('gds-mcp/web_fetch_trusted_hosts', ...).
+        // Populate the trusted-hosts list. User-approved hosts from the
+        // settings option are the primary source; downstream code can add
+        // more via add_filter('gds-mcp/web_fetch_trusted_hosts', ...).
+        // NOTE: wp_validate_redirect-allowed hosts (current site +
+        // allowed_redirect_hosts) are handled separately in maybeSkipApproval
+        // since that check works on URL, not just host.
         add_filter('gds-mcp/web_fetch_trusted_hosts', [self::class, 'addUserApprovedHosts'], 10, 2);
-        add_filter('gds-mcp/web_fetch_trusted_hosts', [self::class, 'addWpAllowedRedirectHosts'], 10, 2);
 
         HelpAbility::registerAbility('gds/web-fetch', [
             'label' => 'Fetch Web Page',
@@ -110,12 +112,14 @@ final class WebFetchAbility
 
     /**
      * Exempt this specific web-fetch call from approval if the target host
-     * is already trusted — either (a) the user clicked "Approve & trust"
-     * for this host previously, or (b) the host is in WordPress's
-     * allowed_redirect_hosts list (already trusted by the site for redirect
-     * safety, so trusting it for LLM-driven fetches is consistent). The
-     * ability stays destructive-by-default for other MCP clients — this is
-     * the gds-assistant-specific relaxation.
+     * is already trusted — either:
+     *   (a) the user clicked "Approve & trust" for this host previously, or
+     *   (b) WordPress would accept the URL as a safe redirect target
+     *       (wp_validate_redirect — canonical WP trust boundary, covers
+     *       current site + allowed_redirect_hosts + scheme/format sanity).
+     *
+     * The ability stays destructive-by-default for other MCP clients —
+     * this is the gds-assistant-specific relaxation.
      */
     public static function maybeSkipApproval(bool $needs, string $abilityName, array $input): bool
     {
@@ -123,12 +127,22 @@ final class WebFetchAbility
             return $needs;
         }
 
-        $host = strtolower((string) wp_parse_url((string) ($input['url'] ?? ''), PHP_URL_HOST));
-        if ($host === '') {
+        $url = (string) ($input['url'] ?? '');
+        $host = strtolower((string) wp_parse_url($url, PHP_URL_HOST));
+        if ($host === '' || $url === '') {
             return $needs;
         }
 
+        // (a) User-approved list.
         if (self::isHostTrusted($host)) {
+            return false;
+        }
+
+        // (b) wp_validate_redirect is WP's standard "would I send a user
+        // here?" check — if WP considers this URL safe to redirect to, we
+        // consider it safe to fetch. Returns the fallback (empty string)
+        // when the host isn't in allowed_redirect_hosts.
+        if (function_exists('wp_validate_redirect') && wp_validate_redirect($url, '') === $url) {
             return false;
         }
 
@@ -185,21 +199,6 @@ final class WebFetchAbility
         return array_merge($hosts, (array) get_option(self::TRUSTED_HOSTS_OPTION, []));
     }
 
-    /**
-     * Filter callback: add hosts WordPress already trusts for redirects
-     * (allowed_redirect_hosts filter) to the trust list. The current site
-     * host is always in that list. Includes plugin-added partners, etc.
-     */
-    public static function addWpAllowedRedirectHosts(array $hosts, string $candidateHost = ''): array
-    {
-        $wpAllowed = (array) apply_filters(
-            'allowed_redirect_hosts',
-            [wp_parse_url(home_url(), PHP_URL_HOST)],
-            $candidateHost
-        );
-
-        return array_merge($hosts, $wpAllowed);
-    }
 
     /**
      * Persist a host to the trusted list when the user clicks
