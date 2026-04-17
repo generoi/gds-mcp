@@ -235,64 +235,156 @@ final class WebFetchAbility
     }
 
     /**
-     * Strip HTML to readable markdown-ish text. Extracts main content area
-     * (<main>, <article>) if present, drops scripts/styles/chrome, preserves
-     * headings, links, lists, and images as inline markdown.
+     * Convert HTML to markdown-ish text using DOMDocument (proper tree
+     * parsing — not regex). Extracts main content area when present,
+     * walks the DOM converting each node to its markdown equivalent.
      */
     private static function htmlToText(string $html): string
     {
-        // Extract the main content area if present — pages wrapping content
-        // in <main> or <article> get much cleaner output.
-        if (preg_match('#<(main|article)\b[^>]*>(.*?)</\1>#is', $html, $main)) {
-            $html = $main[2];
+        if (trim($html) === '') {
+            return '';
         }
 
-        // Remove noisy non-content blocks.
-        $html = preg_replace(
-            '#<(script|style|noscript|iframe|svg|form|button|nav|footer|header|aside)\b[^>]*>.*?</\1>#is',
-            ' ',
-            $html
-        ) ?? $html;
+        // Prepend an XML encoding declaration so libxml parses multi-byte
+        // characters (Unicode text) correctly without mojibake.
+        $source = '<?xml encoding="UTF-8"?>'.$html;
 
-        // Strip HTML comments (often large in WP output — Yoast SEO etc.).
-        $html = preg_replace('#<!--.*?-->#s', '', $html) ?? $html;
+        $dom = new \DOMDocument;
+        $prev = libxml_use_internal_errors(true);
+        // LIBXML_NOERROR and LIBXML_NOWARNING suppress parse errors — pages
+        // in the wild have malformed HTML, libxml recovers gracefully.
+        $dom->loadHTML($source, LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($prev);
 
-        // Convert headings to markdown-style.
-        $html = preg_replace_callback(
-            '#<h([1-6])[^>]*>(.*?)</h\1>#is',
-            fn ($m) => "\n\n".str_repeat('#', (int) $m[1]).' '.trim(wp_strip_all_tags($m[2]))."\n\n",
-            $html
-        ) ?? $html;
+        // Prefer <main>/<article> over <body> when present — skips site chrome.
+        $xpath = new \DOMXPath($dom);
+        $root = $xpath->query('//main[1]')->item(0)
+            ?? $xpath->query('//article[1]')->item(0)
+            ?? $xpath->query('//body[1]')->item(0)
+            ?? $dom->documentElement;
 
-        // Convert links.
-        $html = preg_replace_callback(
-            '#<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>#is',
-            fn ($m) => '['.trim(wp_strip_all_tags($m[2])).']('.$m[1].')',
-            $html
-        ) ?? $html;
+        if (! $root) {
+            return '';
+        }
 
-        // Convert images to markdown.
-        $html = preg_replace_callback(
-            '#<img\b[^>]*src=["\']([^"\']+)["\'][^>]*(?:alt=["\']([^"\']*)["\'])?[^>]*/?>#is',
-            fn ($m) => '![' . ($m[2] ?? '') . '](' . $m[1] . ')',
-            $html
-        ) ?? $html;
-
-        // Convert list items to bullets.
-        $html = preg_replace('#<li\b[^>]*>#i', "\n- ", $html) ?? $html;
-
-        // Paragraphs / line breaks.
-        $html = str_ireplace(['<br>', '<br/>', '<br />', '</p>', '</div>', '</li>'], "\n", $html);
-
-        $text = wp_strip_all_tags($html);
-        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        // Collapse excessive whitespace.
+        $text = self::nodeToMarkdown($root);
+        // Collapse whitespace.
         $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
         $text = preg_replace('/[ \t]+/', ' ', $text) ?? $text;
-        // Tidy bullet lines.
-        $text = preg_replace('/\n +- /', "\n- ", $text) ?? $text;
 
         return trim($text);
+    }
+
+    /**
+     * Recursively render a DOM node as markdown. Text nodes pass through;
+     * elements are translated by tag name. Unknown tags fall through to
+     * their children (transparent).
+     */
+    private static function nodeToMarkdown(\DOMNode $node): string
+    {
+        // Comments disappear.
+        if ($node->nodeType === XML_COMMENT_NODE) {
+            return '';
+        }
+
+        if ($node->nodeType === XML_TEXT_NODE) {
+            return (string) $node->nodeValue;
+        }
+
+        if ($node->nodeType !== XML_ELEMENT_NODE) {
+            return '';
+        }
+
+        $name = strtolower($node->nodeName);
+
+        // Non-content elements we drop entirely.
+        static $skip = [
+            'script', 'style', 'noscript', 'template', 'svg',
+            'iframe', 'embed', 'object',
+            'form', 'button', 'input', 'select', 'textarea', 'label',
+            'nav', 'footer', 'header', 'aside',
+        ];
+        if (in_array($name, $skip, true)) {
+            return '';
+        }
+
+        // Self-closing / attribute-only elements.
+        if ($name === 'br') {
+            return "\n";
+        }
+        if ($name === 'hr') {
+            return "\n\n---\n\n";
+        }
+        if ($name === 'img' && $node instanceof \DOMElement) {
+            $src = $node->getAttribute('src');
+            $alt = $node->getAttribute('alt');
+
+            return $src !== '' ? '!['.$alt.']('.$src.')' : '';
+        }
+
+        // Render children first, then wrap based on tag.
+        $inner = '';
+        foreach ($node->childNodes as $child) {
+            $inner .= self::nodeToMarkdown($child);
+        }
+
+        if ($name === 'a' && $node instanceof \DOMElement) {
+            $href = $node->getAttribute('href');
+            $text = trim($inner);
+            if ($href !== '' && $text !== '') {
+                return '['.$text.']('.$href.')';
+            }
+
+            return $text;
+        }
+
+        if (preg_match('/^h([1-6])$/', $name, $m)) {
+            return "\n\n".str_repeat('#', (int) $m[1]).' '.trim($inner)."\n\n";
+        }
+
+        switch ($name) {
+            case 'p':
+                return "\n\n".trim($inner)."\n\n";
+            case 'li':
+                return "\n- ".trim($inner);
+            case 'ul':
+            case 'ol':
+                return "\n".$inner."\n\n";
+            case 'blockquote':
+                $lines = explode("\n", trim($inner));
+
+                return "\n\n".implode("\n", array_map(fn ($l) => '> '.$l, $lines))."\n\n";
+            case 'pre':
+                return "\n\n```\n".trim($inner)."\n```\n\n";
+            case 'code':
+                // Inline code only — <pre><code> is handled above via pre.
+                return $node->parentNode && strtolower($node->parentNode->nodeName) === 'pre'
+                    ? $inner
+                    : '`'.$inner.'`';
+            case 'strong':
+            case 'b':
+                return '**'.trim($inner).'**';
+            case 'em':
+            case 'i':
+                return '*'.trim($inner).'*';
+            case 'table':
+            case 'tbody':
+            case 'thead':
+            case 'tr':
+                return $inner."\n";
+            case 'td':
+            case 'th':
+                return trim($inner).' | ';
+            case 'div':
+            case 'section':
+            case 'main':
+            case 'article':
+                // Block-level containers get separation but no extra markup.
+                return "\n".$inner."\n";
+            default:
+                return $inner;
+        }
     }
 
     private static function finalUrl(array $response, string $original): string
