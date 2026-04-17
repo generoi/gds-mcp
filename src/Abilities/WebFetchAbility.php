@@ -25,8 +25,25 @@ final class WebFetchAbility
 
     private const TIMEOUT = 15;
 
+    /**
+     * Option key holding the list of hosts the user has trusted for
+     * auto-approval of web-fetch calls (set via "Approve & trust" UI button).
+     */
+    private const TRUSTED_HOSTS_OPTION = 'gds_mcp_trusted_web_hosts';
+
     public static function register(): void
     {
+        // Register hooks for approval-integration with gds-assistant.
+        // These are no-ops if gds-assistant isn't installed.
+        add_filter('gds-assistant/tool_requires_approval', [self::class, 'maybeSkipApproval'], 10, 3);
+        add_action('gds-assistant/approve_with_trust', [self::class, 'trustHost']);
+
+        // Populate the trusted-hosts list. Each source is its own filter
+        // callback so downstream code can cleanly remove any of them via
+        // remove_filter('gds-mcp/web_fetch_trusted_hosts', ...).
+        add_filter('gds-mcp/web_fetch_trusted_hosts', [self::class, 'addUserApprovedHosts'], 10, 2);
+        add_filter('gds-mcp/web_fetch_trusted_hosts', [self::class, 'addWpAllowedRedirectHosts'], 10, 2);
+
         HelpAbility::registerAbility('gds/web-fetch', [
             'label' => 'Fetch Web Page',
             'description' => 'Fetch a URL and return its text content. Requests markdown via Accept header; falls back to HTML stripped to text. Blocks private IPs (SSRF-safe). Use for reading external pages, blog posts, competitor sites, docs, etc.',
@@ -89,6 +106,116 @@ final class WebFetchAbility
     public static function permissionCheck(): bool
     {
         return current_user_can('read');
+    }
+
+    /**
+     * Exempt this specific web-fetch call from approval if the target host
+     * is already trusted — either (a) the user clicked "Approve & trust"
+     * for this host previously, or (b) the host is in WordPress's
+     * allowed_redirect_hosts list (already trusted by the site for redirect
+     * safety, so trusting it for LLM-driven fetches is consistent). The
+     * ability stays destructive-by-default for other MCP clients — this is
+     * the gds-assistant-specific relaxation.
+     */
+    public static function maybeSkipApproval(bool $needs, string $abilityName, array $input): bool
+    {
+        if (! $needs || $abilityName !== 'gds/web-fetch') {
+            return $needs;
+        }
+
+        $host = strtolower((string) wp_parse_url((string) ($input['url'] ?? ''), PHP_URL_HOST));
+        if ($host === '') {
+            return $needs;
+        }
+
+        if (self::isHostTrusted($host)) {
+            return false;
+        }
+
+        return $needs;
+    }
+
+    /**
+     * Check whether a host is trusted. Delegates to the
+     * `gds-mcp/web_fetch_trusted_hosts` filter so callers can extend the
+     * trust list from anywhere (themes, site-specific mu-plugins, etc.).
+     *
+     * Default trusted hosts include:
+     *   - gds_mcp_trusted_web_hosts option (user clicked "Approve & trust")
+     *   - WordPress's allowed_redirect_hosts (current site + plugin-added)
+     *
+     * @param  string  $host  Lowercased hostname to check.
+     */
+    public static function isHostTrusted(string $host): bool
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return false;
+        }
+
+        $trusted = self::getTrustedHosts($host);
+
+        return in_array($host, $trusted, true);
+    }
+
+    /**
+     * Build the current trusted-hosts list. Sources are added by filter
+     * callbacks (see register()) so downstream code can add/remove/replace
+     * sources via the usual add_filter/remove_filter mechanism.
+     *
+     * @param  string  $candidateHost  Lowercased host about to be checked.
+     * @return string[]
+     */
+    public static function getTrustedHosts(string $candidateHost = ''): array
+    {
+        $hosts = (array) apply_filters('gds-mcp/web_fetch_trusted_hosts', [], $candidateHost);
+
+        return array_values(array_unique(array_filter(array_map(
+            fn ($h) => strtolower(trim((string) $h)),
+            $hosts
+        ))));
+    }
+
+    /**
+     * Filter callback: add hosts the user has approved via "Approve & trust"
+     * (stored in the gds_mcp_trusted_web_hosts option) to the trust list.
+     */
+    public static function addUserApprovedHosts(array $hosts, string $candidateHost = ''): array
+    {
+        return array_merge($hosts, (array) get_option(self::TRUSTED_HOSTS_OPTION, []));
+    }
+
+    /**
+     * Filter callback: add hosts WordPress already trusts for redirects
+     * (allowed_redirect_hosts filter) to the trust list. The current site
+     * host is always in that list. Includes plugin-added partners, etc.
+     */
+    public static function addWpAllowedRedirectHosts(array $hosts, string $candidateHost = ''): array
+    {
+        $wpAllowed = (array) apply_filters(
+            'allowed_redirect_hosts',
+            [wp_parse_url(home_url(), PHP_URL_HOST)],
+            $candidateHost
+        );
+
+        return array_merge($hosts, $wpAllowed);
+    }
+
+    /**
+     * Persist a host to the trusted list when the user clicks
+     * "Approve & trust" in the approval UI.
+     */
+    public static function trustHost(string $host): void
+    {
+        $host = strtolower(trim($host));
+        if ($host === '') {
+            return;
+        }
+        $trusted = (array) get_option(self::TRUSTED_HOSTS_OPTION, []);
+        if (! in_array($host, $trusted, true)) {
+            $trusted[] = $host;
+            update_option(self::TRUSTED_HOSTS_OPTION, array_values(array_unique($trusted)));
+        }
     }
 
     public static function execute(mixed $input = []): array|WP_Error
