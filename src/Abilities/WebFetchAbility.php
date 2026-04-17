@@ -318,9 +318,16 @@ final class WebFetchAbility
         }
         if ($name === 'img' && $node instanceof \DOMElement) {
             $src = $node->getAttribute('src');
-            $alt = $node->getAttribute('alt');
+            $alt = trim($node->getAttribute('alt'));
 
-            return $src !== '' ? '!['.$alt.']('.$src.')' : '';
+            // Drop images with no alt text — they're decorative (accessibility
+            // convention: alt="" means "skip me"). Logo carousels, spacer
+            // images, icons etc. bloat output without adding info.
+            if ($src === '' || $alt === '') {
+                return '';
+            }
+
+            return '!['.$alt.']('.$src.')';
         }
 
         // Render children first, then wrap based on tag.
