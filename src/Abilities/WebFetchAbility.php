@@ -100,6 +100,12 @@ final class WebFetchAbility
                     // destinations before the request goes out.
                     'destructive' => true,
                     'idempotent' => true,
+                    // Approval-gated but safe to offer on any tier — the
+                    // user sees the URL before every fetch, so weak models
+                    // can't exfiltrate silently. Explicit min_tier: read
+                    // overrides the default risk-based hiding for
+                    // destructive tools.
+                    'min_tier' => 'read',
                 ],
             ],
         ]);
