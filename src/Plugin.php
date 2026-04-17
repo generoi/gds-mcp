@@ -75,6 +75,7 @@ class Plugin
         Abilities\PatchBlockAbility::register();
         Abilities\SiteMapResource::register();
         Abilities\ThemeJsonResource::register();
+        Abilities\WebFetchAbility::register();
 
         // ACF -- only if active
         if (function_exists('acf_get_field_groups')) {
