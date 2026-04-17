@@ -38,6 +38,11 @@ final class WebFetchAbility
                         'type' => 'string',
                         'description' => 'Full https:// URL to fetch (plain http is not allowed).',
                     ],
+                    'format' => [
+                        'type' => 'string',
+                        'enum' => ['markdown', 'text', 'html'],
+                        'description' => 'Output format. "markdown" (default): main content extracted, HTML → markdown with headings/links/lists. "text": plain text with all tags stripped. "html": raw HTML (truncated) — use when you need <head>, meta tags, nav structure, form fields, etc.',
+                    ],
                     'max_length' => [
                         'type' => 'integer',
                         'description' => 'Truncate returned content to this many characters (default 20000, max 100000).',
@@ -79,6 +84,9 @@ final class WebFetchAbility
     {
         $input = (array) ($input ?? []);
         $url = (string) ($input['url'] ?? '');
+        $format = in_array($input['format'] ?? '', ['markdown', 'text', 'html'], true)
+            ? $input['format']
+            : 'markdown';
         $maxLength = min(100000, max(500, (int) ($input['max_length'] ?? 20000)));
 
         if ($url === '') {
@@ -156,7 +164,11 @@ final class WebFetchAbility
         $title = '';
         if ($isHtml) {
             $title = self::extractTitle($body);
-            $content = self::htmlToText($body);
+            $content = match ($format) {
+                'html' => $body,
+                'text' => self::htmlToPlainText($body),
+                default => self::htmlToText($body),
+            };
         } elseif ($isMarkdown) {
             $content = trim($body);
             $title = self::extractMarkdownTitle($content);
@@ -232,6 +244,20 @@ final class WebFetchAbility
         }
 
         return false;
+    }
+
+    /**
+     * Strip all HTML to plain text (no markdown syntax). Simpler than
+     * htmlToText — used when format=text.
+     */
+    private static function htmlToPlainText(string $html): string
+    {
+        $text = wp_strip_all_tags($html, true);
+        $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace("/\n{3,}/", "\n\n", $text) ?? $text;
+        $text = preg_replace('/[ \t]+/', ' ', $text) ?? $text;
+
+        return trim($text);
     }
 
     /**
