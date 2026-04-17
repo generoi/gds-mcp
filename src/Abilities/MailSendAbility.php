@@ -86,6 +86,12 @@ final class MailSendAbility
                     // recipients and subject so the user can catch bad sends.
                     'destructive' => true,
                     'idempotent' => false,
+                    // Drafting coherent email requires solid instruction-
+                    // following. Weak read-tier models (Gemini Flash-Lite
+                    // etc.) reliably struggle — they print the skill prompt
+                    // instead of executing it. gds-assistant respects this
+                    // and asks the user to switch models.
+                    'min_tier' => 'standard',
                 ],
             ],
         ]);
