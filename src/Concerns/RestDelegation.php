@@ -35,6 +35,19 @@ trait RestDelegation
     }
 
     /**
+     * Make an internal PUT request to the WordPress REST API.
+     */
+    protected static function restPut(string $route, array $body = []): WP_REST_Response
+    {
+        $request = new WP_REST_Request('PUT', $route);
+        $request->set_header('Content-Type', 'application/json');
+
+        $request->set_body_params($body);
+
+        return rest_do_request($request);
+    }
+
+    /**
      * Get the REST API route for a post type (e.g. "/wp/v2/pages").
      */
     protected static function getRestRoute(string $postType): ?string
