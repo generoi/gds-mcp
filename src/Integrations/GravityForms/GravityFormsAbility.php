@@ -277,7 +277,7 @@ final class GravityFormsAbility
         }
 
         // Read the current form so callers can send partial updates.
-        $current = GFAPI::get_form($id);
+        $current = \GFAPI::get_form($id);
         if (! $current || is_wp_error($current)) {
             return new WP_Error('form_not_found', "Form {$id} not found.");
         }
