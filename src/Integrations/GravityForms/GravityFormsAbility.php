@@ -277,10 +277,13 @@ final class GravityFormsAbility
         }
 
         // Read the current form so callers can send partial updates.
-        $current = \GFAPI::get_form($id);
-        if (! $current || is_wp_error($current)) {
+        // GFAPI::get_form() returns GF_Field objects in fields[]; JSON round-trip
+        // normalises everything to plain arrays before merging with caller input.
+        $raw = \GFAPI::get_form($id);
+        if (! $raw || is_wp_error($raw)) {
             return new WP_Error('form_not_found', "Form {$id} not found.");
         }
+        $current = json_decode(json_encode($raw), true);
 
         unset($input['id']);
         $merged = array_replace_recursive($current, $input);
@@ -326,9 +329,18 @@ final class GravityFormsAbility
             $merged['confirmations'] = $keyed;
         }
 
-        $response = self::restPut("/gf/v2/forms/{$id}", $merged);
+        // Use GFAPI directly — REST PUT requires GF_Field objects to already be
+        // instantiated, but after the json_decode round-trip they're plain arrays.
+        $result = \GFAPI::update_form($merged, $id);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if ($result === false) {
+            return new WP_Error('update_failed', "Failed to update form {$id}.");
+        }
 
-        return self::restResponseOrError($response);
+        // Return the saved form.
+        return json_decode(json_encode(\GFAPI::get_form($id)), true) ?: [];
     }
 
     public function listEntries(mixed $input = []): array|WP_Error
