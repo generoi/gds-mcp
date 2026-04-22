@@ -189,20 +189,36 @@ final class GravityFormsAbility
 
     public function listForms(mixed $input = []): array|WP_Error
     {
-        $response = self::restGet('/gf/v2/forms', (array) ($input ?? []));
+        if (! class_exists('GFAPI')) {
+            return new WP_Error('gf_not_available', 'Gravity Forms is not active.');
+        }
 
-        return self::restResponseOrError($response);
+        // GFAPI::get_forms(active, trash) — default returns only active, non-trashed.
+        $forms = \GFAPI::get_forms(true, false);
+
+        $result = [];
+        foreach ($forms as $form) {
+            $result[(int) $form['id']] = json_decode(json_encode($form), true);
+        }
+
+        return $result;
     }
 
     public function readForm(mixed $input = []): array|WP_Error
     {
+        if (! class_exists('GFAPI')) {
+            return new WP_Error('gf_not_available', 'Gravity Forms is not active.');
+        }
+
         $input = (array) ($input ?? []);
         $id = (int) ($input['id'] ?? 0);
-        unset($input['id']);
 
-        $response = self::restGet("/gf/v2/forms/{$id}", $input);
+        $form = \GFAPI::get_form($id);
+        if (! $form) {
+            return new WP_Error('form_not_found', "Form {$id} not found.");
+        }
 
-        return self::restResponseOrError($response);
+        return json_decode(json_encode($form), true) ?: [];
     }
 
     public function createForm(mixed $input = []): array|WP_Error
@@ -213,54 +229,74 @@ final class GravityFormsAbility
 
         // Deep-convert to arrays (GFAPI expects arrays, not stdClass)
         $input = json_decode(json_encode($input ?? []), true) ?: [];
+        $input = self::normalizeFormPayload($input);
 
+        // Bypass the GF REST API (which expects the body as a JSON-encoded string
+        // and returns cryptic "no route"/"must be sent as a JSON string" errors
+        // depending on the request wrapper) and call GFAPI directly.
+        $result = \GFAPI::add_form($input);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+        if (! $result) {
+            return new WP_Error('create_failed', 'Failed to create form.');
+        }
+
+        $formId = (int) $result;
+
+        return json_decode(json_encode(\GFAPI::get_form($formId)), true) ?: [];
+    }
+
+    /**
+     * Auto-assign field/notification/confirmation IDs and set GF-required defaults.
+     *
+     * Shared by createForm() and updateForm() so the two paths produce identical output.
+     */
+    private static function normalizeFormPayload(array $input): array
+    {
         // Auto-assign field IDs — GF requires each field to have a unique id.
         if (! empty($input['fields']) && is_array($input['fields'])) {
+            $maxId = 0;
+            foreach ($input['fields'] as $field) {
+                $maxId = max($maxId, (int) ($field['id'] ?? 0));
+            }
             foreach ($input['fields'] as $i => &$field) {
-                if (! isset($field['id'])) {
-                    $field['id'] = $i + 1;
+                if (empty($field['id'])) {
+                    $field['id'] = ++$maxId;
                 }
             }
             unset($field);
         }
 
-        // Auto-assign notification IDs and set required GF fields
+        // Auto-assign notification IDs and set required GF fields.
         if (! empty($input['notifications']) && is_array($input['notifications'])) {
             $keyed = [];
             foreach ($input['notifications'] as $notif) {
-                $id = $notif['id'] ?? wp_generate_uuid4();
-                $notif['id'] = $id;
+                $nid = $notif['id'] ?? wp_generate_uuid4();
+                $notif['id'] = $nid;
                 // GF requires toType='email' for custom email addresses
                 if (! empty($notif['to']) && ! isset($notif['toType'])) {
                     $notif['toType'] = 'email';
                 }
-                // Default event
-                if (! isset($notif['event'])) {
-                    $notif['event'] = 'form_submission';
-                }
-                // Default message with all fields
-                if (! isset($notif['message'])) {
-                    $notif['message'] = '{all_fields}';
-                }
-                $keyed[$id] = $notif;
+                $notif['event'] ??= 'form_submission';
+                $notif['message'] ??= '{all_fields}';
+                $keyed[$nid] = $notif;
             }
             $input['notifications'] = $keyed;
         }
 
-        // Auto-assign confirmation IDs (same pattern as notifications)
+        // Auto-assign confirmation IDs (same pattern as notifications).
         if (! empty($input['confirmations']) && is_array($input['confirmations'])) {
             $keyed = [];
             foreach ($input['confirmations'] as $conf) {
-                $id = $conf['id'] ?? wp_generate_uuid4();
-                $conf['id'] = $id;
-                $keyed[$id] = $conf;
+                $cid = $conf['id'] ?? wp_generate_uuid4();
+                $conf['id'] = $cid;
+                $keyed[$cid] = $conf;
             }
             $input['confirmations'] = $keyed;
         }
 
-        $response = self::restPost('/gf/v2/forms', $input);
-
-        return self::restResponseOrError($response);
+        return $input;
     }
 
     public function updateForm(mixed $input = []): array|WP_Error
@@ -286,48 +322,16 @@ final class GravityFormsAbility
         $current = json_decode(json_encode($raw), true);
 
         unset($input['id']);
-        $merged = array_replace_recursive($current, $input);
 
-        // Re-key fields: preserve existing IDs, auto-assign new ones.
-        if (! empty($merged['fields']) && is_array($merged['fields'])) {
-            $maxId = 0;
-            foreach ($merged['fields'] as $field) {
-                $maxId = max($maxId, (int) ($field['id'] ?? 0));
-            }
-            foreach ($merged['fields'] as &$field) {
-                if (empty($field['id'])) {
-                    $field['id'] = ++$maxId;
-                }
-            }
-            unset($field);
-        }
-
-        // Re-key notifications by their id (GF stores as associative array).
-        if (isset($merged['notifications']) && is_array($merged['notifications'])) {
-            $keyed = [];
-            foreach ($merged['notifications'] as $notif) {
-                $nid = $notif['id'] ?? wp_generate_uuid4();
-                $notif['id'] = $nid;
-                if (! empty($notif['to']) && ! isset($notif['toType'])) {
-                    $notif['toType'] = 'email';
-                }
-                $notif['event'] ??= 'form_submission';
-                $notif['message'] ??= '{all_fields}';
-                $keyed[$nid] = $notif;
-            }
-            $merged['notifications'] = $keyed;
-        }
-
-        // Re-key confirmations the same way.
-        if (isset($merged['confirmations']) && is_array($merged['confirmations'])) {
-            $keyed = [];
-            foreach ($merged['confirmations'] as $conf) {
-                $cid = $conf['id'] ?? wp_generate_uuid4();
-                $conf['id'] = $cid;
-                $keyed[$cid] = $conf;
-            }
-            $merged['confirmations'] = $keyed;
-        }
+        // Top-level replacement, not recursive merge: if the caller supplies a key
+        // (fields, notifications, confirmations, title, description) it fully
+        // replaces the current value. Omitted keys stay untouched.
+        //
+        // array_replace_recursive would recurse into the numerically-indexed
+        // fields array and only replace entries at the same index, leaving
+        // extras behind — that was the "leftover fields can't be deleted" bug.
+        $merged = array_merge($current, $input);
+        $merged = self::normalizeFormPayload($merged);
 
         // Use GFAPI directly — REST PUT requires GF_Field objects to already be
         // instantiated, but after the json_decode round-trip they're plain arrays.
@@ -345,12 +349,24 @@ final class GravityFormsAbility
 
     public function listEntries(mixed $input = []): array|WP_Error
     {
+        if (! class_exists('GFAPI')) {
+            return new WP_Error('gf_not_available', 'Gravity Forms is not active.');
+        }
+
         $input = (array) ($input ?? []);
         $formId = (int) ($input['form_id'] ?? 0);
-        unset($input['form_id']);
 
-        $response = self::restGet("/gf/v2/forms/{$formId}/entries", $input);
+        $entries = \GFAPI::get_entries(
+            $formId,
+            $input['search_criteria'] ?? [],
+            $input['sorting'] ?? null,
+            $input['paging'] ?? null,
+        );
 
-        return self::restResponseOrError($response);
+        if (is_wp_error($entries)) {
+            return $entries;
+        }
+
+        return json_decode(json_encode($entries), true) ?: [];
     }
 }

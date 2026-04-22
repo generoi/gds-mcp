@@ -36,6 +36,7 @@ tests_add_filter('muplugins_loaded', function () {
         'stream/stream.php',
         'advanced-custom-fields-pro/acf.php',
         'advanced-custom-fields/acf.php',
+        'gravityforms/gravityforms.php',
     ];
 
     foreach ($integrations as $plugin) {
@@ -146,4 +147,18 @@ if (function_exists('wp_stream_get_instance')) {
     if (isset($stream->install) && method_exists($stream->install, 'install')) {
         $stream->install->install($stream->get_version());
     }
+}
+
+// Create Gravity Forms DB tables if the plugin is loaded.
+// Plain plugin activation in wp-phpunit doesn't trigger GF's install routine,
+// so do it manually. install() creates the modern gf_* tables; without the
+// corresponding gf_db_version option GFFormsModel falls back to the legacy
+// rg_* table names and every GFAPI call fails with "table doesn't exist".
+//
+// wp-phpunit's per-test transaction rollback wipes any option we write in
+// bootstrap, so we force the value via a pre_option filter instead.
+if (function_exists('gf_upgrade') && class_exists('GFForms')) {
+    gf_upgrade()->install();
+    add_filter('pre_option_gf_db_version', fn () => \GFForms::$version);
+    gf_upgrade()->flush_versions();
 }
