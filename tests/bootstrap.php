@@ -159,6 +159,6 @@ if (function_exists('wp_stream_get_instance')) {
 // bootstrap, so we force the value via a pre_option filter instead.
 if (function_exists('gf_upgrade') && class_exists('GFForms')) {
     gf_upgrade()->install();
-    add_filter('pre_option_gf_db_version', fn () => \GFForms::$version);
+    add_filter('pre_option_gf_db_version', fn () => GFForms::$version);
     gf_upgrade()->flush_versions();
 }
