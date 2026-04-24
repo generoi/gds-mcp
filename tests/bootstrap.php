@@ -161,4 +161,22 @@ if (function_exists('gf_upgrade') && class_exists('GFForms')) {
     gf_upgrade()->install();
     add_filter('pre_option_gf_db_version', fn () => GFForms::$version);
     gf_upgrade()->flush_versions();
+
+    // gf_addon_feed is normally created by GFFeedAddOn::upgrade_base() when a
+    // feed addon (ActiveCampaign, Webhooks, ...) activates. No feed addon is
+    // loaded in tests, so create the table manually so feed CRUD works.
+    global $wpdb;
+    require_once ABSPATH.'wp-admin/includes/upgrade.php';
+    $charsetCollate = $wpdb->get_charset_collate();
+    dbDelta("CREATE TABLE {$wpdb->prefix}gf_addon_feed (
+        id mediumint(8) unsigned not null auto_increment,
+        form_id mediumint(8) unsigned not null,
+        is_active tinyint(1) not null default 1,
+        feed_order mediumint(8) unsigned not null default 0,
+        meta longtext,
+        addon_slug varchar(50),
+        event_type varchar(20),
+        PRIMARY KEY  (id),
+        KEY addon_form (addon_slug,form_id)
+    ) {$charsetCollate};");
 }

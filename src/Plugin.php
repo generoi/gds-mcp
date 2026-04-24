@@ -102,6 +102,7 @@ class Plugin
         // Gravity Forms -- only if REST API is available
         if (class_exists('GFAPI')) {
             Integrations\GravityForms\GravityFormsAbility::register();
+            Integrations\GravityForms\FeedsAbility::register();
         }
 
         // Cache clearing -- via sage-cachetags (abstracts Kinsta, Fastly, etc.)
