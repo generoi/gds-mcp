@@ -60,13 +60,16 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-read', [
             'label' => 'Read Content',
-            'description' => "Read a single post/page/CPT by ID with full content. Available types: {$typeDesc}.",
+            'description' => "Read a single post/page/CPT by ID with full content. Available types: {$typeDesc}. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list) — pass it as-is.",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'type' => ['type' => 'string', 'enum' => $typeEnum, 'description' => 'Post type'],
-                    'id' => ['type' => 'integer', 'description' => 'Post ID'],
+                    'id' => [
+                        'type' => ['integer', 'string'],
+                        'description' => 'Numeric post ID, or composite template id "{theme}//{slug}" for wp_template / wp_template_part.',
+                    ],
                 ],
                 'required' => ['type', 'id'],
             ],
@@ -103,13 +106,16 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-update', [
             'label' => 'Update Content',
-            'description' => "Update an existing post/page/CPT. Available types: {$typeDesc}. Requires type and id. Fields are plain strings. Only include fields you want to change.",
+            'description' => "Update an existing post/page/CPT. Available types: {$typeDesc}. Requires type and id. Fields are plain strings. Only include fields you want to change. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'type' => ['type' => 'string', 'enum' => $typeEnum, 'description' => 'Post type'],
-                    'id' => ['type' => 'integer', 'description' => 'Post ID to update'],
+                    'id' => [
+                        'type' => ['integer', 'string'],
+                        'description' => 'Numeric post ID, or composite template id "{theme}//{slug}" for wp_template / wp_template_part.',
+                    ],
                     'title' => ['type' => ['string', 'object']],
                     'content' => ['type' => ['string', 'object']],
                     'excerpt' => ['type' => ['string', 'object']],
@@ -127,13 +133,16 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-delete', [
             'label' => 'Delete Content',
-            'description' => "Delete a post/page/CPT. Moves to trash by default; use force=true for permanent deletion. Available types: {$typeDesc}.",
+            'description' => "Delete a post/page/CPT. Moves to trash by default; use force=true for permanent deletion. Available types: {$typeDesc}. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'type' => ['type' => 'string', 'enum' => $typeEnum, 'description' => 'Post type'],
-                    'id' => ['type' => 'integer', 'description' => 'Post ID to delete'],
+                    'id' => [
+                        'type' => ['integer', 'string'],
+                        'description' => 'Numeric post ID, or composite template id "{theme}//{slug}" for wp_template / wp_template_part.',
+                    ],
                     'force' => ['type' => 'boolean', 'description' => 'Permanently delete instead of trashing (default: false)'],
                 ],
                 'required' => ['type', 'id'],
@@ -242,7 +251,7 @@ final class GenericPostTypeAbility
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
-        $id = (int) ($input['id'] ?? 0);
+        $id = self::normalizeId($input['id'] ?? null);
         unset($input['type'], $input['id']);
 
         $response = self::restGet("{$route}/{$id}", $input);
@@ -299,7 +308,7 @@ final class GenericPostTypeAbility
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
-        $id = (int) ($input['id'] ?? 0);
+        $id = self::normalizeId($input['id'] ?? null);
 
         $acfFields = $input['fields'] ?? null;
         $lang = $input['lang'] ?? null;
@@ -317,12 +326,15 @@ final class GenericPostTypeAbility
 
         $data = self::restResponseData($response);
 
-        if ($lang && ! empty($data['id'])) {
-            self::assignLanguage((int) $data['id'], $lang);
+        // Templates expose composite ids in `id`, the numeric post id in `wp_id`.
+        $numericId = (int) ($data['wp_id'] ?? $data['id'] ?? 0);
+
+        if ($lang && $numericId) {
+            self::assignLanguage($numericId, $lang);
         }
 
-        if ($acfFields && is_array($acfFields)) {
-            self::updateAcfFields($data['id'], $acfFields);
+        if ($acfFields && is_array($acfFields) && $numericId) {
+            self::updateAcfFields($numericId, $acfFields);
         }
 
         return self::enrichPostUrls($data);
@@ -334,7 +346,9 @@ final class GenericPostTypeAbility
      */
     private static function enrichPostUrls(array $data): array
     {
-        $id = (int) ($data['id'] ?? 0);
+        // Templates expose the composite "{theme}//{slug}" in `id` and the
+        // numeric post id in `wp_id`. Prefer wp_id so we still get edit links.
+        $id = (int) ($data['wp_id'] ?? $data['id'] ?? 0);
         if (! $id) {
             return $data;
         }
@@ -399,7 +413,7 @@ final class GenericPostTypeAbility
         if (! $route) {
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
-        $id = (int) ($input['id'] ?? 0);
+        $id = self::normalizeId($input['id'] ?? null);
         $force = $input['force'] ?? false;
 
         $request = new \WP_REST_Request('DELETE', "{$route}/{$id}");
@@ -408,5 +422,22 @@ final class GenericPostTypeAbility
         $response = rest_do_request($request);
 
         return self::restResponseOrError($response);
+    }
+
+    /**
+     * Normalize an id for REST routing.
+     *
+     * Accepts an integer post id, or a composite "{theme}//{slug}" id used by
+     * /wp/v2/templates and /wp/v2/template-parts. The WP_REST_Templates_Controller
+     * route pattern explicitly matches the double-slash form, so we pass the
+     * string through unchanged. Anything else is coerced to int (legacy behaviour).
+     */
+    private static function normalizeId(mixed $rawId): int|string
+    {
+        if (is_string($rawId) && str_contains($rawId, '//')) {
+            return $rawId;
+        }
+
+        return (int) ($rawId ?? 0);
     }
 }
