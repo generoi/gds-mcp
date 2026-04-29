@@ -76,7 +76,7 @@ final class PatchBlockAbility
     {
         HelpAbility::registerAbility('gds/blocks-patch', [
             'label' => 'Patch Block',
-            'description' => 'Modify, insert, or delete blocks within a post. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Supports batch operations. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
+            'description' => 'Modify, insert, or delete blocks within a post. To find a target id, call gds/content-list first — do not query REST endpoints directly. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Supports batch operations. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

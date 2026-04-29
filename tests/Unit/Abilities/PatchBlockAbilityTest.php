@@ -273,9 +273,14 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     /**
      * Create a wp_template_part post owned by the given theme term.
+     *
+     * Switches the current user to administrator — wp_template_part's
+     * meta-cap mapping requires edit_theme_options, which 'editor' lacks.
      */
     private function createTemplatePart(string $theme, string $slug, string $content): int
     {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+
         if (! taxonomy_exists('wp_theme')) {
             register_taxonomy('wp_theme', ['wp_template', 'wp_template_part'], [
                 'public' => false,
@@ -285,8 +290,13 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
             ]);
         }
 
-        $term = wp_insert_term($theme, 'wp_theme');
-        $termId = is_wp_error($term) ? get_term_by('name', $theme, 'wp_theme')->term_id : $term['term_id'];
+        $existing = term_exists($theme, 'wp_theme');
+        if ($existing) {
+            $termId = is_array($existing) ? (int) $existing['term_id'] : (int) $existing;
+        } else {
+            $term = wp_insert_term($theme, 'wp_theme');
+            $termId = is_wp_error($term) ? (int) $term->get_error_data() : (int) $term['term_id'];
+        }
 
         $postId = self::factory()->post->create([
             'post_type' => 'wp_template_part',
@@ -294,7 +304,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
             'post_name' => $slug,
             'post_content' => $content,
         ]);
-        wp_set_object_terms($postId, [(int) $termId], 'wp_theme');
+        wp_set_object_terms($postId, [$termId], 'wp_theme');
 
         return $postId;
     }
@@ -335,6 +345,7 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
             'attrs' => ['align' => 'right'],
         ]);
 
+        $this->assertIsArray($resultSv);
         $this->assertTrue($resultSv['success']);
         $this->assertSame($svId, $resultSv['id']);
 
@@ -348,6 +359,8 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
     public function test_composite_id_unknown_theme_returns_error(): void
     {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+
         $result = (new PatchBlockAbility)->execute([
             'id' => 'nonexistent-theme//footer',
             'block_name' => 'core/paragraph',
