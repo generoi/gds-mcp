@@ -276,4 +276,99 @@ class ContentAbilityTest extends AbilityTestCase
             'title' => 'Should Fail',
         ]);
     }
+
+    // ── Composite template ids ────────────────────────────────────
+
+    /**
+     * Create a wp_template_part post with a wp_theme term association.
+     *
+     * Uses administrator role because wp_template_part's meta-cap mapping
+     * requires edit_theme_options.
+     */
+    private function createTemplatePart(string $theme, string $slug, string $content = '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->'): int
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+
+        if (! taxonomy_exists('wp_theme')) {
+            register_taxonomy('wp_theme', ['wp_template', 'wp_template_part'], [
+                'public' => false,
+                'hierarchical' => false,
+                'rewrite' => false,
+                'show_ui' => false,
+            ]);
+        }
+
+        $existing = term_exists($theme, 'wp_theme');
+        if ($existing) {
+            $termId = is_array($existing) ? (int) $existing['term_id'] : (int) $existing;
+        } else {
+            $term = wp_insert_term($theme, 'wp_theme');
+            $termId = is_wp_error($term) ? (int) $term->get_error_data() : (int) $term['term_id'];
+        }
+
+        $postId = self::factory()->post->create([
+            'post_type' => 'wp_template_part',
+            'post_status' => 'publish',
+            'post_name' => $slug,
+            'post_content' => $content,
+        ]);
+        wp_set_object_terms($postId, [$termId], 'wp_theme');
+
+        return $postId;
+    }
+
+    public function test_read_accepts_composite_template_id(): void
+    {
+        $partId = $this->createTemplatePart('gds', 'footer');
+
+        $result = $this->assertAbilitySuccess('gds/content-read', [
+            'type' => 'template-parts',
+            'id' => 'gds//footer',
+        ]);
+
+        $this->assertSame('gds//footer', $result['id']);
+        $this->assertSame($partId, (int) ($result['wp_id'] ?? 0));
+    }
+
+    public function test_update_accepts_composite_template_id(): void
+    {
+        $partId = $this->createTemplatePart('gds', 'footer');
+        $newContent = '<!-- wp:paragraph --><p>Updated</p><!-- /wp:paragraph -->';
+
+        $result = $this->assertAbilitySuccess('gds/content-update', [
+            'type' => 'template-parts',
+            'id' => 'gds//footer',
+            'content' => $newContent,
+        ]);
+
+        $this->assertSame('gds//footer', $result['id']);
+        $stored = get_post($partId)->post_content;
+        $this->assertStringContainsString('Updated', $stored);
+    }
+
+    public function test_delete_accepts_composite_template_id(): void
+    {
+        $partId = $this->createTemplatePart('gds', 'footer');
+
+        $result = $this->assertAbilitySuccess('gds/content-delete', [
+            'type' => 'template-parts',
+            'id' => 'gds//footer',
+            'force' => true,
+        ]);
+
+        $this->assertIsArray($result);
+        $this->assertNull(get_post($partId));
+    }
+
+    public function test_read_numeric_id_still_works(): void
+    {
+        $page = $this->createPost(['post_type' => 'page', 'post_title' => 'Numeric still works']);
+
+        $result = $this->assertAbilitySuccess('gds/content-read', [
+            'type' => 'pages',
+            'id' => $page,
+        ]);
+
+        $this->assertSame($page, (int) $result['id']);
+    }
 }
