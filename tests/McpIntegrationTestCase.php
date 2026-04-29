@@ -46,9 +46,7 @@ class McpIntegrationTestCase extends TestCase
     {
         $request = new WP_REST_Request('POST', $route);
         $request->set_header('Content-Type', 'application/json');
-        foreach ($body as $key => $value) {
-            $request->set_param($key, $value);
-        }
+        $request->set_body(wp_json_encode($body));
 
         return rest_do_request($request);
     }

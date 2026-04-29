@@ -23,26 +23,30 @@ trait RestDelegation
 
     /**
      * Make an internal POST request to the WordPress REST API.
+     *
+     * Gravity Forms (and several core endpoints) expect {@see WP_REST_Request::get_json_params()}
+     * to be populated from a JSON document — use {@see WP_REST_Request::set_body()} with
+     * {@see wp_json_encode()}, not {@see WP_REST_Request::set_body_params()} alone.
      */
     protected static function restPost(string $route, array $body = []): WP_REST_Response
     {
         $request = new WP_REST_Request('POST', $route);
         $request->set_header('Content-Type', 'application/json');
-
-        $request->set_body_params($body);
+        $request->set_body(wp_json_encode($body));
 
         return rest_do_request($request);
     }
 
     /**
      * Make an internal PUT request to the WordPress REST API.
+     *
+     * Same JSON body semantics as {@see self::restPost()}.
      */
     protected static function restPut(string $route, array $body = []): WP_REST_Response
     {
         $request = new WP_REST_Request('PUT', $route);
         $request->set_header('Content-Type', 'application/json');
-
-        $request->set_body_params($body);
+        $request->set_body(wp_json_encode($body));
 
         return rest_do_request($request);
     }
