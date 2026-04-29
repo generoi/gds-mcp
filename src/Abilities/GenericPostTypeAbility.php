@@ -36,7 +36,7 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-list', [
             'label' => 'List Content',
-            'description' => "Search and filter content by type. Available types: {$typeDesc}. Use _fields to limit response size (e.g. \"id,title,slug,status\"). Use per_page (max 100), orderby, order, search, status params to filter.",
+            'description' => "Search and filter content by type. Available types: {$typeDesc}. Use _fields to limit response size (e.g. \"id,title,slug,status\"). Use per_page (max 100), orderby, order, search, status params to filter. For wp_template / wp_template_part, the response `id` is a composite \"{theme}//{slug}\" string — pass it as-is to gds/blocks-patch (which accepts both composite and numeric ids), or use the numeric `wp_id` field also returned in each item.",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
