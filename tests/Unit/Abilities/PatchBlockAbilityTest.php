@@ -268,4 +268,133 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
 
         return $names;
     }
+
+    // ── Composite template id resolution ─────────────────────────────────
+
+    /**
+     * Create a wp_template_part post owned by the given theme term.
+     */
+    private function createTemplatePart(string $theme, string $slug, string $content): int
+    {
+        if (! taxonomy_exists('wp_theme')) {
+            register_taxonomy('wp_theme', ['wp_template', 'wp_template_part'], [
+                'public' => false,
+                'hierarchical' => false,
+                'rewrite' => false,
+                'show_ui' => false,
+            ]);
+        }
+
+        $term = wp_insert_term($theme, 'wp_theme');
+        $termId = is_wp_error($term) ? get_term_by('name', $theme, 'wp_theme')->term_id : $term['term_id'];
+
+        $postId = self::factory()->post->create([
+            'post_type' => 'wp_template_part',
+            'post_status' => 'publish',
+            'post_name' => $slug,
+            'post_content' => $content,
+        ]);
+        wp_set_object_terms($postId, [(int) $termId], 'wp_theme');
+
+        return $postId;
+    }
+
+    public function test_resolves_composite_template_id(): void
+    {
+        $partId = $this->createTemplatePart(
+            'gds',
+            'footer',
+            '<!-- wp:paragraph --><p>Footer text</p><!-- /wp:paragraph -->',
+        );
+
+        $result = (new PatchBlockAbility)->execute([
+            'id' => 'gds//footer',
+            'block_name' => 'core/paragraph',
+            'attrs' => ['align' => 'center'],
+        ]);
+
+        $this->assertIsArray($result);
+        $this->assertTrue($result['success']);
+        $this->assertSame($partId, $result['id']);
+        $this->assertSame(1, $result['total_modified']);
+
+        $blocks = parse_blocks(get_post($partId)->post_content);
+        $this->assertSame('center', $blocks[0]['attrs']['align']);
+    }
+
+    public function test_resolves_polylang_translated_slug_suffix(): void
+    {
+        // Polylang Pro suffixes translated wp_template_part slugs with "___{lang}".
+        // Each suffix variant is its own post; the resolver should pick the right one.
+        $fiId = $this->createTemplatePart('gds', 'footer', '<!-- wp:paragraph --><p>FI</p><!-- /wp:paragraph -->');
+        $svId = $this->createTemplatePart('gds', 'footer___sv', '<!-- wp:paragraph --><p>SV</p><!-- /wp:paragraph -->');
+
+        $resultSv = (new PatchBlockAbility)->execute([
+            'id' => 'gds//footer___sv',
+            'block_name' => 'core/paragraph',
+            'attrs' => ['align' => 'right'],
+        ]);
+
+        $this->assertTrue($resultSv['success']);
+        $this->assertSame($svId, $resultSv['id']);
+
+        // FI part must be untouched.
+        $fiBlocks = parse_blocks(get_post($fiId)->post_content);
+        $this->assertArrayNotHasKey('align', $fiBlocks[0]['attrs'] ?? []);
+
+        $svBlocks = parse_blocks(get_post($svId)->post_content);
+        $this->assertSame('right', $svBlocks[0]['attrs']['align']);
+    }
+
+    public function test_composite_id_unknown_theme_returns_error(): void
+    {
+        $result = (new PatchBlockAbility)->execute([
+            'id' => 'nonexistent-theme//footer',
+            'block_name' => 'core/paragraph',
+            'attrs' => ['align' => 'center'],
+        ]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('template_not_customized', $result->get_error_code());
+    }
+
+    public function test_composite_id_unknown_slug_returns_error(): void
+    {
+        $this->createTemplatePart('gds', 'header', '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->');
+
+        $result = (new PatchBlockAbility)->execute([
+            'id' => 'gds//does-not-exist',
+            'block_name' => 'core/paragraph',
+            'attrs' => ['align' => 'center'],
+        ]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('template_not_customized', $result->get_error_code());
+    }
+
+    public function test_malformed_composite_id_returns_error(): void
+    {
+        $result = (new PatchBlockAbility)->execute([
+            'id' => 'just-a-slug//',
+            'block_name' => 'core/paragraph',
+            'attrs' => ['align' => 'center'],
+        ]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('invalid_template_id', $result->get_error_code());
+    }
+
+    public function test_numeric_id_still_works(): void
+    {
+        // Sanity: existing integer-id callers shouldn't regress.
+        $result = (new PatchBlockAbility)->execute([
+            'id' => $this->postId,
+            'block_name' => 'core/paragraph',
+            'occurrence' => 1,
+            'attrs' => ['align' => 'left'],
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame($this->postId, $result['id']);
+    }
 }
