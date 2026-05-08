@@ -23,10 +23,6 @@ class Plugin
         add_action('wp_abilities_api_categories_init', [$this, 'registerCategory']);
         add_action('wp_abilities_api_init', [$this, 'registerAbilities']);
 
-        // Mark our own gds/* abilities as MCP-public by default so consumers
-        // (e.g. gds-assistant) can discover them without a project-level filter.
-        add_filter('wp_register_ability_args', [self::class, 'markGdsAbilitiesPublic'], 10, 2);
-
         // Clear cached schemas when plugins change (abilities may differ)
         add_action('activated_plugin', [self::class, 'clearSchemaCache']);
         add_action('deactivated_plugin', [self::class, 'clearSchemaCache']);
@@ -35,15 +31,6 @@ class Plugin
         // so they're available outside the /woocommerce/mcp endpoint. Deferred
         // because WC may load after gds-mcp on the plugins_loaded cycle.
         add_action('plugins_loaded', [Integrations\WooCommerce\AbilitiesBridge::class, 'register'], 20);
-    }
-
-    public static function markGdsAbilitiesPublic(array $args, string $name): array
-    {
-        if (str_starts_with($name, 'gds/')) {
-            $args['meta']['mcp']['public'] = true;
-        }
-
-        return $args;
     }
 
     public static function clearSchemaCache(): void

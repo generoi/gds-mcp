@@ -29,6 +29,12 @@ final class HelpAbility
             $args['input_schema']['default'] = [];
         }
 
+        // Every ability registered via this helper is intended for MCP exposure.
+        // Downstream consumers (default MCP server, gds-assistant, …) read this
+        // flag to populate their tool catalogs. A project-level filter can still
+        // unset it if a specific ability needs to stay private.
+        $args['meta']['mcp']['public'] = $args['meta']['mcp']['public'] ?? true;
+
         wp_register_ability($name, $args);
 
         $meta = $args['meta'] ?? [];
@@ -63,6 +69,7 @@ final class HelpAbility
             'permission_callback' => '__return_true',
             'execute_callback' => [self::class, 'execute'],
             'meta' => [
+                'mcp' => ['public' => true],
                 'annotations' => [
                     'readonly' => true,
                     'destructive' => false,
