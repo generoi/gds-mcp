@@ -7,9 +7,8 @@ Built on the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) a
 ## Requirements
 
 - PHP >= 8.0
-- WordPress >= 6.8
-- [wordpress/mcp-adapter](https://github.com/WordPress/mcp-adapter) (required)
-- [wordpress/abilities-api](https://github.com/WordPress/abilities-api) (required, ships with WP 6.9+)
+- WordPress >= 7.0
+- [wordpress/mcp-adapter](https://github.com/WordPress/mcp-adapter) (required for MCP HTTP/STDIO transport)
 
 ## Installation
 
@@ -17,6 +16,8 @@ Built on the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) a
 composer require generoi/gds-mcp
 wp plugin activate gds-mcp
 ```
+
+Install and activate the MCP adapter as a normal WordPress plugin or Composer-managed dependency. `gds-mcp` bootstraps the adapter when the adapter class is present, so host projects do not need a separate adapter MU-plugin.
 
 ## Architecture
 
@@ -125,6 +126,8 @@ Polylang also adds `lang` and `translations` fields to all REST responses automa
 
 ## Connecting
 
+`gds-mcp` registers WordPress abilities. The `wordpress/mcp-adapter` plugin exposes those abilities as an MCP server.
+
 ### STDIO (developers with shell access)
 
 ```json
@@ -173,29 +176,6 @@ claude mcp add-json -s local my-site \
     }
   }
 }
-```
-
-## Host project setup
-
-The host project needs an MCP adapter bootstrap mu-plugin:
-
-```php
-<?php
-use WP\MCP\Core\McpAdapter;
-
-if (! defined('ABSPATH') || ! class_exists(McpAdapter::class)) {
-    return;
-}
-
-McpAdapter::instance();
-
-// Expose all gds/ abilities as public MCP tools.
-add_filter('wp_register_ability_args', function (array $args, string $name): array {
-    if (str_starts_with($name, 'gds/')) {
-        $args['meta']['mcp']['public'] = true;
-    }
-    return $args;
-}, 10, 2);
 ```
 
 ## Development

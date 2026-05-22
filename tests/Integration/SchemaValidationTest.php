@@ -166,6 +166,26 @@ class SchemaValidationTest extends AbilityTestCase
     }
 
     /**
+     * Test that all gds/* abilities opt into MCP without host project filters.
+     */
+    public function test_all_abilities_are_public_mcp_tools(): void
+    {
+        $abilities = wp_get_abilities();
+
+        foreach ($abilities as $ability) {
+            if (! str_starts_with($ability->get_name(), 'gds/')) {
+                continue;
+            }
+
+            $meta = $ability->get_meta();
+            $this->assertTrue(
+                $meta['mcp']['public'] ?? false,
+                "Ability '{$ability->get_name()}' should set meta.mcp.public=true."
+            );
+        }
+    }
+
+    /**
      * @dataProvider readOnlyAbilitiesProvider
      *
      * Execute each read-only ability with minimal valid input and verify
