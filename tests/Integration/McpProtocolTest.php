@@ -39,11 +39,11 @@ class McpProtocolTest extends AbilityTestCase
         $context = $server->create_transport_context();
         $this->router = $context->request_router;
 
-        // Verify gds/* tools are exposed (requires mcp.public filter).
+        // Verify gds/* tools are exposed through their own registration metadata.
         $response = $this->router->route_request('tools/list', [], 0);
         $toolNames = array_column($response['tools'] ?? [], 'name');
         if (! in_array('gds/help', $toolNames, true)) {
-            $this->markTestSkipped('MCP adapter loaded but gds/* tools not registered (mcp.public filter may not be active).');
+            $this->markTestSkipped('MCP adapter loaded but gds/* tools not registered.');
         }
     }
 

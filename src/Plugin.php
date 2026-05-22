@@ -22,6 +22,7 @@ class Plugin
     {
         add_action('wp_abilities_api_categories_init', [$this, 'registerCategory']);
         add_action('wp_abilities_api_init', [$this, 'registerAbilities']);
+        add_action('plugins_loaded', [$this, 'bootstrapMcpAdapter'], 20);
 
         // Clear cached schemas when plugins change (abilities may differ)
         add_action('activated_plugin', [self::class, 'clearSchemaCache']);
@@ -31,6 +32,20 @@ class Plugin
         // so they're available outside the /woocommerce/mcp endpoint. Deferred
         // because WC may load after gds-mcp on the plugins_loaded cycle.
         add_action('plugins_loaded', [Integrations\WooCommerce\AbilitiesBridge::class, 'register'], 20);
+    }
+
+    public function bootstrapMcpAdapter(): void
+    {
+        if (! function_exists('wp_register_ability')) {
+            return;
+        }
+
+        $adapterClass = '\\WP\\MCP\\Core\\McpAdapter';
+        if (! class_exists($adapterClass)) {
+            return;
+        }
+
+        $adapterClass::instance();
     }
 
     public static function clearSchemaCache(): void
