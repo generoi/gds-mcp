@@ -146,6 +146,26 @@ class SchemaValidationTest extends AbilityTestCase
     }
 
     /**
+     * Test that all gds/* abilities are visible to the WP 7.0 REST-backed abilities registry.
+     */
+    public function test_all_abilities_are_exposed_in_rest(): void
+    {
+        $abilities = wp_get_abilities();
+
+        foreach ($abilities as $ability) {
+            if (! str_starts_with($ability->get_name(), 'gds/')) {
+                continue;
+            }
+
+            $meta = $ability->get_meta();
+            $this->assertTrue(
+                $meta['show_in_rest'] ?? false,
+                "Ability '{$ability->get_name()}' should set meta.show_in_rest=true."
+            );
+        }
+    }
+
+    /**
      * @dataProvider readOnlyAbilitiesProvider
      *
      * Execute each read-only ability with minimal valid input and verify

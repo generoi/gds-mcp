@@ -34,6 +34,7 @@ final class HelpAbility
         // flag to populate their tool catalogs. A project-level filter can still
         // unset it if a specific ability needs to stay private.
         $args['meta']['mcp']['public'] = $args['meta']['mcp']['public'] ?? true;
+        $args['meta']['show_in_rest'] = $args['meta']['show_in_rest'] ?? true;
 
         wp_register_ability($name, $args);
 
@@ -50,7 +51,7 @@ final class HelpAbility
 
     public static function register(): void
     {
-        wp_register_ability('gds/help', [
+        self::registerAbility('gds/help', [
             'label' => 'GDS MCP Help',
             'description' => 'Get a grouped summary of all available tools and resources. Start here to discover what you can do.',
             'category' => 'gds-content',
