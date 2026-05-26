@@ -4,12 +4,14 @@ namespace GeneroWP\MCP\Integrations\Polylang;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Undo\Reversible;
 use PLL_MO;
 use WP_Error;
 
 final class UpdateStringTranslationAbility
 {
     use PolylangAware;
+    use Reversible;
 
     public static function register(): void
     {
@@ -102,11 +104,20 @@ final class UpdateStringTranslationAbility
         // Save back to database.
         $mo->export_to_db($langObject);
 
-        return [
+        $result = [
             'string' => $string,
             'lang' => $language,
             'translation' => $translation,
             'previous' => $previous,
         ];
+
+        // Restore the prior value. When there was no prior translation,
+        // $previous is null and the empty-string restore clears the entry.
+        return $this->reversible(
+            $result,
+            'restore-string',
+            ['string' => $string, 'lang' => $language, 'translation' => (string) ($previous ?? '')],
+            sprintf('Revert the "%s" translation', $string),
+        );
     }
 }

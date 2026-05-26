@@ -6,6 +6,7 @@ use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use GeneroWP\MCP\Concerns\PostCopying;
 use GeneroWP\MCP\Concerns\RestDelegation;
+use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
 final class CreateTranslationAbility
@@ -13,6 +14,7 @@ final class CreateTranslationAbility
     use PolylangAware;
     use PostCopying;
     use RestDelegation;
+    use Reversible;
 
     public static function register(): void
     {
@@ -160,10 +162,14 @@ final class CreateTranslationAbility
         if ($route) {
             $response = self::restGet("{$route}/{$newId}");
             if (! self::isRestError($response)) {
-                return self::restResponseData($response);
+                $result = self::restResponseData($response);
+
+                return $this->reversible($result, 'trash', ['id' => $newId], 'Delete the created translation');
             }
         }
 
-        return ['id' => $newId, 'source_id' => $sourceId];
+        $result = ['id' => $newId, 'source_id' => $sourceId];
+
+        return $this->reversible($result, 'trash', ['id' => $newId], 'Delete the created translation');
     }
 }

@@ -4,6 +4,7 @@ namespace GeneroWP\MCP\Integrations\GravityForms;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\RestDelegation;
+use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
 /**
@@ -14,6 +15,7 @@ use WP_Error;
 final class GravityFormsAbility
 {
     use RestDelegation;
+    use Reversible;
 
     public static function register(): void
     {
@@ -248,7 +250,10 @@ final class GravityFormsAbility
 
         $formId = (int) $result;
 
-        return json_decode(json_encode(\GFAPI::get_form($formId)), true) ?: [];
+        $saved = json_decode(json_encode(\GFAPI::get_form($formId)), true) ?: [];
+
+        // Undo a create by deleting the new form.
+        return $this->reversible($saved, 'delete-form', ['id' => $formId], "Delete the created form \"{$saved['title']}\"");
     }
 
     /**
@@ -374,8 +379,11 @@ final class GravityFormsAbility
             return new WP_Error('update_failed', "Failed to update form {$id}.");
         }
 
-        // Return the saved form.
-        return json_decode(json_encode(\GFAPI::get_form($id)), true) ?: [];
+        // Return the saved form, with the full prior form as an undo snapshot
+        // ($current was read before the merge, so capture is free).
+        $saved = json_decode(json_encode(\GFAPI::get_form($id)), true) ?: [];
+
+        return $this->reversible($saved, 'restore-form', ['id' => $id, 'form' => $current], "Revert form \"{$saved['title']}\" to its previous state");
     }
 
     /**

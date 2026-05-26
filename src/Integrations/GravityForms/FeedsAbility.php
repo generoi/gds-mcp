@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Integrations\GravityForms;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
+use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
 /**
@@ -13,6 +14,8 @@ use WP_Error;
  */
 final class FeedsAbility
 {
+    use Reversible;
+
     public static function register(): void
     {
         $instance = new self;
@@ -227,7 +230,9 @@ final class FeedsAbility
             return $saved;
         }
 
-        return json_decode(json_encode($saved), true) ?: [];
+        $result = json_decode(json_encode($saved), true) ?: [];
+
+        return $this->reversible($result, 'delete-feed', ['feed_id' => $feedId], 'Delete the created feed');
     }
 
     public function updateFeed(mixed $input = []): array|WP_Error
@@ -250,6 +255,15 @@ final class FeedsAbility
         if (! $existing) {
             return new WP_Error('feed_not_found', "Feed {$id} not found.");
         }
+
+        // Capture the prior state before mutating so the change can be reverted.
+        $undo = [
+            'feed_id' => $id,
+            'meta' => $existing['meta'],
+            'form_id' => (int) $existing['form_id'],
+            'is_active' => (int) $existing['is_active'],
+            'feed_order' => (int) $existing['feed_order'],
+        ];
 
         if (array_key_exists('meta', $input)) {
             $meta = $input['meta'];
@@ -281,7 +295,9 @@ final class FeedsAbility
             return $saved;
         }
 
-        return json_decode(json_encode($saved), true) ?: [];
+        $result = json_decode(json_encode($saved), true) ?: [];
+
+        return $this->reversible($result, 'restore-feed', $undo, 'Revert the feed changes');
     }
 
     public function deleteFeed(mixed $input = []): array|WP_Error
@@ -297,12 +313,27 @@ final class FeedsAbility
             return new WP_Error('missing_id', 'Feed id is required.');
         }
 
+        // Capture the feed before deleting so it can be recreated. If the lookup
+        // fails the delete still proceeds, but we won't attach an undo envelope.
+        $feed = \GFAPI::get_feed($id);
+        $undo = (! is_wp_error($feed) && is_array($feed)) ? [
+            'form_id' => (int) $feed['form_id'],
+            'addon_slug' => $feed['addon_slug'],
+            'meta' => $feed['meta'],
+            'is_active' => (int) $feed['is_active'],
+            'feed_order' => (int) $feed['feed_order'],
+        ] : null;
+
         $result = \GFAPI::delete_feed($id);
         if (is_wp_error($result)) {
             return $result;
         }
 
-        return ['deleted' => true, 'id' => $id];
+        $output = ['deleted' => true, 'id' => $id];
+
+        return $undo
+            ? $this->reversible($output, 'recreate-feed', $undo, 'Restore the deleted feed')
+            : $output;
     }
 
     public function duplicateFeed(mixed $input = []): array|WP_Error
@@ -336,6 +367,8 @@ final class FeedsAbility
             $newId = \GFAPI::add_feed($targetFormId, $source['meta'], $source['addon_slug']);
             if (is_wp_error($newId)) {
                 // Return early with partial results so the caller sees what succeeded.
+                // Note: feeds already created on this partial path are not auto-undoable
+                // (no undo envelope is attached to a WP_Error result).
                 return new WP_Error(
                     $newId->get_error_code(),
                     sprintf('Failed duplicating feed %d onto form %d: %s', $sourceId, $targetFormId, $newId->get_error_message()),
@@ -355,6 +388,14 @@ final class FeedsAbility
             $created[] = is_wp_error($saved) ? ['id' => (int) $newId, 'form_id' => $targetFormId] : json_decode(json_encode($saved), true);
         }
 
-        return ['source_id' => $sourceId, 'created' => $created];
+        $result = ['source_id' => $sourceId, 'created' => $created];
+
+        // Full success: every created feed can be undone by deleting it.
+        $items = [];
+        foreach ($created as $c) {
+            $items[] = ['kind' => 'delete-feed', 'data' => ['feed_id' => (int) $c['id']]];
+        }
+
+        return $this->reversible($result, 'bulk', ['items' => $items], 'Remove the duplicated feed(s)');
     }
 }

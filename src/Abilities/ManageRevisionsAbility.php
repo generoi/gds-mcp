@@ -3,6 +3,8 @@
 namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Concerns\RestDelegation;
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use WP_Error;
 
 /**
@@ -14,6 +16,7 @@ use WP_Error;
 final class ManageRevisionsAbility
 {
     use RestDelegation;
+    use Reversible;
 
     private static ?self $instance = null;
 
@@ -133,24 +136,33 @@ final class ManageRevisionsAbility
             require_once ABSPATH.'wp-admin/includes/post.php';
         }
 
+        // Capture the parent post's full state before the revision overwrites it.
+        $parentId = (int) $revision->post_parent;
+        $before = Snapshot::postFields($parentId);
+
         $restoredId = wp_restore_post_revision($revisionId);
 
         if (! $restoredId) {
             return new WP_Error('restore_failed', 'Failed to restore revision.');
         }
 
-        // Return the restored post via REST
-        $parentId = $revision->post_parent;
         $post = get_post($parentId);
+        $label = "Undo the revision restore on \"{$post->post_title}\"";
+
+        // Return the restored post via REST
         $route = self::getRestRoute($post->post_type);
         if ($route) {
             $response = self::restGet("{$route}/{$parentId}");
             if (! self::isRestError($response)) {
-                return self::restResponseData($response);
+                $result = self::restResponseData($response);
+
+                return $before ? $this->reversible($result, 'restore-post', $before, $label) : $result;
             }
         }
 
-        return ['id' => $parentId, 'restored_from_revision' => $revisionId];
+        $result = ['id' => $parentId, 'restored_from_revision' => $revisionId];
+
+        return $before ? $this->reversible($result, 'restore-post', $before, $label) : $result;
     }
 
     private function getRevisionRoute(int $postId): string|WP_Error

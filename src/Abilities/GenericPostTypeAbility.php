@@ -4,6 +4,8 @@ namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Concerns\AcfAware;
 use GeneroWP\MCP\Concerns\RestDelegation;
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use WP_Error;
 
 /**
@@ -17,6 +19,7 @@ final class GenericPostTypeAbility
 {
     use AcfAware;
     use RestDelegation;
+    use Reversible;
 
     /**
      * Register the 5 generic content abilities.
@@ -294,7 +297,16 @@ final class GenericPostTypeAbility
             self::updateAcfFields($data['id'], $acfFields);
         }
 
-        return self::enrichPostUrls($data);
+        $data = self::enrichPostUrls($data);
+
+        // Undo a create by trashing the new post (recoverable).
+        $createdId = (int) ($data['wp_id'] ?? $data['id'] ?? 0);
+        if ($createdId) {
+            $title = get_the_title($createdId) ?: "#{$createdId}";
+            $data = $this->reversible($data, 'trash', ['id' => $createdId], "Remove the created \"{$title}\"");
+        }
+
+        return $data;
     }
 
     public function executeUpdate(mixed $input = []): array|WP_Error
@@ -317,6 +329,11 @@ final class GenericPostTypeAbility
             return $langError;
         }
 
+        // Capture the full prior state (fields + meta + terms) BEFORE writing,
+        // so the edit can be undone. Numeric ids only — composite template ids
+        // are an edge case we don't snapshot.
+        $undo = is_int($id) && $id ? Snapshot::postFields($id) : [];
+
         $response = self::restPost("{$route}/{$id}", $input);
 
         if (self::isRestError($response)) {
@@ -336,7 +353,14 @@ final class GenericPostTypeAbility
             self::updateAcfFields($numericId, $acfFields);
         }
 
-        return self::enrichPostUrls($data);
+        $data = self::enrichPostUrls($data);
+
+        if ($undo) {
+            $title = get_the_title($id) ?: "#{$id}";
+            $data = $this->reversible($data, 'restore-post', $undo, "Revert changes to \"{$title}\"");
+        }
+
+        return $data;
     }
 
     /**
@@ -420,12 +444,22 @@ final class GenericPostTypeAbility
         // those deletion is unavoidably permanent, so we fall back to force.
         // Trashable content is never force-deleted.
         $response = self::dispatchDelete($route, $id, false);
+        $forced = false;
         if (self::isRestError($response)
             && self::restErrorToWpError($response)->get_error_code() === 'rest_trash_not_supported') {
             $response = self::dispatchDelete($route, $id, true);
+            $forced = true;
         }
 
-        return self::restResponseOrError($response);
+        $result = self::restResponseOrError($response);
+
+        // Undo a trash by untrashing. (Force-deleted trashless types can't be
+        // restored, so no undo is offered there.)
+        if (! is_wp_error($result) && ! $forced && is_int($id) && $id) {
+            $result = $this->reversible($result, 'untrash', ['id' => $id], 'Restore the trashed item from trash');
+        }
+
+        return $result;
     }
 
     private static function dispatchDelete(string $route, int|string $id, bool $force): \WP_REST_Response

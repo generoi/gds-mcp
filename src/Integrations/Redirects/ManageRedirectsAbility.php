@@ -6,6 +6,7 @@ use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Integrations\Redirects\Providers\Redirection;
 use GeneroWP\MCP\Integrations\Redirects\Providers\SafeRedirectManager;
 use GeneroWP\MCP\Integrations\Redirects\Providers\YoastRedirects;
+use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
 /**
@@ -14,6 +15,8 @@ use WP_Error;
  */
 final class ManageRedirectsAbility
 {
+    use Reversible;
+
     public static function register(): void
     {
         HelpAbility::registerAbility('gds/redirects-manage', [
@@ -86,7 +89,7 @@ final class ManageRedirectsAbility
 
         return match ($action) {
             'list' => $provider::list(),
-            'create' => self::handleCreate($provider, $input),
+            'create' => $this->handleCreate($provider, $input),
             default => new WP_Error('invalid_action', 'Action must be list or create.'),
         };
     }
@@ -111,7 +114,7 @@ final class ManageRedirectsAbility
         return null;
     }
 
-    private static function handleCreate(string $provider, array $input): array|WP_Error
+    private function handleCreate(string $provider, array $input): array|WP_Error
     {
         $from = $input['from'] ?? '';
         $to = $input['to'] ?? '';
@@ -130,6 +133,20 @@ final class ManageRedirectsAbility
             return new WP_Error('invalid_to', '"to" must be a valid URL or relative path.');
         }
 
-        return $provider::create($from, $to, $input);
+        $result = $provider::create($from, $to, $input);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        // Each provider returns provider-aware undo data under `_undo_data`;
+        // peel it off so it never reaches the LLM, then attach the undo envelope.
+        $undo = $result['_undo_data'] ?? null;
+        unset($result['_undo_data']);
+
+        if (is_array($undo)) {
+            return $this->reversible($result, 'restore-redirect', $undo, 'Remove the created redirect');
+        }
+
+        return $result;
     }
 }
