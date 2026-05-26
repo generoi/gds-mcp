@@ -22,6 +22,11 @@ class Plugin
     {
         add_action('wp_abilities_api_categories_init', [$this, 'registerCategory']);
         add_action('wp_abilities_api_init', [$this, 'registerAbilities']);
+
+        // Enforce least-privilege capabilities on gds/* abilities before they
+        // register (they default to __return_true, deferring all auth to the
+        // chat-level gate). Must be hooked before wp_abilities_api_init fires.
+        Abilities\CapabilityPolicy::register();
         add_action('plugins_loaded', [$this, 'bootstrapMcpAdapter'], 20);
 
         // Clear cached schemas when plugins change (abilities may differ)
