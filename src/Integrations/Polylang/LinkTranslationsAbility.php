@@ -41,6 +41,10 @@ final class LinkTranslationsAbility
                         'description' => 'Map of language code → post ID. Each post must already have its language assigned.',
                         'additionalProperties' => ['type' => 'integer'],
                     ],
+                    'confirm_destructive' => [
+                        'type' => 'boolean',
+                        'description' => 'Set true to confirm relinking posts that already belong to a translation group or have a different language. This unlinks the previously-related posts — translation links have no revisions. Leave unset for new/unlinked posts.',
+                    ],
                 ],
                 'required' => ['translations'],
                 'additionalProperties' => false,
@@ -88,6 +92,23 @@ final class LinkTranslationsAbility
 
         if ($error = $this->validate($normalized)) {
             return $error;
+        }
+
+        // Guard destructive relinks. pll_save_post_translations OVERWRITES the
+        // group and pll_set_post_language can strip a post from its current
+        // group — both unrevisioned and invisible. Refuse to silently orphan
+        // existing relationships unless the caller confirms.
+        if (empty($input['confirm_destructive'])) {
+            $conflicts = $this->destructiveRelinks($normalized);
+            if ($conflicts) {
+                return new WP_Error(
+                    'destructive_relink',
+                    "This relink changes or breaks existing translation relationships, which have no revisions:\n- "
+                        .implode("\n- ", $conflicts)
+                        ."\n\nRe-run with \"confirm_destructive\": true to proceed, or unlink the affected posts first.",
+                    ['status' => 409, 'conflicts' => $conflicts],
+                );
+            }
         }
 
         // Assign each post the claimed language (idempotent if already correct).
@@ -142,5 +163,49 @@ final class LinkTranslationsAbility
         }
 
         return null;
+    }
+
+    /**
+     * Detect relinks that would change a post's language or orphan posts from
+     * an existing translation group.
+     *
+     * @param  array<string, int>  $translations  lang => post_id (the new group)
+     * @return string[] Human-readable conflict descriptions (empty if safe).
+     */
+    private function destructiveRelinks(array $translations): array
+    {
+        $conflicts = [];
+
+        foreach ($translations as $lang => $id) {
+            $currentLang = function_exists('pll_get_post_language') ? pll_get_post_language($id) : false;
+            if ($currentLang && $currentLang !== $lang) {
+                $conflicts[] = sprintf(
+                    'post %d is currently "%s"; relinking it as "%s" removes it from its current translation group',
+                    $id,
+                    $currentLang,
+                    $lang,
+                );
+            }
+
+            $existing = function_exists('pll_get_post_translations') ? pll_get_post_translations($id) : [];
+            foreach ($existing as $exLang => $exId) {
+                $exId = (int) $exId;
+                if ($exId === $id) {
+                    continue; // the post's own entry, not a sibling
+                }
+                // A current sibling whose slot is gone or now points elsewhere
+                // gets unlinked by this relink.
+                if (($translations[(string) $exLang] ?? null) !== $exId) {
+                    $conflicts[] = sprintf(
+                        'post %d is already linked to post %d ("%s"), which this relink drops',
+                        $id,
+                        $exId,
+                        $exLang,
+                    );
+                }
+            }
+        }
+
+        return array_values(array_unique($conflicts));
     }
 }
