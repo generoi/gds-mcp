@@ -232,9 +232,7 @@ final class RestoreSnapshot
             clean_term_cache([$oldId], $taxonomy);
 
             self::restoreTermMeta($oldId, (array) ($data['meta'] ?? []));
-            foreach ((array) ($data['object_ids'] ?? []) as $objectId) {
-                wp_set_object_terms((int) $objectId, [$oldId], $taxonomy, true);
-            }
+            self::reattachObjects($ttId, (array) ($data['object_ids'] ?? []));
             wp_update_term_count_now([$ttId], $taxonomy);
 
             return [
@@ -267,6 +265,36 @@ final class RestoreSnapshot
             'old_term_id' => $oldId,
             'caveats' => self::staleTermReferences($oldId, $newId),
         ];
+    }
+
+    /**
+     * Re-link objects to a term by inserting term_relationships rows directly.
+     * Needed because the term was re-inserted under its original id via raw
+     * SQL, and wp_set_object_terms() SKIPS integer term ids that term_exists()
+     * can't yet resolve for a freshly raw-inserted term.
+     */
+    private static function reattachObjects(int $ttId, array $objectIds): void
+    {
+        global $wpdb;
+        foreach ($objectIds as $objectId) {
+            $objectId = (int) $objectId;
+            if (! $objectId) {
+                continue;
+            }
+            $exists = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->term_relationships} WHERE object_id = %d AND term_taxonomy_id = %d",
+                $objectId,
+                $ttId,
+            ));
+            if (! $exists) {
+                $wpdb->insert($wpdb->term_relationships, [
+                    'object_id' => $objectId,
+                    'term_taxonomy_id' => $ttId,
+                    'term_order' => 0,
+                ]);
+            }
+            clean_object_term_cache($objectId, get_post_type($objectId) ?: 'post');
+        }
     }
 
     private static function restoreTermMeta(int $termId, array $meta): void

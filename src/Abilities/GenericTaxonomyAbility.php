@@ -155,6 +155,23 @@ final class GenericTaxonomyAbility
         return null;
     }
 
+    /**
+     * Resolve a REST base (e.g. "categories") to the actual taxonomy slug
+     * (e.g. "category"). The REST routes use the base, but WP term functions
+     * (get_term, wp_insert_term) — and therefore the undo snapshots — need the
+     * real slug.
+     */
+    private static function resolveTaxonomy(string $restBase): string
+    {
+        foreach (get_taxonomies(['show_in_rest' => true], 'objects') as $tax) {
+            if (($tax->rest_base ?: $tax->name) === $restBase) {
+                return $tax->name;
+            }
+        }
+
+        return $restBase;
+    }
+
     public function executeList(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -191,7 +208,7 @@ final class GenericTaxonomyAbility
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
-        $taxonomy = (string) ($input['taxonomy'] ?? '');
+        $taxonomy = self::resolveTaxonomy((string) ($input['taxonomy'] ?? ''));
         unset($input['taxonomy']);
 
         $response = self::restPost($route, $input);
@@ -211,11 +228,12 @@ final class GenericTaxonomyAbility
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $taxonomy = (string) ($input['taxonomy'] ?? '');
-        $route = self::resolveRoute($taxonomy);
+        $restBase = (string) ($input['taxonomy'] ?? '');
+        $route = self::resolveRoute($restBase);
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
+        $taxonomy = self::resolveTaxonomy($restBase);
         $id = (int) ($input['id'] ?? 0);
         unset($input['taxonomy'], $input['id']);
 
@@ -235,11 +253,12 @@ final class GenericTaxonomyAbility
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $taxonomy = (string) ($input['taxonomy'] ?? '');
-        $route = self::resolveRoute($taxonomy);
+        $restBase = (string) ($input['taxonomy'] ?? '');
+        $route = self::resolveRoute($restBase);
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
+        $taxonomy = self::resolveTaxonomy($restBase);
         $id = (int) ($input['id'] ?? 0);
         $force = $input['force'] ?? false;
 
