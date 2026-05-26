@@ -141,6 +141,64 @@ class LinkTranslationsAbilityTest extends TestCase
         $this->assertSame('too_few_translations', $result->get_error_code());
     }
 
+    public function test_relinking_post_already_in_a_group_is_refused_without_confirm(): void
+    {
+        // Establish an en↔fi group.
+        $en = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        $fi1 = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi1, 'fi');
+        $this->ability->execute(['translations' => ['en' => $en, 'fi' => $fi1]]);
+
+        // Now try to relink en to a DIFFERENT fi — that would orphan fi1.
+        $fi2 = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        pll_set_post_language($fi2, 'fi');
+
+        $result = $this->ability->execute(['translations' => ['en' => $en, 'fi' => $fi2]]);
+
+        $this->assertWPError($result);
+        $this->assertSame('destructive_relink', $result->get_error_code());
+
+        // The original group must be intact since the call was refused.
+        clean_post_cache($en);
+        $this->assertSame($fi1, pll_get_post_translations($en)['fi'] ?? null);
+    }
+
+    public function test_relinking_with_confirm_destructive_succeeds(): void
+    {
+        $en = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        $fi1 = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi1, 'fi');
+        $this->ability->execute(['translations' => ['en' => $en, 'fi' => $fi1]]);
+
+        $fi2 = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        pll_set_post_language($fi2, 'fi');
+
+        $result = $this->ability->execute([
+            'translations' => ['en' => $en, 'fi' => $fi2],
+            'confirm_destructive' => true,
+        ]);
+
+        $this->assertIsArray($result);
+        clean_post_cache($en);
+        $this->assertSame($fi2, pll_get_post_translations($en)['fi'] ?? null, 'Confirmed relink should repoint fi to fi2.');
+    }
+
+    public function test_relinking_that_changes_a_posts_language_is_refused(): void
+    {
+        // A post currently in English, asked to be linked as the Finnish slot.
+        $p = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        $other = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        pll_set_post_language($p, 'en');
+        pll_set_post_language($other, 'en');
+
+        $result = $this->ability->execute(['translations' => ['en' => $other, 'fi' => $p]]);
+
+        $this->assertWPError($result);
+        $this->assertSame('destructive_relink', $result->get_error_code());
+    }
+
     public function test_link_three_languages(): void
     {
         $configured = pll_languages_list();
