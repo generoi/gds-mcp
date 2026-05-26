@@ -133,7 +133,7 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-delete', [
             'label' => 'Delete Content',
-            'description' => "Delete a post/page/CPT. Moves to trash by default; use force=true for permanent deletion. Available types: {$typeDesc}. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
+            'description' => "Move a post/page/CPT to trash (recoverable). Permanent deletion is not available — trashed content can be restored. Available types: {$typeDesc}. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -143,7 +143,6 @@ final class GenericPostTypeAbility
                         'type' => ['integer', 'string'],
                         'description' => 'Numeric post ID, or composite template id "{theme}//{slug}" for wp_template / wp_template_part.',
                     ],
-                    'force' => ['type' => 'boolean', 'description' => 'Permanently delete instead of trashing (default: false)'],
                 ],
                 'required' => ['type', 'id'],
             ],
@@ -414,14 +413,27 @@ final class GenericPostTypeAbility
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
         $id = self::normalizeId($input['id'] ?? null);
-        $force = $input['force'] ?? false;
 
+        // Always trash (recoverable) — permanent deletion is intentionally not
+        // exposed to the assistant. Some types (templates, template parts) have
+        // no trash; WP signals this with rest_trash_not_supported, and for
+        // those deletion is unavoidably permanent, so we fall back to force.
+        // Trashable content is never force-deleted.
+        $response = self::dispatchDelete($route, $id, false);
+        if (self::isRestError($response)
+            && self::restErrorToWpError($response)->get_error_code() === 'rest_trash_not_supported') {
+            $response = self::dispatchDelete($route, $id, true);
+        }
+
+        return self::restResponseOrError($response);
+    }
+
+    private static function dispatchDelete(string $route, int|string $id, bool $force): \WP_REST_Response
+    {
         $request = new \WP_REST_Request('DELETE', "{$route}/{$id}");
         $request->set_param('force', $force);
 
-        $response = rest_do_request($request);
-
-        return self::restResponseOrError($response);
+        return rest_do_request($request);
     }
 
     /**

@@ -52,14 +52,13 @@ class WorkflowTest extends AbilityTestCase
         ]);
         $this->assertGreaterThanOrEqual(1, $list['total']);
 
-        // 5. Delete
+        // 5. Delete (trashed, recoverable — permanent delete is not exposed)
         $deleted = $this->executeAbility('gds/content-delete', [
             'type' => 'posts',
             'id' => $id,
-            'force' => true,
         ]);
         $this->assertIsArray($deleted);
-        $this->assertNull(get_post($id));
+        $this->assertSame('trash', get_post_status($id));
     }
 
     // ── Terms → Content assignment ────────────────────────────────

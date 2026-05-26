@@ -221,13 +221,16 @@ class ContentAbilityTest extends AbilityTestCase
         $this->assertSame('trash', get_post_status($id));
     }
 
-    public function test_delete_force(): void
+    public function test_delete_trashes_even_when_force_requested(): void
     {
         $id = $this->createPost([
             'post_type' => 'page',
             'post_status' => 'publish',
         ]);
 
+        // force is no longer exposed by content-delete; even if a caller
+        // smuggles it in, trashable content must only be trashed, never
+        // permanently deleted.
         $result = $this->executeAbility('gds/content-delete', [
             'type' => 'pages',
             'id' => $id,
@@ -239,7 +242,7 @@ class ContentAbilityTest extends AbilityTestCase
         }
 
         $this->assertIsArray($result);
-        $this->assertNull(get_post($id));
+        $this->assertSame('trash', get_post_status($id), 'Pages support trash, so the smuggled force flag must be ignored.');
     }
 
     // ── Permissions ───────────────────────────────────────────────
@@ -350,14 +353,22 @@ class ContentAbilityTest extends AbilityTestCase
     {
         $partId = $this->createTemplatePart('gds', 'footer');
 
+        // Verifies composite-id routing ("{theme}//{slug}") reaches the
+        // templates controller. Delete is trash-only now; template parts that
+        // support trash are trashed (recoverable) rather than force-deleted.
         $result = $this->assertAbilitySuccess('gds/content-delete', [
             'type' => 'template-parts',
             'id' => 'gds//footer',
-            'force' => true,
         ]);
 
         $this->assertIsArray($result);
-        $this->assertNull(get_post($partId));
+        // Trashed (if the type supports trash) or removed (if it doesn't) —
+        // either way it's no longer live.
+        $status = get_post_status($partId);
+        $this->assertTrue(
+            $status === 'trash' || $status === false,
+            'Template part should be trashed or removed, got: '.var_export($status, true),
+        );
     }
 
     public function test_read_numeric_id_still_works(): void
