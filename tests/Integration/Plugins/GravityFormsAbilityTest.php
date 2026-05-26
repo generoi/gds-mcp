@@ -450,6 +450,117 @@ class GravityFormsAbilityTest extends AbilityTestCase
         $this->assertArrayHasKey($id, $result, 'forms-list result should contain the created form id as a key.');
     }
 
+    public function test_forms_update_blocks_field_removal_when_entries_exist(): void
+    {
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Destructive Removal '.uniqid(),
+            'fields' => [
+                ['id' => 1, 'type' => 'email', 'label' => 'Email'],
+                ['id' => 2, 'type' => 'text', 'label' => 'Company'],
+            ],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+
+        // A real submission ties data to field 2.
+        $entryId = \GFAPI::add_entry(['form_id' => $id, '1' => 'a@example.com', '2' => 'Acme']);
+        $this->assertNotWPError($entryId);
+
+        // Dropping field 2 would orphan its submitted value — refuse it.
+        $this->assertAbilityError('gds/forms-update', [
+            'id' => $id,
+            'fields' => [
+                ['id' => 1, 'type' => 'email', 'label' => 'Email'],
+            ],
+        ], 'destructive_field_change');
+
+        // The form must be left untouched — both fields still present.
+        $fresh = \GFAPI::get_form($id);
+        $this->assertCount(2, $fresh['fields'], 'A refused update must not modify the form.');
+    }
+
+    public function test_forms_update_blocks_field_type_change_when_entries_exist(): void
+    {
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Destructive Retype '.uniqid(),
+            'fields' => [
+                ['id' => 1, 'type' => 'text', 'label' => 'Email'],
+            ],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+        $this->assertNotWPError(\GFAPI::add_entry(['form_id' => $id, '1' => 'plain text']));
+
+        // text → email is the exact case from the bug report.
+        $this->assertAbilityError('gds/forms-update', [
+            'id' => $id,
+            'fields' => [
+                ['id' => 1, 'type' => 'email', 'label' => 'Email'],
+            ],
+        ], 'destructive_field_change');
+    }
+
+    public function test_forms_update_allows_destructive_change_with_confirm_flag(): void
+    {
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Confirmed Removal '.uniqid(),
+            'fields' => [
+                ['id' => 1, 'type' => 'email', 'label' => 'Email'],
+                ['id' => 2, 'type' => 'text', 'label' => 'Company'],
+            ],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+        $this->assertNotWPError(\GFAPI::add_entry(['form_id' => $id, '1' => 'a@example.com', '2' => 'Acme']));
+
+        $updated = $this->assertAbilitySuccess('gds/forms-update', [
+            'id' => $id,
+            'confirm_destructive' => true,
+            'fields' => [
+                ['id' => 1, 'type' => 'email', 'label' => 'Email'],
+            ],
+        ]);
+
+        $this->assertCount(1, $updated['fields'], 'With confirmation the field removal must go through.');
+        // The guard flag must not leak onto the persisted form object.
+        $this->assertArrayNotHasKey('confirm_destructive', $updated);
+    }
+
+    public function test_forms_update_allows_field_removal_without_entries(): void
+    {
+        // No submissions → nothing to orphan → the guard stays out of the way.
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Safe Removal '.uniqid(),
+            'fields' => [
+                ['id' => 1, 'type' => 'email', 'label' => 'Email'],
+                ['id' => 2, 'type' => 'text', 'label' => 'Company'],
+            ],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+
+        $updated = $this->assertAbilitySuccess('gds/forms-update', [
+            'id' => $id,
+            'fields' => [
+                ['id' => 1, 'type' => 'email', 'label' => 'Email'],
+            ],
+        ]);
+        $this->assertCount(1, $updated['fields']);
+    }
+
+    public function test_forms_update_label_change_allowed_with_entries(): void
+    {
+        // Relabeling keeps id + type, so submissions stay intact → allowed.
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Relabel With Entries '.uniqid(),
+            'fields' => [['id' => 1, 'type' => 'email', 'label' => 'Email']],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+        $this->assertNotWPError(\GFAPI::add_entry(['form_id' => $id, '1' => 'a@example.com']));
+
+        $updated = $this->assertAbilitySuccess('gds/forms-update', [
+            'id' => $id,
+            'fields' => [['id' => 1, 'type' => 'email', 'label' => 'Sähköposti']],
+        ]);
+        $this->assertSame('Sähköposti', $updated['fields'][0]['label']);
+    }
+
     public function test_forms_update_requires_id(): void
     {
         $this->assertAbilityError('gds/forms-update', [

@@ -158,6 +158,10 @@ final class GravityFormsAbility
                             ],
                         ],
                     ],
+                    'confirm_destructive' => [
+                        'type' => 'boolean',
+                        'description' => 'Set true ONLY to confirm intentional removal of an existing field or a change to its type. Either permanently orphans the submissions stored for that field (Gravity Forms has no field-level revisions). Leave unset for normal edits — the call is refused if it would destroy submitted data without this flag.',
+                    ],
                 ],
                 'required' => ['id'],
                 'additionalProperties' => true,
@@ -323,6 +327,33 @@ final class GravityFormsAbility
 
         unset($input['id']);
 
+        // `confirm_destructive` is a guard signal, not a form property — capture
+        // it then strip it so it isn't merged into and written onto the form.
+        $confirmDestructive = ! empty($input['confirm_destructive']);
+        unset($input['confirm_destructive']);
+
+        // Guard irreversible field changes. A full fields[] replacement that
+        // removes a field or changes its type permanently orphans that field's
+        // submitted entries (GF keys entry values by field id and has no form
+        // revisions). Refuse unless the caller explicitly confirms.
+        if (array_key_exists('fields', $input) && ! $confirmDestructive) {
+            $destructive = self::destructiveFieldChanges(
+                $current['fields'] ?? [],
+                is_array($input['fields'] ?? null) ? $input['fields'] : [],
+            );
+
+            if (! empty($destructive)) {
+                $entryCount = (int) \GFAPI::count_entries($id);
+                if ($entryCount > 0) {
+                    return new WP_Error(
+                        'destructive_field_change',
+                        self::destructiveChangeMessage($id, $entryCount, $destructive),
+                        ['status' => 409, 'fields' => array_values($destructive), 'entry_count' => $entryCount],
+                    );
+                }
+            }
+        }
+
         // Top-level replacement, not recursive merge: if the caller supplies a key
         // (fields, notifications, confirmations, title, description) it fully
         // replaces the current value. Omitted keys stay untouched.
@@ -345,6 +376,75 @@ final class GravityFormsAbility
 
         // Return the saved form.
         return json_decode(json_encode(\GFAPI::get_form($id)), true) ?: [];
+    }
+
+    /**
+     * Compare current vs incoming fields (both numerically indexed) and return
+     * the fields that would lose submitted data: removed entirely, or whose
+     * type changes. Matched by field id; an incoming field without an id can't
+     * be matched to an existing one, so omitting/renumbering ids reads as a
+     * removal — which is exactly the destructive case we want to catch.
+     *
+     * @return array<int, array{id: int, label: string, reason: string}> Keyed by old field id.
+     */
+    private static function destructiveFieldChanges(array $oldFields, array $newFields): array
+    {
+        $newById = [];
+        foreach ($newFields as $field) {
+            $fid = (int) ($field['id'] ?? 0);
+            if ($fid) {
+                $newById[$fid] = $field;
+            }
+        }
+
+        $changes = [];
+        foreach ($oldFields as $field) {
+            $fid = (int) ($field['id'] ?? 0);
+            if (! $fid) {
+                continue;
+            }
+            $label = (string) ($field['label'] ?? '');
+            $label = $label !== '' ? $label : "Field {$fid}";
+
+            if (! isset($newById[$fid])) {
+                $changes[$fid] = ['id' => $fid, 'label' => $label, 'reason' => 'removed'];
+
+                continue;
+            }
+
+            $oldType = (string) ($field['type'] ?? '');
+            $newType = (string) ($newById[$fid]['type'] ?? '');
+            if ($oldType !== '' && $newType !== '' && $oldType !== $newType) {
+                $changes[$fid] = [
+                    'id' => $fid,
+                    'label' => $label,
+                    'reason' => "type changed from {$oldType} to {$newType}",
+                ];
+            }
+        }
+
+        return $changes;
+    }
+
+    /**
+     * Build the human-readable refusal explaining which fields would lose data.
+     *
+     * @param  array<int, array{id: int, label: string, reason: string}>  $changes
+     */
+    private static function destructiveChangeMessage(int $formId, int $entryCount, array $changes): string
+    {
+        $lines = [];
+        foreach ($changes as $change) {
+            $lines[] = "- Field {$change['id']} \"{$change['label']}\": {$change['reason']}";
+        }
+        $list = implode("\n", $lines);
+        $entries = $entryCount === 1 ? '1 entry' : "{$entryCount} entries";
+
+        return "This update to form {$formId} removes or retypes fields that hold submitted data. "
+            ."The form has {$entries}, and these changes permanently orphan the affected submissions "
+            ."(Gravity Forms has no field-level revisions):\n{$list}\n\n"
+            .'To preserve submissions, keep each existing field\'s original id and type and change only labels or settings. '
+            .'If the loss is intentional, re-run with "confirm_destructive": true.';
     }
 
     public function listEntries(mixed $input = []): array|WP_Error
