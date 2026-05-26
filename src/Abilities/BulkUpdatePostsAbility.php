@@ -2,11 +2,21 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use WP_Error;
 use WP_Query;
 
 final class BulkUpdatePostsAbility
 {
+    use Reversible;
+
+    /**
+     * Above this many updated posts we skip undo: the stored snapshot would
+     * grow unbounded. The bulk update is still applied, just not reversible.
+     */
+    private const UNDO_MAX_POSTS = 200;
+
     public static function register(): void
     {
         HelpAbility::registerAbility('gds/posts-bulk-update', [
@@ -110,8 +120,13 @@ final class BulkUpdatePostsAbility
             return $posts;
         }
 
+        // The meta keys this run touches — captured per-post for a partial
+        // (merge) restore so we never snapshot full content/meta.
+        $touchedMetaKeys = array_merge(array_keys((array) $setMeta), array_values((array) $deleteMeta));
+
         $results = [];
         $updated = 0;
+        $undoItems = [];
 
         foreach ($posts as $post) {
             if (! current_user_can('edit_post', $post->ID)) {
@@ -119,6 +134,12 @@ final class BulkUpdatePostsAbility
             }
 
             if (! $dryRun) {
+                // Capture this post's prior status + touched meta before mutating.
+                $undoItems[] = [
+                    'kind' => 'restore-post-partial',
+                    'data' => Snapshot::partialPost($post->ID, $touchedMetaKeys),
+                ];
+
                 if ($setStatus) {
                     wp_update_post([
                         'ID' => $post->ID,
@@ -153,12 +174,27 @@ final class BulkUpdatePostsAbility
             ];
         }
 
-        return [
+        $result = [
             'updated' => $dryRun ? 0 : $updated,
             'matched' => count($results),
             'dry_run' => $dryRun,
             'posts' => $results,
         ];
+
+        // Attach undo only for a real run within the snapshot size bound.
+        if (! $dryRun && $undoItems) {
+            if (count($undoItems) > self::UNDO_MAX_POSTS) {
+                $result['undo_skipped'] = sprintf(
+                    'Undo not recorded: %d posts updated exceeds the %d-post limit for storing a reversible snapshot.',
+                    count($undoItems),
+                    self::UNDO_MAX_POSTS,
+                );
+            } else {
+                $result = $this->reversible($result, 'bulk', ['items' => $undoItems], sprintf('Revert the bulk update to %d post(s)', count($undoItems)));
+            }
+        }
+
+        return $result;
     }
 
     /**

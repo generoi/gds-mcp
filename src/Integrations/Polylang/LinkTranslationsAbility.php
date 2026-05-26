@@ -4,6 +4,8 @@ namespace GeneroWP\MCP\Integrations\Polylang;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use WP_Error;
 
 /**
@@ -21,6 +23,7 @@ use WP_Error;
 final class LinkTranslationsAbility
 {
     use PolylangAware;
+    use Reversible;
 
     public static function register(): void
     {
@@ -111,6 +114,10 @@ final class LinkTranslationsAbility
             }
         }
 
+        // Capture prior languages + translation groups (incl. siblings the
+        // relink would orphan) before mutating anything.
+        $undo = Snapshot::translationLinkBefore(array_values($normalized));
+
         // Assign each post the claimed language (idempotent if already correct).
         foreach ($normalized as $lang => $id) {
             pll_set_post_language($id, $lang);
@@ -118,10 +125,12 @@ final class LinkTranslationsAbility
 
         pll_save_post_translations($normalized);
 
-        return [
+        $result = [
             'linked' => $normalized,
             'note' => 'Polylang translation relationship saved. Language switcher will now navigate between these posts.',
         ];
+
+        return $this->reversible($result, 'restore-translation-link', $undo, 'Undo the translation re-link');
     }
 
     /** @param array<string, int> $translations */

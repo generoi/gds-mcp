@@ -2,12 +2,16 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use WP_Block_Type_Registry;
 use WP_Error;
 use WP_HTML_Tag_Processor;
 
 final class PatchBlockAbility
 {
+    use Reversible;
+
     private const OPERATION_FIELDS = [
         'action', 'block_name', 'occurrence', 'attrs', 'set_attrs',
         'remove_attrs', 'inner_html', 'inner_blocks', 'search_depth',
@@ -185,6 +189,9 @@ final class PatchBlockAbility
 
         $newContent = serialize_blocks($blocks);
 
+        // Capture the post's full state before overwriting its content.
+        $before = Snapshot::postFields($postId);
+
         $updateResult = wp_update_post([
             'ID' => $postId,
             'post_content' => $newContent,
@@ -196,7 +203,7 @@ final class PatchBlockAbility
 
         $updated = get_post($postId);
 
-        return [
+        $result = [
             'success' => true,
             'id' => $postId,
             'results' => $results,
@@ -204,6 +211,12 @@ final class PatchBlockAbility
             'content' => $updated->post_content,
             'modified' => $updated->post_modified_gmt,
         ];
+
+        if ($before) {
+            $result = $this->reversible($result, 'restore-post', $before, "Revert block changes to \"{$post->post_title}\"");
+        }
+
+        return $result;
     }
 
     /**

@@ -57,6 +57,8 @@ final class Redirection
                 'to' => $to,
                 'status_code' => $redirect->get_action_code(),
             ],
+            // Undo data for the ability to peel off; deletes the created item.
+            '_undo_data' => ['provider' => 'redirection', 'item_id' => (int) $redirect->get_id()],
         ];
     }
 }

@@ -47,6 +47,9 @@ final class YoastRedirects
             return new WP_Error('invalid_post', 'Yoast redirects require a valid post ID or URL that maps to a post.');
         }
 
+        // Capture the prior redirect meta before overwriting so it can be reverted.
+        $prev = get_post_meta($postId, '_yoast_wpseo_redirect', true);
+
         update_post_meta($postId, '_yoast_wpseo_redirect', esc_url_raw($to));
 
         return [
@@ -57,6 +60,8 @@ final class YoastRedirects
                 'to' => $to,
                 'status_code' => 301,
             ],
+            // Undo data for the ability to peel off; restores the prior meta.
+            '_undo_data' => ['provider' => 'yoast', 'post_id' => (int) $postId, 'prev_meta' => $prev],
         ];
     }
 }

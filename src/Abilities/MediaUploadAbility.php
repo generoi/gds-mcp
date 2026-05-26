@@ -2,10 +2,13 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
 final class MediaUploadAbility
 {
+    use Reversible;
+
     private const MAX_BASE64_BYTES = 10 * 1024 * 1024; // 10 MB decoded
 
     public static function register(): void
@@ -219,7 +222,10 @@ final class MediaUploadAbility
             wp_update_post($postUpdate);
         }
 
-        return $this->formatResponse($attachmentId);
+        $result = $this->formatResponse($attachmentId);
+
+        // Undo a create by trashing the attachment (keeps the file on disk).
+        return $this->reversible($result, 'trash', ['id' => $attachmentId], 'Remove the uploaded file');
     }
 
     private function formatResponse(int $attachmentId): array

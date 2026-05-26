@@ -57,6 +57,8 @@ final class SafeRedirectManager
                 'to' => $to,
                 'status_code' => $input['status_code'] ?? 301,
             ],
+            // Undo data for the ability to peel off; trashes the created post.
+            '_undo_data' => ['provider' => 'srm', 'post_id' => (int) $postId],
         ];
     }
 }

@@ -4,6 +4,7 @@ namespace GeneroWP\MCP\Integrations\Polylang;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
 /**
@@ -13,6 +14,7 @@ use WP_Error;
 final class CreateTermTranslationAbility
 {
     use PolylangAware;
+    use Reversible;
 
     public static function register(): void
     {
@@ -149,7 +151,7 @@ final class CreateTermTranslationAbility
 
         $newTerm = get_term($newTermId, $taxonomy);
 
-        return [
+        $result = [
             'id' => $newTerm->term_id,
             'name' => $newTerm->name,
             'slug' => $newTerm->slug,
@@ -157,5 +159,12 @@ final class CreateTermTranslationAbility
             'lang' => $language,
             'source_id' => $sourceTermId,
         ];
+
+        return $this->reversible(
+            $result,
+            'delete-term',
+            ['term_id' => $newTermId, 'taxonomy' => $taxonomy],
+            'Delete the created term translation',
+        );
     }
 }

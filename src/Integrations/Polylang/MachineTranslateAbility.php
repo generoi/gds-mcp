@@ -4,6 +4,9 @@ namespace GeneroWP\MCP\Integrations\Polylang;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
+use PLL_MO;
 use WP_Error;
 use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Data;
 use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Factory;
@@ -16,6 +19,7 @@ use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Processor;
 final class MachineTranslateAbility
 {
     use PolylangAware;
+    use Reversible;
 
     public static function register(): void
     {
@@ -103,7 +107,7 @@ final class MachineTranslateAbility
                 return new WP_Error('forbidden', 'You do not have permission to manage string translations.', ['status' => 403]);
             }
 
-            return self::translateStrings($input['string_group'], $targetLang, $service, $language);
+            return $this->translateStrings($input['string_group'], $targetLang, $service, $language);
         }
 
         $postId = (int) ($input['id'] ?? 0);
@@ -115,15 +119,22 @@ final class MachineTranslateAbility
             return new WP_Error('forbidden', 'You do not have permission to translate this post.', ['status' => 403]);
         }
 
-        return self::translatePost($postId, $targetLang, $service, $language);
+        return $this->translatePost($postId, $targetLang, $service, $language);
     }
 
-    private static function translatePost(int $postId, object $targetLang, object $service, string $language): array|WP_Error
+    private function translatePost(int $postId, object $targetLang, object $service, string $language): array|WP_Error
     {
         $post = get_post($postId);
         if (! $post) {
             return new WP_Error('post_not_found', 'Source post not found.');
         }
+
+        // Determine the undo branch BEFORE translating: if a translation in the
+        // target language already exists it will be OVERWRITTEN (revert it via a
+        // full post snapshot); otherwise a new post is created (undo by trashing
+        // it). DeepL credits consumed by the translation are NOT refundable.
+        $existingId = pll_get_post_translations($postId)[$language] ?? null;
+        $beforeSnapshot = $existingId ? Snapshot::postFields((int) $existingId) : [];
 
         $container = new \PLL_Export_Container(Data::class);
         $exporter = new \PLL_Export_Data_From_Posts(\PLL()->model);
@@ -145,20 +156,40 @@ final class MachineTranslateAbility
         $translations = pll_get_post_translations($postId);
         $translationId = $translations[$language] ?? 0;
         $translatedPost = $translationId ? get_post($translationId) : null;
+        $title = $translatedPost ? $translatedPost->post_title : '';
 
-        return [
+        $response = [
             'type' => 'post',
             'source_id' => $postId,
             'translation_id' => $translationId,
             'lang' => $language,
-            'title' => $translatedPost ? $translatedPost->post_title : '',
+            'title' => $title,
             'status' => $translatedPost ? $translatedPost->post_status : '',
             'url' => $translatedPost ? get_permalink($translatedPost) : '',
             'service' => $service->get_name(),
         ];
+
+        if ($existingId) {
+            // An existing translation was overwritten — revert it to the
+            // captured prior state.
+            return $this->reversible(
+                $response,
+                'restore-post',
+                $beforeSnapshot,
+                sprintf('Revert the machine translation of "%s"', $title),
+            );
+        }
+
+        // A new translation post was created — undo by trashing it.
+        return $this->reversible(
+            $response,
+            'trash',
+            ['id' => (int) $translationId],
+            'Delete the machine-created translation',
+        );
     }
 
-    private static function translateStrings(string $group, object $targetLang, object $service, string $language): array|WP_Error
+    private function translateStrings(string $group, object $targetLang, object $service, string $language): array|WP_Error
     {
         $sources = \PLL_Admin_Strings::get_strings();
 
@@ -168,6 +199,29 @@ final class MachineTranslateAbility
 
         if (empty($sources)) {
             return new WP_Error('no_strings', sprintf('No registered strings found for group "%s".', $group));
+        }
+
+        // Capture each string's prior translation in the target language BEFORE
+        // translating, mirroring UpdateStringTranslationAbility (PLL_MO import +
+        // translate). On undo each prior value is re-applied; an empty string
+        // clears the entry when there was no prior translation. DeepL credits
+        // consumed by the translation are NOT refundable by undo.
+        $undoItems = [];
+        if (class_exists('PLL_MO')) {
+            $mo = new PLL_MO;
+            $mo->import_from_db($targetLang);
+            foreach ($sources as $source) {
+                $src = (string) ($source['string'] ?? '');
+                if ($src === '') {
+                    continue;
+                }
+                $prev = $mo->translate($src);
+                $prev = ($prev !== $src && $prev !== '') ? $prev : '';
+                $undoItems[] = [
+                    'kind' => 'restore-string',
+                    'data' => ['string' => $src, 'lang' => $language, 'translation' => (string) $prev],
+                ];
+            }
         }
 
         $container = new \PLL_Export_Container(Data::class);
@@ -187,13 +241,15 @@ final class MachineTranslateAbility
             return new WP_Error('save_failed', implode('; ', $result->get_error_messages()));
         }
 
-        return [
+        $response = [
             'type' => 'strings',
             'group' => $group ?: '(all)',
             'lang' => $language,
             'count' => count($sources),
             'service' => $service->get_name(),
         ];
+
+        return $this->reversible($response, 'bulk', ['items' => $undoItems], 'Revert the machine-translated strings');
     }
 
     private static function buildDescription(): string

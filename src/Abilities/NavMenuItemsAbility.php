@@ -3,6 +3,8 @@
 namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Concerns\RestDelegation;
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use WP_Error;
 
 /**
@@ -29,6 +31,7 @@ use WP_Error;
 final class NavMenuItemsAbility
 {
     use RestDelegation;
+    use Reversible;
 
     private const ROUTE = '/wp/v2/menu-items';
 
@@ -151,7 +154,7 @@ final class NavMenuItemsAbility
     {
         HelpAbility::registerAbility('gds/nav-menu-items-delete', [
             'label' => 'Delete Menu Item',
-            'description' => 'Permanently delete a menu item. Sibling items below it shift up to close the gap.',
+            'description' => 'Delete a menu item (recoverable — moved to trash). Sibling items below it shift up to close the gap.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -330,7 +333,14 @@ final class NavMenuItemsAbility
             return self::restErrorToWpError($response);
         }
 
-        return self::transformItem(self::restResponseData($response));
+        $result = self::transformItem(self::restResponseData($response));
+
+        // Undo a create by trashing the new menu item.
+        if (! empty($result['id'])) {
+            $result = $this->reversible($result, 'trash', ['id' => (int) $result['id']], 'Remove the added menu item');
+        }
+
+        return $result;
     }
 
     public function executeUpdate(mixed $input = []): array|WP_Error
@@ -358,12 +368,21 @@ final class NavMenuItemsAbility
             $payload = array_merge($payload, $restFields);
         }
 
+        // Capture the item's full state before overwriting its fields/meta.
+        $before = Snapshot::postFields($id);
+
         $response = self::restPost(self::ROUTE.'/'.$id, $payload);
         if (self::isRestError($response)) {
             return self::restErrorToWpError($response);
         }
 
-        return self::transformItem(self::restResponseData($response));
+        $result = self::transformItem(self::restResponseData($response));
+
+        if ($before) {
+            $result = $this->reversible($result, 'restore-post', $before, 'Revert changes to the menu item');
+        }
+
+        return $result;
     }
 
     public function executeDelete(mixed $input = []): array|WP_Error
@@ -382,7 +401,9 @@ final class NavMenuItemsAbility
         $menuId = self::getMenuIdForItem($id);
         $itemOrder = (int) $post->menu_order;
 
-        $deleted = wp_delete_post($id, true);
+        // Soft delete (trash) so it's recoverable and child->parent menu links
+        // stay valid for an undo.
+        $deleted = wp_delete_post($id, false);
         if (! $deleted) {
             return new WP_Error('delete_failed', "Could not delete menu item {$id}.");
         }
@@ -392,7 +413,10 @@ final class NavMenuItemsAbility
             self::shiftOrder($menuId, $itemOrder + 1, -1);
         }
 
-        return ['deleted' => $id];
+        $result = ['deleted' => $id];
+
+        // Undo by untrashing the item.
+        return $this->reversible($result, 'untrash', ['id' => $id], 'Restore the deleted menu item');
     }
 
     public function executeMove(mixed $input = []): array|WP_Error
@@ -420,6 +444,20 @@ final class NavMenuItemsAbility
         $newMenuId = (int) ($input['menu_id'] ?? $currentMenuId);
         $newParentId = array_key_exists('parent_item_id', $input) ? (int) $input['parent_item_id'] : $currentParentId;
 
+        // Capture, BEFORE any mutation, the moved item plus every item in the
+        // source and destination menus — shiftOrder re-numbers all of them and
+        // the move also changes the item's menu term, parent meta and order.
+        $affectedIds = [$id];
+        foreach ([$currentMenuId, $newMenuId] as $menuToCapture) {
+            foreach ((array) (wp_get_nav_menu_items($menuToCapture) ?: []) as $sibling) {
+                $affectedIds[] = (int) $sibling->ID;
+            }
+        }
+        $undoItems = [];
+        foreach (array_unique($affectedIds) as $affectedId) {
+            $undoItems[] = ['kind' => 'restore-post', 'data' => Snapshot::postFields($affectedId)];
+        }
+
         // Step 1: close the gap at the old location (move item out of the way first).
         self::shiftOrder($currentMenuId, $currentOrder + 1, -1);
 
@@ -442,7 +480,9 @@ final class NavMenuItemsAbility
         // Step 6: write the new menu_order on the item itself.
         wp_update_post(['ID' => $id, 'menu_order' => $targetOrder]);
 
-        return self::transformItem(wp_setup_nav_menu_item(clone get_post($id)));
+        $result = self::transformItem(wp_setup_nav_menu_item(clone get_post($id)));
+
+        return $this->reversible($result, 'bulk', ['items' => $undoItems], 'Undo the menu move');
     }
 
     public function executeReorder(mixed $input = []): array|WP_Error
@@ -473,6 +513,12 @@ final class NavMenuItemsAbility
             );
         }
 
+        // Capture each affected item's full state before re-assigning menu_order.
+        $undoItems = [];
+        foreach ($itemIds as $itemId) {
+            $undoItems[] = ['kind' => 'restore-post', 'data' => Snapshot::postFields($itemId)];
+        }
+
         // Preserve existing menu_order values (they may be sparse); re-assign by provided order.
         $orders = array_map(fn ($s) => (int) $s->menu_order, $siblings);
         sort($orders);
@@ -481,7 +527,9 @@ final class NavMenuItemsAbility
             wp_update_post(['ID' => $itemId, 'menu_order' => $orders[$i]]);
         }
 
-        return ['reordered' => $itemIds];
+        $result = ['reordered' => $itemIds];
+
+        return $this->reversible($result, 'bulk', ['items' => $undoItems], 'Undo the menu reorder');
     }
 
     // ── Linkage helpers ─────────────────────────────────────────────────────

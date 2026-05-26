@@ -3,6 +3,8 @@
 namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Concerns\RestDelegation;
+use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use WP_Error;
 
 /**
@@ -14,6 +16,7 @@ use WP_Error;
 final class GenericTaxonomyAbility
 {
     use RestDelegation;
+    use Reversible;
 
     public static function register(): void
     {
@@ -188,43 +191,73 @@ final class GenericTaxonomyAbility
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
+        $taxonomy = (string) ($input['taxonomy'] ?? '');
         unset($input['taxonomy']);
 
         $response = self::restPost($route, $input);
+        $result = self::restResponseOrError($response);
 
-        return self::restResponseOrError($response);
+        // Undo a create by deleting the new term.
+        if (! is_wp_error($result) && ! empty($result['id'])) {
+            $result = $this->reversible($result, 'delete-term', [
+                'term_id' => (int) $result['id'],
+                'taxonomy' => $taxonomy,
+            ], "Delete the created term \"{$result['name']}\"");
+        }
+
+        return $result;
     }
 
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $route = self::resolveRoute($input['taxonomy'] ?? '');
+        $taxonomy = (string) ($input['taxonomy'] ?? '');
+        $route = self::resolveRoute($taxonomy);
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
         $id = (int) ($input['id'] ?? 0);
         unset($input['taxonomy'], $input['id']);
 
-        $response = self::restPost("{$route}/{$id}", $input);
+        // Capture the term's prior fields + meta before overwriting.
+        $undo = $id ? Snapshot::termFields($id, $taxonomy) : [];
 
-        return self::restResponseOrError($response);
+        $response = self::restPost("{$route}/{$id}", $input);
+        $result = self::restResponseOrError($response);
+
+        if (! is_wp_error($result) && $undo) {
+            $result = $this->reversible($result, 'restore-term', $undo, "Revert changes to the term \"{$result['name']}\"");
+        }
+
+        return $result;
     }
 
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $route = self::resolveRoute($input['taxonomy'] ?? '');
+        $taxonomy = (string) ($input['taxonomy'] ?? '');
+        $route = self::resolveRoute($taxonomy);
         if (! $route) {
             return new WP_Error('invalid_taxonomy', 'Unknown taxonomy: '.($input['taxonomy'] ?? ''));
         }
         $id = (int) ($input['id'] ?? 0);
         $force = $input['force'] ?? false;
 
+        // Terms have no trash, so deletion is permanent. Capture everything
+        // needed to recreate the term under its original id (see
+        // RestoreSnapshot::recreateTerm).
+        $undo = $id ? Snapshot::termForRecreate($id, $taxonomy) : [];
+
         $request = new \WP_REST_Request('DELETE', "{$route}/{$id}");
         $request->set_param('force', $force);
 
         $response = rest_do_request($request);
+        $result = self::restResponseOrError($response);
 
-        return self::restResponseOrError($response);
+        if (! is_wp_error($result) && $undo) {
+            $result = $this->reversible($result, 'recreate-term', $undo, "Restore the deleted term \"{$undo['fields']['name']}\"");
+        }
+
+        return $result;
     }
 }
