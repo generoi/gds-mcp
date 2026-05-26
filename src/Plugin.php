@@ -27,6 +27,11 @@ class Plugin
         // register (they default to __return_true, deferring all auth to the
         // chat-level gate). Must be hooked before wp_abilities_api_init fires.
         Abilities\CapabilityPolicy::register();
+
+        // Undo: handle restore requests from gds-assistant (snapshots captured
+        // by mutating abilities and replayed via the gds-mcp/restore_snapshot
+        // filter).
+        Undo\RestoreSnapshot::register();
         add_action('plugins_loaded', [$this, 'bootstrapMcpAdapter'], 20);
 
         // Clear cached schemas when plugins change (abilities may differ)
