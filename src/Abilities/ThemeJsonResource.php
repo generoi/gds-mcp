@@ -10,7 +10,7 @@ final class ThemeJsonResource
     {
         HelpAbility::registerAbility('gds/design-theme-json', [
             'label' => 'Theme JSON',
-            'description' => 'Read-only design tokens from theme.json (color palette, gradients, spacing, font sizes, layout, per-block overrides) and resolved CSS custom properties from the built stylesheet. Read design://css-vars for just the CSS variables.',
+            'description' => 'Read-only design tokens from theme.json (color palette, gradients, spacing, font sizes, layout, per-block overrides) and resolved CSS custom properties from the built stylesheet. color_settings.custom tells you whether raw hex is allowed (false = palette slugs only). Read design://css-vars for just the CSS variables.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -58,6 +58,14 @@ final class ThemeJsonResource
         // Colors.
         if (! empty($settings['color'])) {
             $color = $settings['color'];
+
+            // Whether the theme permits custom (hex) values beyond the palette.
+            // When false, only the palette slugs above are valid — consumers
+            // must not emit raw hex. (WP core defaults these to true.)
+            $result['color_settings'] = [
+                'custom' => (bool) ($color['custom'] ?? true),
+                'custom_gradient' => (bool) ($color['customGradient'] ?? true),
+            ];
 
             if (! empty($color['palette']['theme'])) {
                 $result['colors'] = array_map(fn ($c) => [
