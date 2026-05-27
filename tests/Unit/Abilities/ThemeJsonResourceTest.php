@@ -49,6 +49,22 @@ class ThemeJsonResourceTest extends WP_UnitTestCase
         }
     }
 
+    public function test_color_settings_expose_custom_flags(): void
+    {
+        $result = (new ThemeJsonResource)->execute([]);
+
+        // Present whenever the theme defines color settings, so consumers know
+        // whether raw hex is allowed (false = palette slugs only).
+        if (isset($result['color_settings'])) {
+            $this->assertArrayHasKey('custom', $result['color_settings']);
+            $this->assertArrayHasKey('custom_gradient', $result['color_settings']);
+            $this->assertIsBool($result['color_settings']['custom']);
+            $this->assertIsBool($result['color_settings']['custom_gradient']);
+        } else {
+            $this->assertIsArray($result);
+        }
+    }
+
     public function test_execute_font_sizes_have_expected_structure(): void
     {
         $result = (new ThemeJsonResource)->execute([]);
