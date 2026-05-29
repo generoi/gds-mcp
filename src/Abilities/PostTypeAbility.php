@@ -165,6 +165,9 @@ final class PostTypeAbility
      * Normalize input so LLMs can send plain strings for title/content/excerpt.
      * The REST API schema defines these as type:object ({raw:"...", rendered:"..."}),
      * but LLMs naturally send plain strings. We wrap them for compatibility.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
      */
     public static function normalizeInput(array $input): array
     {
@@ -177,6 +180,9 @@ final class PostTypeAbility
         return $input;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeList(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -196,6 +202,9 @@ final class PostTypeAbility
         ];
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeRead(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -207,6 +216,9 @@ final class PostTypeAbility
         return self::restResponseOrError($response);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeCreate(mixed $input = []): array|WP_Error
     {
         $input = self::normalizeInput((array) ($input ?? []));
@@ -230,6 +242,9 @@ final class PostTypeAbility
         return $data;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
         $input = self::normalizeInput((array) ($input ?? []));
@@ -255,6 +270,9 @@ final class PostTypeAbility
         return $data;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);

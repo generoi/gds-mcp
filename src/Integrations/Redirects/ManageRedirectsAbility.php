@@ -73,6 +73,9 @@ final class ManageRedirectsAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -114,6 +117,10 @@ final class ManageRedirectsAbility
         return null;
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>|WP_Error
+     */
     private function handleCreate(string $provider, array $input): array|WP_Error
     {
         $from = $input['from'] ?? '';

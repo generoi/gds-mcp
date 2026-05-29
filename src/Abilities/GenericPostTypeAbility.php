@@ -162,6 +162,8 @@ final class GenericPostTypeAbility
      * exposes a schema that treats the post/term/url linkage and menu_order
      * positioning as first-class fields instead of colliding with the
      * generic tool's `type` parameter.
+     *
+     * @return array<string, mixed>
      */
     private static function getAvailableTypes(): array
     {
@@ -216,6 +218,9 @@ final class GenericPostTypeAbility
 
     // ── Execute methods ─────────────────────────────────────────────
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeList(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -243,6 +248,9 @@ final class GenericPostTypeAbility
         ];
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeRead(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -262,6 +270,9 @@ final class GenericPostTypeAbility
         return is_wp_error($data) ? $data : self::enrichPostUrls($data);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeCreate(mixed $input = []): array|WP_Error
     {
         $input = PostTypeAbility::normalizeInput((array) ($input ?? []));
@@ -309,6 +320,9 @@ final class GenericPostTypeAbility
         return $data;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
         $input = PostTypeAbility::normalizeInput((array) ($input ?? []));
@@ -366,6 +380,9 @@ final class GenericPostTypeAbility
     /**
      * Add edit_url and preview_url to a post response so the LLM can
      * provide correct links regardless of post type or status.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
     private static function enrichPostUrls(array $data): array
     {
@@ -426,6 +443,9 @@ final class GenericPostTypeAbility
         }
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);

@@ -81,6 +81,9 @@ final class GetBlockAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -125,6 +128,9 @@ final class GetBlockAbility
         ];
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private static function formatBlockDetail(WP_Block_Type $blockType): array
     {
         $detail = [
@@ -222,6 +228,8 @@ final class GetBlockAbility
 
     /**
      * Get all styles for a block, merging block.json styles with WP_Block_Styles_Registry.
+     *
+     * @return list<array<string, mixed>>
      */
     private static function getBlockStyles(WP_Block_Type $blockType): array
     {

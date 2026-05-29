@@ -39,6 +39,9 @@ final class ThemeJsonResource
         ]);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function execute(mixed $input = []): array
     {
         $input = (array) ($input ?? []);

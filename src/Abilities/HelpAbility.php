@@ -14,6 +14,8 @@ final class HelpAbility
     /**
      * Register a WordPress ability AND add it to the help index.
      * Use instead of wp_register_ability() to auto-index for discoverability.
+     *
+     * @param  array<string, mixed>  $args
      */
     public static function registerAbility(string $name, array $args): void
     {
@@ -80,6 +82,9 @@ final class HelpAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function execute(mixed $input = []): array
     {
         $input = (array) ($input ?? []);

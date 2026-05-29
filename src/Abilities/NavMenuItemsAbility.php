@@ -216,7 +216,11 @@ final class NavMenuItemsAbility
         ]);
     }
 
-    /** The `linked` discriminated-union schema shared between create and update. */
+    /**
+     * The `linked` discriminated-union schema shared between create and update.
+     *
+     * @return array<string, mixed>
+     */
     private static function linkedSchema(): array
     {
         return [
@@ -236,6 +240,9 @@ final class NavMenuItemsAbility
 
     // ── Execute methods ─────────────────────────────────────────────────────
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeList(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -269,6 +276,9 @@ final class NavMenuItemsAbility
         ];
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeRead(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -287,6 +297,9 @@ final class NavMenuItemsAbility
         return self::transformItem($items);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeCreate(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -343,6 +356,9 @@ final class NavMenuItemsAbility
         return $result;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -385,6 +401,9 @@ final class NavMenuItemsAbility
         return $result;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -419,6 +438,9 @@ final class NavMenuItemsAbility
         return $this->reversible($result, 'untrash', ['id' => $id], 'Restore the deleted menu item');
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeMove(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -485,6 +507,9 @@ final class NavMenuItemsAbility
         return $this->reversible($result, 'bulk', ['items' => $undoItems], 'Undo the menu move');
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeReorder(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -534,7 +559,12 @@ final class NavMenuItemsAbility
 
     // ── Linkage helpers ─────────────────────────────────────────────────────
 
-    /** Translate our `linked` discriminated union into WP REST type/object/object_id/url. */
+    /**
+     * Translate our `linked` discriminated union into WP REST type/object/object_id/url.
+     *
+     * @param  array<string, mixed>  $linked
+     * @return array<string, mixed>|WP_Error
+     */
     private static function linkedToRestFields(array $linked): array|WP_Error
     {
         $kind = $linked['kind'] ?? '';
@@ -551,6 +581,10 @@ final class NavMenuItemsAbility
         };
     }
 
+    /**
+     * @param  array<string, mixed>  $linked
+     * @return array<string, mixed>|WP_Error
+     */
     private static function linkedFromPost(array $linked): array|WP_Error
     {
         $postId = (int) ($linked['post_id'] ?? 0);
@@ -570,6 +604,10 @@ final class NavMenuItemsAbility
         ];
     }
 
+    /**
+     * @param  array<string, mixed>  $linked
+     * @return array<string, mixed>|WP_Error
+     */
     private static function linkedFromTaxonomy(array $linked): array|WP_Error
     {
         $taxonomy = $linked['taxonomy'] ?? '';
@@ -591,6 +629,10 @@ final class NavMenuItemsAbility
         ];
     }
 
+    /**
+     * @param  array<string, mixed>  $linked
+     * @return array<string, mixed>|WP_Error
+     */
     private static function linkedFromArchive(array $linked): array|WP_Error
     {
         $postType = $linked['post_type'] ?? '';
@@ -630,6 +672,10 @@ final class NavMenuItemsAbility
         ];
     }
 
+    /**
+     * @param  array<string, mixed>  $linked
+     * @return array<string, mixed>|WP_Error
+     */
     private static function linkedFromUrl(array $linked): array|WP_Error
     {
         $url = $linked['url'] ?? '';
@@ -645,7 +691,11 @@ final class NavMenuItemsAbility
 
     // ── Output shaping ──────────────────────────────────────────────────────
 
-    /** Convert REST item / setup'd menu item object to our `linked` + flat response format. */
+    /**
+     * Convert REST item / setup'd menu item object to our `linked` + flat response format.
+     *
+     * @return array<string, mixed>
+     */
     private static function transformItem(mixed $item): array
     {
         $item = is_array($item) ? $item : json_decode(json_encode($item), true);
@@ -707,6 +757,8 @@ final class NavMenuItemsAbility
      * @param  int  $rootParentId  The parent_item_id whose children should become the tree roots.
      *                             Defaults to 0 (top-level). Pass a specific parent ID when
      *                             you've already filtered to its subtree.
+     * @param  array<int, array<string, mixed>>  $items
+     * @return list<array<string, mixed>>
      */
     private static function buildTree(array $items, int $rootParentId = 0): array
     {
@@ -820,7 +872,12 @@ final class NavMenuItemsAbility
         return (int) $terms[0];
     }
 
-    /** Extract optional passthrough fields from input. */
+    /**
+     * Extract optional passthrough fields from input.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
     private static function optionalFieldsFromInput(array $input): array
     {
         $out = [];

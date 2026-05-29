@@ -126,6 +126,8 @@ final class WebFetchAbility
      *
      * The ability stays destructive-by-default for other MCP clients —
      * this is the gds-assistant-specific relaxation.
+     *
+     * @param  array<string, mixed>  $input
      */
     public static function maybeSkipApproval(bool $needs, string $abilityName, array $input): bool
     {
@@ -199,6 +201,9 @@ final class WebFetchAbility
     /**
      * Filter callback: add hosts the user has approved via "Approve & trust"
      * (stored in the gds_mcp_trusted_web_hosts option) to the trust list.
+     *
+     * @param  array<string, mixed>  $hosts
+     * @return array<string, mixed>
      */
     public static function addUserApprovedHosts(array $hosts, string $candidateHost = ''): array
     {
@@ -222,6 +227,9 @@ final class WebFetchAbility
         }
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public static function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -376,6 +384,8 @@ final class WebFetchAbility
     /**
      * Check whether a host matches any entry in the allowlist.
      * Entries may be exact hostnames or wildcards like "*.example.com".
+     *
+     * @param  array<string, mixed>  $allowlist
      */
     private static function hostMatchesAllowlist(string $host, array $allowlist): bool
     {
@@ -634,6 +644,9 @@ final class WebFetchAbility
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $response
+     */
     private static function finalUrl(array $response, string $original): string
     {
         // WP doesn't expose the final URL directly on wp_remote_get responses,

@@ -11,6 +11,9 @@ final class YoastRedirects
         return defined('WPSEO_VERSION');
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function list(): array
     {
         global $wpdb;
@@ -38,6 +41,10 @@ final class YoastRedirects
         return ['provider' => 'yoast', 'redirects' => $redirects];
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>|WP_Error
+     */
     public static function create(string $from, string $to, array $input): array|WP_Error
     {
         // For Yoast, "from" must be a post ID or permalink.

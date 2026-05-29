@@ -70,6 +70,9 @@ final class LinkTranslationsAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         if (! self::polylangAvailable() || ! function_exists('pll_save_post_translations')) {

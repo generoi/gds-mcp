@@ -12,6 +12,9 @@ final class Redirection
         return class_exists(Red_Item::class);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function list(): array
     {
         $result = Red_Item::get_filtered([
@@ -33,6 +36,10 @@ final class Redirection
         return ['provider' => 'redirection', 'redirects' => $redirects];
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>|WP_Error
+     */
     public static function create(string $from, string $to, array $input): array|WP_Error
     {
         $redirect = Red_Item::create([

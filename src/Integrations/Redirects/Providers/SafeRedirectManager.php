@@ -12,6 +12,9 @@ final class SafeRedirectManager
         return function_exists('srm_create_redirect');
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public static function list(): array
     {
         $query = new WP_Query([
@@ -33,6 +36,10 @@ final class SafeRedirectManager
         return ['provider' => 'safe-redirect-manager', 'redirects' => $redirects];
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>|WP_Error
+     */
     public static function create(string $from, string $to, array $input): array|WP_Error
     {
         $postId = srm_create_redirect(

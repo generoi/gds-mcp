@@ -12,6 +12,8 @@ trait AcfAware
     /**
      * Update ACF fields on a post using update_field() so ACF hooks fire
      * (bidirectional relationships, validation, etc.).
+     *
+     * @param  array<string, mixed>  $fields
      */
     private static function updateAcfFields(int $postId, array $fields): void
     {

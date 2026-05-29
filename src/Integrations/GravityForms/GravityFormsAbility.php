@@ -200,6 +200,9 @@ final class GravityFormsAbility
         ]);
     }
 
+    /**
+     * @return array<int, array<string, mixed>>|WP_Error
+     */
     public function listForms(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -229,6 +232,9 @@ final class GravityFormsAbility
         return $result;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function readForm(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -246,6 +252,9 @@ final class GravityFormsAbility
         return json_decode(json_encode($form), true) ?: [];
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function createForm(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -279,6 +288,9 @@ final class GravityFormsAbility
      * Auto-assign field/notification/confirmation IDs and set GF-required defaults.
      *
      * Shared by createForm() and updateForm() so the two paths produce identical output.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
      */
     private static function normalizeFormPayload(array $input): array
     {
@@ -327,6 +339,9 @@ final class GravityFormsAbility
         return $input;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function updateForm(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -420,6 +435,9 @@ final class GravityFormsAbility
      * disambiguate audit-log labels when the user updates the same form
      * multiple times. Picks the most informative dimension(s) — field count
      * changes lead; otherwise list which top-level keys differ.
+     *
+     * @param  array<string, mixed>  $after
+     * @param  array<string, mixed>  $before
      */
     private static function summarizeUpdateDelta(array $before, array $after): string
     {
@@ -460,6 +478,8 @@ final class GravityFormsAbility
      * be matched to an existing one, so omitting/renumbering ids reads as a
      * removal — which is exactly the destructive case we want to catch.
      *
+     * @param  array<string, mixed>  $newFields
+     * @param  array<string, mixed>  $oldFields
      * @return array<int, array{id: int, label: string, reason: string}> Keyed by old field id.
      */
     private static function destructiveFieldChanges(array $oldFields, array $newFields): array
@@ -522,6 +542,9 @@ final class GravityFormsAbility
             .'If the loss is intentional, re-run with "confirm_destructive": true.';
     }
 
+    /**
+     * @return array<int, array<string, mixed>>|WP_Error
+     */
     public function listEntries(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {

@@ -21,6 +21,8 @@ final class Snapshot
      * Full state of a post needed to restore an edit: core fields, all meta,
      * and term relationships. Used to undo updates (content, blocks, bulk,
      * revisions-restore, machine-translate).
+     *
+     * @return array<string, mixed>
      */
     public static function postFields(int $id): array
     {
@@ -51,6 +53,9 @@ final class Snapshot
      * large batch never snapshots full content/meta and the restore won't
      * clobber meta it didn't change. A key with no value snapshots as null
      * (restore removes it). Pairs with RestoreSnapshot::restorePostPartial().
+     *
+     * @param  array<int, string>  $metaKeys
+     * @return array<string, mixed>
      */
     public static function partialPost(int $id, array $metaKeys): array
     {
@@ -73,6 +78,9 @@ final class Snapshot
      * relink touches AND every sibling currently in their groups (so siblings
      * the relink would orphan are restored too). Pairs with
      * RestoreSnapshot::restoreTranslationLink().
+     *
+     * @param  array<int, int>  $postIds
+     * @return array<string, mixed>
      */
     public static function translationLinkBefore(array $postIds): array
     {
@@ -103,6 +111,8 @@ final class Snapshot
 
     /**
      * Term relationships keyed by taxonomy: [taxonomy => [term_id, ...]].
+     *
+     * @return array<string, mixed>
      */
     public static function postTerms(int $id): array
     {
@@ -119,6 +129,8 @@ final class Snapshot
 
     /**
      * Term core fields + meta, to restore an updated term (id stays stable).
+     *
+     * @return array<string, mixed>
      */
     public static function termFields(int $termId, string $taxonomy): array
     {
@@ -146,6 +158,8 @@ final class Snapshot
      * lets the restore re-insert with the same ids, so existing references
      * (menus, ACF term fields, query blocks) keep working — see
      * {@see RestoreSnapshot::recreateTerm()}.
+     *
+     * @return array<string, mixed>
      */
     public static function termForRecreate(int $termId, string $taxonomy): array
     {
