@@ -25,6 +25,8 @@ jobs:
 
       - run: composer lint
 
+      - run: composer stan
+
   test:
     name: PHPUnit
     runs-on: ubuntu-latest

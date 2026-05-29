@@ -21,7 +21,6 @@ final class PostTypeAbility
     use RestDelegation;
 
     public function __construct(
-        private readonly string $postType,
         private readonly string $route,
         private readonly string $slug,
         private readonly string $label,
@@ -42,7 +41,7 @@ final class PostTypeAbility
                 continue;
             }
 
-            $namespace = $type->rest_namespace ?? 'wp/v2';
+            $namespace = $type->rest_namespace ?: 'wp/v2';
             $route = "/{$namespace}/{$restBase}";
 
             // Sanitize slug for ability name (lowercase alphanumeric + dashes only)
@@ -53,7 +52,7 @@ final class PostTypeAbility
                 continue;
             }
 
-            $ability = new self($type->name, $route, $slug, $type->labels->name);
+            $ability = new self($route, $slug, $type->labels->name);
             $ability->register();
         }
     }

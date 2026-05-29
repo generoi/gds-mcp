@@ -159,9 +159,10 @@ final class TranslationAuditAbility
                     }
                 }
 
+                // `empty()` covered the zero case; `count > 0` is redundant.
                 if (empty($missingLangs)) {
                     $fullyTranslated++;
-                } elseif (count($missingLangs) > 0 && count($missingLangs) < count($languageSlugs)) {
+                } elseif (count($missingLangs) < count($languageSlugs)) {
                     $partiallyTranslated++;
                 }
 

@@ -205,7 +205,7 @@ final class GenericPostTypeAbility
         foreach (get_post_types(['show_in_rest' => true], 'objects') as $type) {
             $base = $type->rest_base ?: $type->name;
             if ($base === $restBase) {
-                $namespace = $type->rest_namespace ?? 'wp/v2';
+                $namespace = $type->rest_namespace ?: 'wp/v2';
 
                 return "/{$namespace}/{$base}";
             }

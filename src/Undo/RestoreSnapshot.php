@@ -176,7 +176,10 @@ final class RestoreSnapshot
         return ['restored' => 'term', 'term_id' => $termId];
     }
 
-    private static function deleteTerm(array $data): array|WP_Error
+    /**
+     * @return array<string, mixed>
+     */
+    private static function deleteTerm(array $data): array
     {
         $termId = (int) ($data['term_id'] ?? 0);
         $taxonomy = (string) ($data['taxonomy'] ?? '');
@@ -578,8 +581,10 @@ final class RestoreSnapshot
      * post for bulk-update, or delete-feed per feed for feeds-duplicate).
      *
      * data: { items: [ {kind, data}, ... ] }
+     *
+     * @return array<string, mixed>
      */
-    private static function bulk(array $data): array|WP_Error
+    private static function bulk(array $data): array
     {
         $restored = 0;
         $errors = [];

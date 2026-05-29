@@ -61,7 +61,10 @@ trait RestDelegation
             return null;
         }
 
-        $namespace = $typeObject->rest_namespace ?? 'wp/v2';
+        // rest_namespace is typed bool|string in WP core (bool only when REST
+        // is disabled, already guarded above). `?:` covers an empty string
+        // too — `??` was dead, the property is never null.
+        $namespace = $typeObject->rest_namespace ?: 'wp/v2';
         $restBase = $typeObject->rest_base ?: $typeObject->name;
 
         return '/'.$namespace.'/'.$restBase;

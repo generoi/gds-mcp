@@ -146,7 +146,7 @@ final class GenericTaxonomyAbility
         foreach (get_taxonomies(['show_in_rest' => true], 'objects') as $tax) {
             $base = $tax->rest_base ?: $tax->name;
             if ($base === $restBase) {
-                $namespace = $tax->rest_namespace ?? 'wp/v2';
+                $namespace = $tax->rest_namespace ?: 'wp/v2';
 
                 return "/{$namespace}/{$base}";
             }

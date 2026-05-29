@@ -566,8 +566,11 @@ final class PatchBlockAbility
             return;
         }
 
-        // Dynamic (server-rendered) blocks have no saved HTML — nothing to sync.
-        if ($blockType->render_callback || ! empty($blockType->render)) {
+        // Dynamic (server-rendered) blocks have no saved HTML — nothing to
+        // sync. WP stubs type render_callback as always-callable but
+        // unregistered static blocks have it null at runtime; is_callable
+        // is the runtime-honest check the stubs don't let PHPStan model.
+        if (is_callable($blockType->render_callback)) {
             return;
         }
 
@@ -686,7 +689,7 @@ final class PatchBlockAbility
 
         return array_values(array_filter(
             $blocks,
-            fn ($b) => $b['blockName'] !== null || trim($b['innerHTML'] ?? '') !== ''
+            fn ($b) => $b['blockName'] !== null || trim($b['innerHTML']) !== ''
         ));
     }
 
