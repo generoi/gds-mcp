@@ -12,8 +12,15 @@ use GeneroWP\MCP\Undo\Snapshot;
  */
 class RestoreSnapshotTest extends TestCase
 {
-    private function restore(string $kind, array $data): mixed
+    /**
+     * @param  array<string, mixed>|object  $data  Snapshot value object (any class with toArray()) or a raw array.
+     */
+    private function restore(string $kind, array|object $data): mixed
     {
+        if (is_object($data)) {
+            $data = $data->toArray();
+        }
+
         return RestoreSnapshot::handle(null, ['kind' => $kind, 'data' => $data]);
     }
 
@@ -79,8 +86,9 @@ class RestoreSnapshotTest extends TestCase
         wp_set_object_terms($post, [$term], 'category');
 
         $before = Snapshot::termForRecreate($term, 'category');
-        $this->assertSame($term, $before['term_id']);
-        $this->assertContains($post, $before['object_ids']);
+        $this->assertNotNull($before);
+        $this->assertSame($term, $before->termId);
+        $this->assertContains($post, $before->objectIds);
 
         wp_delete_term($term, 'category');
         $this->assertNull(term_exists($term, 'category'));

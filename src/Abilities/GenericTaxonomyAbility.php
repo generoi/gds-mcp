@@ -253,7 +253,7 @@ final class GenericTaxonomyAbility
         unset($input['taxonomy'], $input['id']);
 
         // Capture the term's prior fields + meta before overwriting.
-        $undo = $id ? Snapshot::termFields($id, $taxonomy) : [];
+        $undo = $id ? Snapshot::termFields($id, $taxonomy) : null;
 
         $response = self::restPost("{$route}/{$id}", $input);
         $result = self::restResponseOrError($response);
@@ -283,7 +283,7 @@ final class GenericTaxonomyAbility
         // Terms have no trash, so deletion is permanent. Capture everything
         // needed to recreate the term under its original id (see
         // RestoreSnapshot::recreateTerm).
-        $undo = $id ? Snapshot::termForRecreate($id, $taxonomy) : [];
+        $undo = $id ? Snapshot::termForRecreate($id, $taxonomy) : null;
 
         $request = new \WP_REST_Request('DELETE', "{$route}/{$id}");
         $request->set_param('force', $force);
@@ -292,7 +292,7 @@ final class GenericTaxonomyAbility
         $result = self::restResponseOrError($response);
 
         if (! is_wp_error($result) && $undo) {
-            $result = $this->reversible($result, 'recreate-term', $undo, "Restore the deleted term \"{$undo['fields']['name']}\"");
+            $result = $this->reversible($result, 'recreate-term', $undo, "Restore the deleted term \"{$undo->fields['name']}\"");
         }
 
         return $result;

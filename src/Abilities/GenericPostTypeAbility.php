@@ -346,7 +346,7 @@ final class GenericPostTypeAbility
         // Capture the full prior state (fields + meta + terms) BEFORE writing,
         // so the edit can be undone. Numeric ids only — composite template ids
         // are an edge case we don't snapshot.
-        $undo = is_int($id) && $id ? Snapshot::postFields($id) : [];
+        $undo = is_int($id) && $id ? Snapshot::postFields($id) : null;
 
         $response = self::restPost("{$route}/{$id}", $input);
 

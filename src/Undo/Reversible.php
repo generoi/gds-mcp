@@ -12,19 +12,35 @@ namespace GeneroWP\MCP\Undo;
  * `gds-mcp/restore_snapshot` filter (see {@see RestoreSnapshot}).
  *
  * Use {@see Snapshot} for the common capture shapes (post fields, terms, …).
+ *
+ * The `$data` slot accepts either a snapshot value object (any class under
+ * `Snapshots\` exposing `toArray()`) or a plain array — abilities that build
+ * their own ad-hoc shapes (`restore-redirect`, `restore-feed`) still pass an
+ * array; abilities that lean on {@see Snapshot} pass the object straight
+ * through.
  */
 trait Reversible
 {
     /**
      * @param  array<string, mixed>  $result  The successful tool result to return.
      * @param  string  $kind  Restore-handler key — see {@see RestoreSnapshot}.
-     * @param  array<string, mixed>  $data  Everything needed to restore the prior state.
+     * @param  array<string, mixed>|object  $data  Restore payload. Objects must expose `toArray(): array`.
      * @param  string  $label  Human description of what undoing this does.
      * @return array<string, mixed>
      */
-    protected function reversible(array $result, string $kind, array $data, string $label): array
+    protected function reversible(array $result, string $kind, array|object $data, string $label): array
     {
-        $result['_undo'] = ['kind' => $kind, 'data' => $data, 'label' => $label];
+        if (is_object($data)) {
+            if (! method_exists($data, 'toArray')) {
+                throw new \InvalidArgumentException(
+                    'Reversible data object '.$data::class.' must expose toArray(): array',
+                );
+            }
+            $payload = $data->toArray();
+        } else {
+            $payload = $data;
+        }
+        $result['_undo'] = ['kind' => $kind, 'data' => $payload, 'label' => $label];
 
         return $result;
     }

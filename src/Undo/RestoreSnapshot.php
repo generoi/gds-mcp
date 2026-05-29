@@ -2,6 +2,11 @@
 
 namespace GeneroWP\MCP\Undo;
 
+use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
+use GeneroWP\MCP\Undo\Snapshots\PostFieldsSnapshot;
+use GeneroWP\MCP\Undo\Snapshots\TermFieldsSnapshot;
+use GeneroWP\MCP\Undo\Snapshots\TermForRecreateSnapshot;
+use GeneroWP\MCP\Undo\Snapshots\TranslationLinkBeforeSnapshot;
 use WP_Error;
 
 /**
@@ -15,6 +20,8 @@ use WP_Error;
  *
  * Returns an array summary on success or a WP_Error if the target no longer
  * exists (best-effort: the world may have moved on since the snapshot).
+ *
+ * @phpstan-type RestoreSummary array<string, mixed>
  */
 final class RestoreSnapshot
 {
@@ -57,40 +64,37 @@ final class RestoreSnapshot
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array<string, mixed>|WP_Error
+     * @return RestoreSummary|WP_Error
      */
     private static function restorePost(array $data): array|WP_Error
     {
-        $id = (int) ($data['id'] ?? 0);
-        if (! $id || ! get_post($id)) {
-            return new WP_Error('restore_failed', "Post {$id} no longer exists.");
+        $snapshot = PostFieldsSnapshot::fromArray($data);
+        if (! $snapshot) {
+            return new WP_Error('restore_failed', 'Snapshot was missing the post id.');
+        }
+        if (! get_post($snapshot->id)) {
+            return new WP_Error('restore_failed', "Post {$snapshot->id} no longer exists.");
         }
 
-        $postArr = (array) ($data['post'] ?? []);
-        $postArr['ID'] = $id;
-        $result = wp_update_post($postArr, true);
+        $result = wp_update_post(['ID' => $snapshot->id] + $snapshot->post, true);
         if (is_wp_error($result)) {
             return $result;
         }
 
-        if (isset($data['meta']) && is_array($data['meta'])) {
-            foreach (array_keys(get_post_meta($id)) as $key) {
-                delete_post_meta($id, $key);
-            }
-            foreach ($data['meta'] as $key => $values) {
-                foreach ((array) $values as $value) {
-                    add_post_meta($id, $key, maybe_unserialize($value));
-                }
+        foreach (array_keys(get_post_meta($snapshot->id)) as $key) {
+            delete_post_meta($snapshot->id, $key);
+        }
+        foreach ($snapshot->meta as $key => $values) {
+            foreach ($values as $value) {
+                add_post_meta($snapshot->id, $key, maybe_unserialize($value));
             }
         }
 
-        if (isset($data['terms']) && is_array($data['terms'])) {
-            foreach ($data['terms'] as $taxonomy => $ids) {
-                wp_set_object_terms($id, array_map('intval', (array) $ids), $taxonomy, false);
-            }
+        foreach ($snapshot->terms as $taxonomy => $ids) {
+            wp_set_object_terms($snapshot->id, $ids, $taxonomy, false);
         }
 
-        return ['restored' => 'post', 'id' => $id];
+        return ['restored' => 'post', 'id' => $snapshot->id];
     }
 
     /**
@@ -99,34 +103,36 @@ final class RestoreSnapshot
      * which may touch hundreds of posts (so we never snapshot full content/meta)
      * and must not clobber meta it didn't write.
      *
-     * data: { id, status?, meta_prev: { key => [values]|null } }
-     *
      * @param  array<string, mixed>  $data
-     * @return array<string, mixed>|WP_Error
+     * @return RestoreSummary|WP_Error
      */
     private static function restorePostPartial(array $data): array|WP_Error
     {
-        $id = (int) ($data['id'] ?? 0);
-        if (! $id || ! get_post($id)) {
-            return new WP_Error('restore_failed', "Post {$id} no longer exists.");
+        $snapshot = PartialPostSnapshot::fromArray($data);
+        if (! $snapshot) {
+            return new WP_Error('restore_failed', 'Snapshot was missing the post id.');
+        }
+        if (! get_post($snapshot->id)) {
+            return new WP_Error('restore_failed', "Post {$snapshot->id} no longer exists.");
         }
 
-        if (! empty($data['status'])) {
-            wp_update_post(['ID' => $id, 'post_status' => (string) $data['status']]);
+        if ($snapshot->status !== '') {
+            wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status]);
         }
 
-        foreach ((array) ($data['meta_prev'] ?? []) as $key => $values) {
-            delete_post_meta($id, $key);
-            if ($values !== null) {
-                // Values were captured via get_post_meta($id,$key) (already
-                // unserialized); add_post_meta re-serializes as needed.
-                foreach ((array) $values as $value) {
-                    add_post_meta($id, $key, $value);
-                }
+        foreach ($snapshot->metaPrev as $key => $values) {
+            delete_post_meta($snapshot->id, $key);
+            if ($values === null) {
+                continue;
+            }
+            // Values were captured via get_post_meta($id,$key) (already
+            // unserialized); add_post_meta re-serializes as needed.
+            foreach ($values as $value) {
+                add_post_meta($snapshot->id, $key, $value);
             }
         }
 
-        return ['restored' => 'post', 'id' => $id];
+        return ['restored' => 'post', 'id' => $snapshot->id];
     }
 
     /**
@@ -168,33 +174,33 @@ final class RestoreSnapshot
 
     /**
      * @param  array<string, mixed>  $data
-     * @return array<string, mixed>|WP_Error
+     * @return RestoreSummary|WP_Error
      */
     private static function restoreTerm(array $data): array|WP_Error
     {
-        $termId = (int) ($data['term_id'] ?? 0);
-        $taxonomy = (string) ($data['taxonomy'] ?? '');
-        if (! $termId || ! term_exists($termId, $taxonomy)) {
-            return new WP_Error('restore_failed', "Term {$termId} no longer exists.");
+        $snapshot = TermFieldsSnapshot::fromArray($data);
+        if (! $snapshot) {
+            return new WP_Error('restore_failed', 'Snapshot was missing term_id or taxonomy.');
+        }
+        if (! term_exists($snapshot->termId, $snapshot->taxonomy)) {
+            return new WP_Error('restore_failed', "Term {$snapshot->termId} no longer exists.");
         }
 
-        $result = wp_update_term($termId, $taxonomy, (array) ($data['fields'] ?? []));
+        $result = wp_update_term($snapshot->termId, $snapshot->taxonomy, $snapshot->fields);
         if (is_wp_error($result)) {
             return $result;
         }
 
-        if (isset($data['meta']) && is_array($data['meta'])) {
-            foreach (array_keys(get_term_meta($termId)) as $key) {
-                delete_term_meta($termId, $key);
-            }
-            foreach ($data['meta'] as $key => $values) {
-                foreach ((array) $values as $value) {
-                    add_term_meta($termId, $key, maybe_unserialize($value));
-                }
+        foreach (array_keys(get_term_meta($snapshot->termId)) as $key) {
+            delete_term_meta($snapshot->termId, $key);
+        }
+        foreach ($snapshot->meta as $key => $values) {
+            foreach ($values as $value) {
+                add_term_meta($snapshot->termId, $key, maybe_unserialize($value));
             }
         }
 
-        return ['restored' => 'term', 'term_id' => $termId];
+        return ['restored' => 'term', 'term_id' => $snapshot->termId];
     }
 
     /**
@@ -221,22 +227,22 @@ final class RestoreSnapshot
      * still point at the old one (rather than blindly rewriting them).
      *
      * @param  array<string, mixed>  $data
-     * @return array<string, mixed>|WP_Error
+     * @return RestoreSummary|WP_Error
      */
     private static function recreateTerm(array $data): array|WP_Error
     {
         global $wpdb;
 
-        $taxonomy = (string) ($data['taxonomy'] ?? '');
-        $fields = (array) ($data['fields'] ?? []);
-        $name = (string) ($fields['name'] ?? '');
-        $oldId = (int) ($data['term_id'] ?? 0);
-        $ttId = (int) ($data['term_taxonomy_id'] ?? 0);
-
-        if ($name === '' || ! taxonomy_exists($taxonomy)) {
+        $snapshot = TermForRecreateSnapshot::fromArray($data);
+        if (! $snapshot) {
+            return new WP_Error('restore_failed', 'Cannot recreate term: snapshot is missing term_id or taxonomy.');
+        }
+        if ($snapshot->fields['name'] === '' || ! taxonomy_exists($snapshot->taxonomy)) {
             return new WP_Error('restore_failed', 'Cannot recreate term: missing name or taxonomy.');
         }
 
+        $oldId = $snapshot->termId;
+        $ttId = $snapshot->termTaxonomyId;
         $idReused = $oldId && (bool) $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->terms} WHERE term_id = %d", $oldId));
         $ttReused = $ttId && (bool) $wpdb->get_var($wpdb->prepare("SELECT term_taxonomy_id FROM {$wpdb->term_taxonomy} WHERE term_taxonomy_id = %d", $ttId));
 
@@ -245,23 +251,23 @@ final class RestoreSnapshot
             // phpcs:disable WordPress.DB.DirectDatabaseQuery
             $wpdb->insert($wpdb->terms, [
                 'term_id' => $oldId,
-                'name' => $name,
-                'slug' => (string) ($fields['slug'] ?? sanitize_title($name)),
-                'term_group' => (int) ($data['term_group'] ?? 0),
+                'name' => $snapshot->fields['name'],
+                'slug' => $snapshot->fields['slug'] !== '' ? $snapshot->fields['slug'] : sanitize_title($snapshot->fields['name']),
+                'term_group' => $snapshot->termGroup,
             ]);
             $wpdb->insert($wpdb->term_taxonomy, [
                 'term_taxonomy_id' => $ttId,
                 'term_id' => $oldId,
-                'taxonomy' => $taxonomy,
-                'description' => (string) ($fields['description'] ?? ''),
-                'parent' => (int) ($fields['parent'] ?? 0),
+                'taxonomy' => $snapshot->taxonomy,
+                'description' => $snapshot->fields['description'],
+                'parent' => $snapshot->fields['parent'],
                 'count' => 0,
             ]);
-            clean_term_cache([$oldId], $taxonomy);
+            clean_term_cache([$oldId], $snapshot->taxonomy);
 
-            self::restoreTermMeta($oldId, (array) ($data['meta'] ?? []));
-            self::reattachObjects($ttId, (array) ($data['object_ids'] ?? []));
-            wp_update_term_count_now([$ttId], $taxonomy);
+            self::restoreTermMeta($oldId, $snapshot->meta);
+            self::reattachObjects($ttId, $snapshot->objectIds);
+            wp_update_term_count_now([$ttId], $snapshot->taxonomy);
 
             return [
                 'restored' => 'recreate-term',
@@ -272,19 +278,19 @@ final class RestoreSnapshot
 
         // Fallback: the id was reused, so we must create a new one. Don't
         // rewrite references blindly — report what still points at the old id.
-        $created = wp_insert_term($name, $taxonomy, [
-            'slug' => $fields['slug'] ?? '',
-            'description' => $fields['description'] ?? '',
-            'parent' => (int) ($fields['parent'] ?? 0),
+        $created = wp_insert_term($snapshot->fields['name'], $snapshot->taxonomy, [
+            'slug' => $snapshot->fields['slug'],
+            'description' => $snapshot->fields['description'],
+            'parent' => $snapshot->fields['parent'],
         ]);
         if (is_wp_error($created)) {
             return $created;
         }
         $newId = (int) $created['term_id'];
 
-        self::restoreTermMeta($newId, (array) ($data['meta'] ?? []));
-        foreach ((array) ($data['object_ids'] ?? []) as $objectId) {
-            wp_set_object_terms((int) $objectId, [$newId], $taxonomy, true);
+        self::restoreTermMeta($newId, $snapshot->meta);
+        foreach ($snapshot->objectIds as $objectId) {
+            wp_set_object_terms($objectId, [$newId], $snapshot->taxonomy, true);
         }
 
         return [
@@ -301,7 +307,7 @@ final class RestoreSnapshot
      * SQL, and wp_set_object_terms() SKIPS integer term ids that term_exists()
      * can't yet resolve for a freshly raw-inserted term.
      *
-     * @param  array<string, mixed>  $objectIds
+     * @param  list<int>  $objectIds
      */
     private static function reattachObjects(int $ttId, array $objectIds): void
     {
@@ -328,7 +334,7 @@ final class RestoreSnapshot
     }
 
     /**
-     * @param  array<string, mixed>  $meta
+     * @param  array<string, list<string>>  $meta
      */
     private static function restoreTermMeta(int $termId, array $meta): void
     {
@@ -591,7 +597,7 @@ final class RestoreSnapshot
      * Re-apply each affected post's prior language and translation group.
      *
      * @param  array<string, mixed>  $data
-     * @return array<string, mixed>|WP_Error
+     * @return RestoreSummary|WP_Error
      */
     private static function restoreTranslationLink(array $data): array|WP_Error
     {
@@ -599,15 +605,15 @@ final class RestoreSnapshot
             return new WP_Error('polylang_not_active', 'Polylang is not active.');
         }
 
+        $snapshot = TranslationLinkBeforeSnapshot::fromArray($data);
+
         $groups = [];
-        foreach ((array) ($data['before'] ?? []) as $entry) {
-            $id = (int) ($entry['id'] ?? 0);
-            $lang = (string) ($entry['lang'] ?? '');
-            if ($id && $lang) {
-                pll_set_post_language($id, $lang);
+        foreach ($snapshot->before as $row) {
+            if ($row->id && $row->lang !== '') {
+                pll_set_post_language($row->id, $row->lang);
             }
-            $group = array_map('intval', (array) ($entry['group'] ?? []));
-            if (count($group) > 1) {
+            if (count($row->group) > 1) {
+                $group = $row->group;
                 ksort($group);
                 $groups[implode(',', $group)] = $group;
             }
@@ -616,7 +622,7 @@ final class RestoreSnapshot
             pll_save_post_translations($group);
         }
 
-        return ['restored' => 'translation-link', 'count' => count($data['before'] ?? [])];
+        return ['restored' => 'translation-link', 'count' => count($snapshot->before)];
     }
 
     /**

@@ -140,7 +140,7 @@ final class MachineTranslateAbility
         // full post snapshot); otherwise a new post is created (undo by trashing
         // it). DeepL credits consumed by the translation are NOT refundable.
         $existingId = pll_get_post_translations($postId)[$language] ?? null;
-        $beforeSnapshot = $existingId ? Snapshot::postFields((int) $existingId) : [];
+        $beforeSnapshot = $existingId ? Snapshot::postFields((int) $existingId) : null;
 
         $container = new \PLL_Export_Container(Data::class);
         $exporter = new \PLL_Export_Data_From_Posts(\PLL()->model);
