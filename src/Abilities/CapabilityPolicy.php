@@ -34,6 +34,8 @@ final class CapabilityPolicy
     /**
      * @param  array  $args  Ability registration args.
      * @param  string  $name  Ability name, e.g. `gds/forms-update`.
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
      */
     public static function applyCapability(array $args, string $name): array
     {

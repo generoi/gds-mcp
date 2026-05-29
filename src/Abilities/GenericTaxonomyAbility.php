@@ -130,6 +130,9 @@ final class GenericTaxonomyAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private static function getAvailableTaxonomies(): array
     {
         $taxonomies = [];
@@ -172,6 +175,9 @@ final class GenericTaxonomyAbility
         return $restBase;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeList(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -186,6 +192,9 @@ final class GenericTaxonomyAbility
         return self::restResponseOrError($response);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeRead(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -201,6 +210,9 @@ final class GenericTaxonomyAbility
         return self::restResponseOrError($response);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeCreate(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -225,6 +237,9 @@ final class GenericTaxonomyAbility
         return $result;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -250,6 +265,9 @@ final class GenericTaxonomyAbility
         return $result;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function executeDelete(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);

@@ -85,6 +85,9 @@ final class ManageRevisionsAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function listRevisions(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -101,6 +104,9 @@ final class ManageRevisionsAbility
         return self::restResponseOrError($response);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function readRevision(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -118,6 +124,9 @@ final class ManageRevisionsAbility
         return self::restResponseOrError($response);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function restoreRevision(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);

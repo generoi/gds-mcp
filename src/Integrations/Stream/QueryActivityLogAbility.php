@@ -100,6 +100,9 @@ final class QueryActivityLogAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         if (! current_user_can('manage_options')) {

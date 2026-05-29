@@ -10,6 +10,8 @@ trait RestDelegation
 {
     /**
      * Make an internal GET request to the WordPress REST API.
+     *
+     * @param  array<string, mixed>  $params
      */
     protected static function restGet(string $route, array $params = []): WP_REST_Response
     {
@@ -27,6 +29,8 @@ trait RestDelegation
      * Gravity Forms (and several core endpoints) expect {@see WP_REST_Request::get_json_params()}
      * to be populated from a JSON document — use {@see WP_REST_Request::set_body()} with
      * {@see wp_json_encode()}, not {@see WP_REST_Request::set_body_params()} alone.
+     *
+     * @param  array<string, mixed>  $body
      */
     protected static function restPost(string $route, array $body = []): WP_REST_Response
     {
@@ -41,6 +45,8 @@ trait RestDelegation
      * Make an internal PUT request to the WordPress REST API.
      *
      * Same JSON body semantics as {@see self::restPost()}.
+     *
+     * @param  array<string, mixed>  $body
      */
     protected static function restPut(string $route, array $body = []): WP_REST_Response
     {
@@ -75,6 +81,8 @@ trait RestDelegation
      */
     /**
      * Deep-convert REST response data to arrays (handles nested stdClass).
+     *
+     * @return array<string, mixed>
      */
     protected static function restResponseData(WP_REST_Response $response): array
     {
@@ -86,6 +94,9 @@ trait RestDelegation
     /**
      * Remove fields that are large and useless for AI operations.
      * yoast_head alone can be 10-50k chars per item (full SEO meta HTML).
+     *
+     * @param  array<int|string, mixed>  $data
+     * @return array<int|string, mixed>
      */
     private static function stripBloatedFields(array $data): array
     {
@@ -142,6 +153,8 @@ trait RestDelegation
 
     /**
      * Return REST response data or convert error to WP_Error.
+     *
+     * @return array<string, mixed>|WP_Error
      */
     protected static function restResponseOrError(WP_REST_Response $response): array|WP_Error
     {
@@ -157,7 +170,8 @@ trait RestDelegation
      * it in a list response structure with total/pages.
      *
      * @param  string  $route  REST route (e.g. "/wp/v2/pages")
-     * @param  array  $extra  Additional item properties to merge in
+     * @param  array<string, mixed>  $extra  Additional item properties to merge in
+     * @return array<string, mixed>
      */
     protected static function getRestListOutputSchema(string $route, array $extra = []): array
     {
@@ -204,8 +218,9 @@ trait RestDelegation
      * Results are cached in a transient to avoid recomputing on every request.
      *
      * @param  string  $route  REST route (e.g. "/wp/v2/pages")
-     * @param  array  $extra  Additional properties to merge in
+     * @param  array<string, mixed>  $extra  Additional properties to merge in
      * @param  string  $method  HTTP method to pull args for (GET, POST, DELETE)
+     * @return array<string, mixed>
      */
     protected static function getRestInputSchema(string $route, array $extra = [], string $method = 'GET'): array
     {
@@ -287,6 +302,8 @@ trait RestDelegation
 
     /**
      * Get the output schema for a single REST item response.
+     *
+     * @return array<string, mixed>
      */
     protected static function getRestItemOutputSchema(string $route): array
     {

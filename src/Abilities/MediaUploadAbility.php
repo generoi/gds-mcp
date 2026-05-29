@@ -75,6 +75,9 @@ final class MediaUploadAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -108,6 +111,10 @@ final class MediaUploadAbility
         return $this->uploadFromBase64($input);
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>|WP_Error
+     */
     private function uploadFromUrl(array $input): array|WP_Error
     {
         $url = $input['url'];
@@ -143,6 +150,10 @@ final class MediaUploadAbility
         return $this->sideloadAndRespond($tmpFile, $filename, $input);
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>|WP_Error
+     */
     private function uploadFromBase64(array $input): array|WP_Error
     {
         if (empty($input['filename'])) {
@@ -187,6 +198,10 @@ final class MediaUploadAbility
         return $this->sideloadAndRespond($tmpFile, $filename, $input);
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>|WP_Error
+     */
     private function sideloadAndRespond(string $tmpFile, string $filename, array $input): array|WP_Error
     {
         $postParent = (int) ($input['post_parent'] ?? 0);
@@ -234,6 +249,9 @@ final class MediaUploadAbility
         }
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     private function formatResponse(int $attachmentId): array
     {
         $metadata = wp_get_attachment_metadata($attachmentId);

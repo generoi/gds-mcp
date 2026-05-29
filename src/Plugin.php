@@ -7,7 +7,7 @@ use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Factory;
 
 class Plugin
 {
-    protected static $instance;
+    protected static ?self $instance = null;
 
     public static function getInstance(): self
     {

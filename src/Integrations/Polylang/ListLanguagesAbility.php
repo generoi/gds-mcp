@@ -36,6 +36,9 @@ final class ListLanguagesAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $response = self::restGet('/pll/v1/languages', (array) ($input ?? []));

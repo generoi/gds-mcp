@@ -139,6 +139,9 @@ final class FeedsAbility
         ]);
     }
 
+    /**
+     * @return array<int, array<string, mixed>>|WP_Error
+     */
     public function listFeeds(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -165,6 +168,9 @@ final class FeedsAbility
         return json_decode(json_encode($feeds), true) ?: [];
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function readFeed(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -189,6 +195,9 @@ final class FeedsAbility
         return json_decode(json_encode($feed), true) ?: [];
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function createFeed(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -235,6 +244,9 @@ final class FeedsAbility
         return $this->reversible($result, 'delete-feed', ['feed_id' => $feedId], 'Delete the created feed');
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function updateFeed(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -300,6 +312,9 @@ final class FeedsAbility
         return $this->reversible($result, 'restore-feed', $undo, 'Revert the feed changes');
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function deleteFeed(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -336,6 +351,9 @@ final class FeedsAbility
             : $output;
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function duplicateFeed(mixed $input = []): array|WP_Error
     {
         if (! class_exists('GFAPI')) {

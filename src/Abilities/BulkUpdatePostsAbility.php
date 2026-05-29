@@ -101,6 +101,9 @@ final class BulkUpdatePostsAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -200,6 +203,7 @@ final class BulkUpdatePostsAbility
     /**
      * Resolve target posts from explicit IDs or query filters.
      *
+     * @param  array<string, mixed>  $input
      * @return \WP_Post[]|WP_Error
      */
     private static function resolveTargetPosts(array $input, int $limit): array|WP_Error

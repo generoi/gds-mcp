@@ -26,6 +26,8 @@ final class RestoreSnapshot
     /**
      * @param  mixed  $default  Filter default (ignored).
      * @param  array  $snapshot  ['kind' => string, 'data' => array, 'label' => string]
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>|WP_Error
      */
     public static function handle(mixed $default, array $snapshot): array|WP_Error
     {
@@ -53,6 +55,10 @@ final class RestoreSnapshot
         };
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function restorePost(array $data): array|WP_Error
     {
         $id = (int) ($data['id'] ?? 0);
@@ -94,6 +100,9 @@ final class RestoreSnapshot
      * and must not clobber meta it didn't write.
      *
      * data: { id, status?, meta_prev: { key => [values]|null } }
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
      */
     private static function restorePostPartial(array $data): array|WP_Error
     {
@@ -120,6 +129,10 @@ final class RestoreSnapshot
         return ['restored' => 'post', 'id' => $id];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function untrash(array $data): array|WP_Error
     {
         $id = (int) ($data['id'] ?? 0);
@@ -136,6 +149,10 @@ final class RestoreSnapshot
         return ['restored' => 'untrash', 'id' => $id];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function trash(array $data): array|WP_Error
     {
         $id = (int) ($data['id'] ?? 0);
@@ -149,6 +166,10 @@ final class RestoreSnapshot
         return ['restored' => 'trash', 'id' => $id];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function restoreTerm(array $data): array|WP_Error
     {
         $termId = (int) ($data['term_id'] ?? 0);
@@ -177,6 +198,7 @@ final class RestoreSnapshot
     }
 
     /**
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private static function deleteTerm(array $data): array
@@ -197,6 +219,9 @@ final class RestoreSnapshot
      * faithful undo with nothing to rewrite. Only if the id was reused since
      * the delete do we fall back to a new id and report the references that
      * still point at the old one (rather than blindly rewriting them).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
      */
     private static function recreateTerm(array $data): array|WP_Error
     {
@@ -275,6 +300,8 @@ final class RestoreSnapshot
      * Needed because the term was re-inserted under its original id via raw
      * SQL, and wp_set_object_terms() SKIPS integer term ids that term_exists()
      * can't yet resolve for a freshly raw-inserted term.
+     *
+     * @param  array<string, mixed>  $objectIds
      */
     private static function reattachObjects(int $ttId, array $objectIds): void
     {
@@ -300,6 +327,9 @@ final class RestoreSnapshot
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $meta
+     */
     private static function restoreTermMeta(int $termId, array $meta): void
     {
         foreach (array_keys(get_term_meta($termId)) as $key) {
@@ -347,6 +377,10 @@ final class RestoreSnapshot
         return $caveats;
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function restoreForm(array $data): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -376,6 +410,10 @@ final class RestoreSnapshot
         return ['restored' => 'form', 'id' => $id];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function deleteForm(array $data): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -389,6 +427,10 @@ final class RestoreSnapshot
         return ['restored' => 'delete-form', 'id' => $id];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function restoreFeed(array $data): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -423,6 +465,9 @@ final class RestoreSnapshot
      * feed id (rare) won't reconnect.
      *
      * data: { form_id, addon_slug, meta, is_active?, feed_order? }
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
      */
     private static function recreateFeed(array $data): array|WP_Error
     {
@@ -449,6 +494,9 @@ final class RestoreSnapshot
         ];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     */
     private static function restoreFeedProperties(int $feedId, array $data): void
     {
         if (array_key_exists('form_id', $data)) {
@@ -470,6 +518,9 @@ final class RestoreSnapshot
      *   srm:         { post_id }
      *   redirection: { item_id }
      *   yoast:       { post_id, prev_meta: string|null }
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
      */
     private static function restoreRedirect(array $data): array|WP_Error
     {
@@ -483,6 +534,9 @@ final class RestoreSnapshot
         };
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     private static function deleteRedirectionItem(int $itemId): array|WP_Error
     {
         if (! class_exists('Red_Item') || ! $itemId) {
@@ -496,6 +550,10 @@ final class RestoreSnapshot
         return ['restored' => 'delete-redirect', 'item_id' => $itemId];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function restoreYoastRedirect(array $data): array|WP_Error
     {
         $postId = (int) ($data['post_id'] ?? 0);
@@ -512,6 +570,10 @@ final class RestoreSnapshot
         return ['restored' => 'restore-redirect', 'post_id' => $postId];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function deleteFeed(array $data): array|WP_Error
     {
         if (! class_exists('GFAPI')) {
@@ -527,6 +589,9 @@ final class RestoreSnapshot
 
     /**
      * Re-apply each affected post's prior language and translation group.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
      */
     private static function restoreTranslationLink(array $data): array|WP_Error
     {
@@ -554,6 +619,10 @@ final class RestoreSnapshot
         return ['restored' => 'translation-link', 'count' => count($data['before'] ?? [])];
     }
 
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
     private static function restoreString(array $data): array|WP_Error
     {
         if (! class_exists('PLL_MO') || ! function_exists('PLL')) {
@@ -582,6 +651,7 @@ final class RestoreSnapshot
      *
      * data: { items: [ {kind, data}, ... ] }
      *
+     * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private static function bulk(array $data): array

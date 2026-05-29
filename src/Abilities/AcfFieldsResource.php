@@ -45,6 +45,9 @@ final class AcfFieldsResource
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -77,6 +80,9 @@ final class AcfFieldsResource
 
     /**
      * Format a single ACF field for the API response.
+     *
+     * @param  array<string, mixed>  $field
+     * @return array<string, mixed>
      */
     private static function formatField(array $field): array
     {
@@ -145,6 +151,9 @@ final class AcfFieldsResource
 
     /**
      * Extract post type names from ACF location rules.
+     *
+     * @param  array<int, array<int, array<string, mixed>>>  $locationGroups
+     * @return array<int, string>
      */
     private static function extractPostTypes(array $locationGroups): array
     {

@@ -103,6 +103,9 @@ final class MailSendAbility
         return current_user_can('manage_options');
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public static function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);

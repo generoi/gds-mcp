@@ -65,6 +65,10 @@ final class AbilitiesBridge
         }
     }
 
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
     public static function markWooCommerceAbilitiesPublic(array $args, string $name): array
     {
         if (str_starts_with($name, 'woocommerce/')) {
@@ -74,7 +78,7 @@ final class AbilitiesBridge
         return $args;
     }
 
-    public static function grantInProcessPermission(bool $allowed, string $method, $controller): bool
+    public static function grantInProcessPermission(bool $allowed, string $method, mixed $controller): bool
     {
         if ($allowed) {
             return true;

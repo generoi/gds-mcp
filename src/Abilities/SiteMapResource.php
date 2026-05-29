@@ -45,6 +45,9 @@ final class SiteMapResource
         ]);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function execute(mixed $input = []): array
     {
         $input = (array) ($input ?? []);
@@ -65,6 +68,8 @@ final class SiteMapResource
 
     /**
      * Get the primary navigation menu with hierarchical items.
+     *
+     * @return array<string, mixed>
      */
     private static function getPrimaryMenu(): ?array
     {
@@ -119,6 +124,9 @@ final class SiteMapResource
 
     /**
      * Build a hierarchical tree from flat menu items.
+     *
+     * @param  array<int, \stdClass>  $items  Menu items after wp_setup_nav_menu_item — carries dynamic $menu_item_parent / $title / $url / $type / $object / $object_id / $ID props that don't exist on WP_Post.
+     * @return list<array<string, mixed>>
      */
     private static function buildMenuTree(array $items, int $parentId = 0): array
     {
@@ -153,6 +161,9 @@ final class SiteMapResource
 
     /**
      * Collect all page post IDs referenced in the menu tree.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, int>
      */
     private static function collectMenuPageIds(array $items): array
     {
@@ -172,6 +183,9 @@ final class SiteMapResource
 
     /**
      * Get published pages not present in the menu.
+     *
+     * @param  array<int, int>  $excludeIds
+     * @return list<array<string, mixed>>
      */
     private static function getDisconnectedPages(array $excludeIds): array
     {

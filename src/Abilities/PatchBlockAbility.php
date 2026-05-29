@@ -124,6 +124,9 @@ final class PatchBlockAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -286,6 +289,10 @@ final class PatchBlockAbility
         return $postId;
     }
 
+    /**
+     * @param  array<string, mixed>  $input
+     * @return list<array<string, mixed>>|WP_Error
+     */
     private static function normalizeOperations(array $input): array|WP_Error
     {
         $operations = [];
@@ -330,6 +337,9 @@ final class PatchBlockAbility
         return $operations;
     }
 
+    /**
+     * @param  array<string, mixed>  $op
+     */
     private static function hasPatchFields(array $op): bool
     {
         return isset($op['attrs']) || isset($op['set_attrs']) || isset($op['remove_attrs'])
@@ -338,6 +348,10 @@ final class PatchBlockAbility
 
     // ── Patch ───────────────────────────────────────────────────────────────
 
+    /**
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @param  array<string, mixed>  $op
+     */
     private static function applyPatch(
         array &$blocks,
         string $blockName,
@@ -412,6 +426,10 @@ final class PatchBlockAbility
 
     // ── Insert ──────────────────────────────────────────────────────────────
 
+    /**
+     * @param  array<array<string, mixed>>  $blocks
+     * @param  array<string, mixed>  $op
+     */
     private static function applyInsert(
         array &$blocks,
         string $blockName,
@@ -459,6 +477,10 @@ final class PatchBlockAbility
         return $error;
     }
 
+    /**
+     * @param  array<array<string, mixed>>  $blocks
+     * @param  array<int, array<string, mixed>>  $newBlocks
+     */
     private static function insertSibling(
         array &$blocks,
         string $targetName,
@@ -496,6 +518,9 @@ final class PatchBlockAbility
 
     // ── Delete ──────────────────────────────────────────────────────────────
 
+    /**
+     * @param  array<int, array<string, mixed>>  $blocks
+     */
     private static function applyDelete(
         array &$blocks,
         string $blockName,
@@ -513,6 +538,9 @@ final class PatchBlockAbility
         return null;
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $blocks
+     */
     private static function deleteBlocks(
         array &$blocks,
         string $targetName,
@@ -558,6 +586,9 @@ final class PatchBlockAbility
      * block.json — these define an exact selector + HTML attribute mapping.
      *
      * Uses WP_HTML_Tag_Processor for safe, spec-compliant HTML modification.
+     *
+     * @param  array<string, mixed>  $block
+     * @param  array<string, mixed>  $oldAttrs
      */
     private static function syncAttrsToInnerHtml(array &$block, array $oldAttrs, string $blockName): void
     {
@@ -651,7 +682,7 @@ final class PatchBlockAbility
      * Supports: tag names (a, img, div), class selectors (.classname),
      * and tag.class combinations (a.wp-block-button__link).
      *
-     * @return array|null Query array for next_tag(), or null if unsupported.
+     * @return array<string, mixed>|null Query array for next_tag(), or null if unsupported.
      */
     private static function selectorToQuery(string $selector): ?array
     {
@@ -683,6 +714,9 @@ final class PatchBlockAbility
         return null;
     }
 
+    /**
+     * @return list<array<string, mixed>>
+     */
     private static function parseMarkup(string $markup): array
     {
         $blocks = parse_blocks($markup);
@@ -693,6 +727,9 @@ final class PatchBlockAbility
         ));
     }
 
+    /**
+     * @param  array<int, array<string, mixed>>  $blocks
+     */
     private static function walkBlocks(
         array &$blocks,
         string $targetName,

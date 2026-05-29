@@ -16,10 +16,11 @@ namespace GeneroWP\MCP\Undo;
 trait Reversible
 {
     /**
-     * @param  array  $result  The successful tool result to return.
+     * @param  array<string, mixed>  $result  The successful tool result to return.
      * @param  string  $kind  Restore-handler key — see {@see RestoreSnapshot}.
-     * @param  array  $data  Everything needed to restore the prior state.
+     * @param  array<string, mixed>  $data  Everything needed to restore the prior state.
      * @param  string  $label  Human description of what undoing this does.
+     * @return array<string, mixed>
      */
     protected function reversible(array $result, string $kind, array $data, string $label): array
     {

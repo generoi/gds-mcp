@@ -33,6 +33,9 @@ final class BlockCatalogResource
         ]);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function execute(mixed $input = []): array
     {
         $response = self::restGet('/wp/v2/block-types', is_array($input) ? $input : []);

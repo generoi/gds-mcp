@@ -7,6 +7,8 @@ trait BlockExamples
     /**
      * Attributes that distinguish structurally different block usages.
      * Color/decoration attributes are excluded to avoid near-duplicate examples.
+     *
+     * @var array<int, string>
      */
     private static array $structuralAttrs = ['className', 'layout', 'tagName', 'align', 'templateLock'];
 
@@ -151,6 +153,9 @@ trait BlockExamples
 
     /**
      * Recursively find all instances of a specific block within parsed blocks.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @return array<int, array<string, mixed>>
      */
     private static function findBlockInstances(array $blocks, string $blockName): array
     {
@@ -169,6 +174,10 @@ trait BlockExamples
 
     /**
      * Recursively collect deduplicated block examples grouped by block name.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
+     * @param  array<array<int, string>>  $examples
+     * @param  array<array<int, string>>  $fingerprints
      */
     private static function collectBlockExamples(array $blocks, array &$examples, array &$fingerprints = [], int $limit = 10, ?string $style = null): void
     {
@@ -205,6 +214,8 @@ trait BlockExamples
     /**
      * Compute a fingerprint that captures structural differences while ignoring
      * cosmetic attributes like colors.
+     *
+     * @param  array<string, mixed>  $block
      */
     private static function structuralFingerprint(array $block): string
     {
@@ -240,6 +251,8 @@ trait BlockExamples
 
     /**
      * Check if a parsed block has a specific style applied (is-style-{name} in className).
+     *
+     * @param  array<string, mixed>  $block
      */
     private static function blockHasStyle(array $block, string $style): bool
     {

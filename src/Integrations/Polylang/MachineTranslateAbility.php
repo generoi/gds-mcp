@@ -70,6 +70,9 @@ final class MachineTranslateAbility
         ]);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     public function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
@@ -122,6 +125,9 @@ final class MachineTranslateAbility
         return $this->translatePost($postId, $targetLang, $service, $language);
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     private function translatePost(int $postId, object $targetLang, object $service, string $language): array|WP_Error
     {
         $post = get_post($postId);
@@ -189,6 +195,9 @@ final class MachineTranslateAbility
         );
     }
 
+    /**
+     * @return array<string, mixed>|WP_Error
+     */
     private function translateStrings(string $group, object $targetLang, object $service, string $language): array|WP_Error
     {
         $sources = \PLL_Admin_Strings::get_strings();
