@@ -16,7 +16,6 @@ final class TaxonomyAbility
     use RestDelegation;
 
     public function __construct(
-        private readonly string $taxonomy,
         private readonly string $route,
         private readonly string $slug,
         private readonly string $label,
@@ -33,7 +32,7 @@ final class TaxonomyAbility
                 continue;
             }
 
-            $namespace = $tax->rest_namespace ?? 'wp/v2';
+            $namespace = $tax->rest_namespace ?: 'wp/v2';
             $route = "/{$namespace}/{$restBase}";
 
             $slug = preg_replace('/[^a-z0-9-]/', '-', strtolower($restBase));
@@ -43,7 +42,7 @@ final class TaxonomyAbility
                 continue;
             }
 
-            $ability = new self($tax->name, $route, $slug, $tax->labels->name);
+            $ability = new self($route, $slug, $tax->labels->name);
             $ability->register();
         }
     }

@@ -227,7 +227,7 @@ final class GetBlockAbility
     {
         $styles = [];
 
-        foreach (($blockType->styles ?? []) as $style) {
+        foreach ($blockType->styles as $style) {
             $styles[$style['name']] = [
                 'name' => $style['name'],
                 'label' => $style['label'] ?? $style['name'],

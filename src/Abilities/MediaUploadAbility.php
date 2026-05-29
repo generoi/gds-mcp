@@ -197,35 +197,41 @@ final class MediaUploadAbility
             'tmp_name' => $tmpFile,
         ];
 
-        $attachmentId = media_handle_sideload($fileArray, $postParent);
+        try {
+            $attachmentId = media_handle_sideload($fileArray, $postParent);
+            if (is_wp_error($attachmentId)) {
+                return $attachmentId;
+            }
 
-        // Clean up temp file if sideload failed.
-        if (is_wp_error($attachmentId)) {
-            @unlink($tmpFile);
+            // Set optional metadata.
+            if (! empty($input['alt_text'])) {
+                update_post_meta($attachmentId, '_wp_attachment_image_alt', sanitize_text_field($input['alt_text']));
+            }
 
-            return $attachmentId;
+            $postUpdate = ['ID' => $attachmentId];
+            if (! empty($input['title'])) {
+                $postUpdate['post_title'] = sanitize_text_field($input['title']);
+            }
+            if (! empty($input['caption'])) {
+                $postUpdate['post_excerpt'] = sanitize_text_field($input['caption']);
+            }
+            if (count($postUpdate) > 1) {
+                wp_update_post($postUpdate);
+            }
+
+            $result = $this->formatResponse($attachmentId);
+
+            // Undo a create by trashing the attachment (keeps the file on disk).
+            return $this->reversible($result, 'trash', ['id' => $attachmentId], 'Remove the uploaded file');
+        } finally {
+            // media_handle_sideload moves the temp file on success, so this is
+            // a no-op then. On failure or any unhandled exception this catches
+            // the leak. file_exists check skips the @-error for the common
+            // success path.
+            if (file_exists($tmpFile)) {
+                @unlink($tmpFile);
+            }
         }
-
-        // Set optional metadata.
-        if (! empty($input['alt_text'])) {
-            update_post_meta($attachmentId, '_wp_attachment_image_alt', sanitize_text_field($input['alt_text']));
-        }
-
-        $postUpdate = ['ID' => $attachmentId];
-        if (! empty($input['title'])) {
-            $postUpdate['post_title'] = sanitize_text_field($input['title']);
-        }
-        if (! empty($input['caption'])) {
-            $postUpdate['post_excerpt'] = sanitize_text_field($input['caption']);
-        }
-        if (count($postUpdate) > 1) {
-            wp_update_post($postUpdate);
-        }
-
-        $result = $this->formatResponse($attachmentId);
-
-        // Undo a create by trashing the attachment (keeps the file on disk).
-        return $this->reversible($result, 'trash', ['id' => $attachmentId], 'Remove the uploaded file');
     }
 
     private function formatResponse(int $attachmentId): array

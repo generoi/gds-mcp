@@ -1,0 +1,60 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
+
+parameters:
+    level: 5
+    paths:
+        - src
+
+    # Forward-protective patterns — won't match every run, and that's fine.
+    reportUnmatchedIgnoredErrors: false
+
+    bootstrapFiles:
+        # WP-CLI stubs — exposes WP_CLI::* to the analyser without dragging
+        # in WP-CLI at runtime.
+        - vendor/php-stubs/wp-cli-stubs/wp-cli-stubs.php
+
+    ignoreErrors:
+        # Third-party globals — all called behind function_exists /
+        # class_exists guards in src/. Listed here so the analyser doesn't
+        # demand a stub for code that's runtime-gated by feature detection.
+        - '#Function PLL not found\.#'
+        - '#GFAPI#'
+        # Polylang Pro functions + classes
+        - '#Function pll_[a-z_]+ not found\.#'
+        - '#Polylang_Pro#'
+        # Polylang internal classes (PLL_*) — class_exists-guarded.
+        - '#PLL_[A-Za-z_]+#'
+        # Advanced Custom Fields (acf_*, update_field, etc.)
+        - '#Function acf_[a-z_]+ not found\.#'
+        - '#Function update_field not found\.#'
+        # Stream plugin
+        - '#Function wp_stream_get_instance not found\.#'
+        # Safe Redirect Manager + Redirection plugin
+        - '#Function srm_[a-z_]+ not found\.#'
+        - '#Red_Item#'
+        # Acorn / Sage helpers (config(), CacheTags\* classes)
+        - '#Function config not found\.#'
+        - '#Genero\\Sage\\CacheTags\\#'
+        # WooCommerce — class_exists-guarded
+        - '#Automattic\\WooCommerce\\#'
+        # WP_Block_Type's $variations, $uses_context are runtime-registered
+        # by block.json — the WP stubs don't declare them but they exist.
+        - '#Access to an undefined property WP_Block_Type::\$(variations|uses_context)\.#'
+        # WP stubs type WP_Block_Type::$render_callback as always-callable;
+        # at runtime static blocks have it null. The guard + early-return
+        # is correct — PHPStan just can't see past the stub.
+        -
+          message: '#is_callable\(\) with callable\(\): mixed will always evaluate to true\.#'
+          path: src/Abilities/PatchBlockAbility.php
+        -
+          message: '#Unreachable statement - code above always terminates\.#'
+          path: src/Abilities/PatchBlockAbility.php
+        # selectorToQuery is called from syncAttrsToInnerHtml which PHPStan
+        # considers dead per the render_callback stub above — same root cause.
+        -
+          message: '#Static method GeneroWP\\MCP\\Abilities\\PatchBlockAbility::selectorToQuery\(\) is unused\.#'
+          path: src/Abilities/PatchBlockAbility.php
+
+    excludePaths:
+        - vendor/*
