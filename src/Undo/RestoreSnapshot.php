@@ -354,9 +354,20 @@ final class RestoreSnapshot
         if (! $id || ! $form) {
             return new WP_Error('restore_failed', 'Missing form snapshot.');
         }
+        // GFAPI::update_form returns false on validation/save failure without
+        // raising a WP_Error — checking only is_wp_error() lets a silent
+        // failure flow through as "Undone", which is what surfaced the bug
+        // "undo said done but the field didn't change". Treat false as an
+        // explicit failure so we don't lie to the user.
         $result = \GFAPI::update_form($form, $id);
         if (is_wp_error($result)) {
             return $result;
+        }
+        if ($result === false) {
+            return new WP_Error(
+                'restore_failed',
+                "Failed to restore form {$id}: GFAPI::update_form returned false (validation rejected or save failed).",
+            );
         }
 
         return ['restored' => 'form', 'id' => $id];
@@ -388,6 +399,12 @@ final class RestoreSnapshot
         $result = \GFAPI::update_feed($feedId, $meta);
         if (is_wp_error($result)) {
             return $result;
+        }
+        if ($result === false) {
+            return new WP_Error(
+                'restore_failed',
+                "Failed to restore feed {$feedId}: GFAPI::update_feed returned false.",
+            );
         }
 
         // update_feed only restores meta; the form binding / active state /
