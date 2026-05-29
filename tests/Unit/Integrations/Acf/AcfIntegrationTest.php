@@ -101,7 +101,7 @@ class AcfIntegrationTest extends WP_UnitTestCase
         $postId = self::factory()->post->create(['post_status' => 'publish']);
         update_field('read_test_field', 'hello from acf', $postId);
 
-        $posts = new PostTypeAbility('post', '/wp/v2/posts', 'posts', 'Posts');
+        $posts = new PostTypeAbility('/wp/v2/posts', 'posts', 'Posts');
         $result = $posts->executeRead(['id' => $postId]);
 
         $this->assertIsArray($result);

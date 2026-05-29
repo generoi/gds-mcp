@@ -19,7 +19,7 @@ class DeleteAbilitiesTest extends TestCase
     public function test_delete_post_trashes_by_default(): void
     {
         $postId = $this->createPost(['post_status' => 'publish', 'post_title' => 'To Trash']);
-        $ability = new PostTypeAbility('post', '/wp/v2/posts', 'posts', 'Posts');
+        $ability = new PostTypeAbility('/wp/v2/posts', 'posts', 'Posts');
 
         $result = $ability->executeDelete(['id' => $postId]);
 
@@ -30,7 +30,7 @@ class DeleteAbilitiesTest extends TestCase
     public function test_delete_post_force_deletes(): void
     {
         $postId = $this->createPost(['post_status' => 'publish']);
-        $ability = new PostTypeAbility('post', '/wp/v2/posts', 'posts', 'Posts');
+        $ability = new PostTypeAbility('/wp/v2/posts', 'posts', 'Posts');
 
         $result = $ability->executeDelete(['id' => $postId, 'force' => true]);
 
@@ -41,7 +41,7 @@ class DeleteAbilitiesTest extends TestCase
 
     public function test_delete_post_returns_error_for_missing(): void
     {
-        $ability = new PostTypeAbility('post', '/wp/v2/posts', 'posts', 'Posts');
+        $ability = new PostTypeAbility('/wp/v2/posts', 'posts', 'Posts');
         $result = $ability->executeDelete(['id' => 999999]);
         $this->assertWPError($result);
     }
@@ -51,7 +51,7 @@ class DeleteAbilitiesTest extends TestCase
     public function test_delete_term(): void
     {
         $term = wp_insert_term('Deletable', 'category');
-        $ability = new TaxonomyAbility('category', '/wp/v2/categories', 'categories', 'Categories');
+        $ability = new TaxonomyAbility('/wp/v2/categories', 'categories', 'Categories');
 
         $result = $ability->executeDelete(['id' => $term['term_id'], 'force' => true]);
 
@@ -71,7 +71,7 @@ class DeleteAbilitiesTest extends TestCase
             'menu-item-status' => 'publish',
         ]);
 
-        $ability = new PostTypeAbility('nav_menu_item', '/wp/v2/menu-items', 'menu-items', 'Menu Items');
+        $ability = new PostTypeAbility('/wp/v2/menu-items', 'menu-items', 'Menu Items');
         $result = $ability->executeDelete(['id' => $itemId, 'force' => true]);
 
         $this->assertIsArray($result);

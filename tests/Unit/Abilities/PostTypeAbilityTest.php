@@ -13,7 +13,7 @@ class PostTypeAbilityTest extends TestCase
     {
         parent::setUp();
         wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
-        $this->pages = new PostTypeAbility('page', '/wp/v2/pages', 'pages', 'Pages');
+        $this->pages = new PostTypeAbility('/wp/v2/pages', 'pages', 'Pages');
 
         // Initialize REST server. Set Polylang current language to prevent
         // null errors in Polylang Pro's REST response filter during tests.
