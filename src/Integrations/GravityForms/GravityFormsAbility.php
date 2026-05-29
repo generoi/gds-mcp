@@ -23,9 +23,16 @@ final class GravityFormsAbility
 
         HelpAbility::registerAbility('gds/forms-list', [
             'label' => 'List Forms',
-            'description' => 'List Gravity Forms. Delegates to GF REST API v2.',
+            'description' => 'List Gravity Forms. Defaults to active, non-trashed forms — pass `include_inactive` and/or `include_trashed` to widen the listing when the user is hunting for a form they "remember was here" (e.g. a disabled or trashed contact form).',
             'category' => 'gds-content',
-            'input_schema' => self::getRestInputSchema('/gf/v2/forms'),
+            'input_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'include_inactive' => ['type' => 'boolean', 'description' => 'Include inactive forms (status off). Default false.'],
+                    'include_trashed' => ['type' => 'boolean', 'description' => 'Include trashed forms. Default false.'],
+                ],
+                'additionalProperties' => true,
+            ],
             'output_schema' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => true]],
             'permission_callback' => '__return_true',
             'execute_callback' => [$instance, 'listForms'],
@@ -199,8 +206,20 @@ final class GravityFormsAbility
             return new WP_Error('gf_not_available', 'Gravity Forms is not active.');
         }
 
-        // GFAPI::get_forms(active, trash) — default returns only active, non-trashed.
-        $forms = \GFAPI::get_forms(true, false);
+        $input = (array) ($input ?? []);
+        // GFAPI::get_forms($active, $trash):
+        //   $active = null  → ignore active filter (returns active + inactive)
+        //   $active = true  → active only
+        //   $trash  = true  → trashed only
+        //   $trash  = false → not trashed
+        //   $trash  = null  → ignore trash filter (both)
+        $includeInactive = ! empty($input['include_inactive']);
+        $includeTrashed = ! empty($input['include_trashed']);
+
+        $active = $includeInactive ? null : true;
+        $trash = $includeTrashed ? null : false;
+
+        $forms = \GFAPI::get_forms($active, $trash);
 
         $result = [];
         foreach ($forms as $form) {
@@ -383,7 +402,55 @@ final class GravityFormsAbility
         // ($current was read before the merge, so capture is free).
         $saved = json_decode(json_encode(\GFAPI::get_form($id)), true) ?: [];
 
-        return $this->reversible($saved, 'restore-form', ['id' => $id, 'form' => $current], "Revert form \"{$saved['title']}\" to its previous state");
+        // Make consecutive undo entries for the same form distinguishable —
+        // two updates on a single form would otherwise both read "Revert form
+        // 'X' to its previous state", leaving the user no way to tell which
+        // snapshot is which when undoing from the chat UI.
+        $deltaSummary = self::summarizeUpdateDelta($current, $saved);
+        $label = "Revert form \"{$saved['title']}\" to its previous state";
+        if ($deltaSummary !== '') {
+            $label .= " ({$deltaSummary})";
+        }
+
+        return $this->reversible($saved, 'restore-form', ['id' => $id, 'form' => $current], $label);
+    }
+
+    /**
+     * Short human-readable summary of what changed in a forms-update, used to
+     * disambiguate audit-log labels when the user updates the same form
+     * multiple times. Picks the most informative dimension(s) — field count
+     * changes lead; otherwise list which top-level keys differ.
+     */
+    private static function summarizeUpdateDelta(array $before, array $after): string
+    {
+        $bits = [];
+
+        $bf = count(is_array($before['fields'] ?? null) ? $before['fields'] : []);
+        $af = count(is_array($after['fields'] ?? null) ? $after['fields'] : []);
+        if ($bf !== $af) {
+            $bits[] = "fields: {$bf} → {$af}";
+        }
+
+        $watched = ['title', 'description', 'button', 'confirmations', 'notifications'];
+        $changed = [];
+        foreach ($watched as $key) {
+            $b = $before[$key] ?? null;
+            $a = $after[$key] ?? null;
+            if ($b !== $a && json_encode($b) !== json_encode($a)) {
+                $changed[] = $key;
+            }
+        }
+        if ($changed) {
+            $bits[] = 'changed: '.implode(', ', $changed);
+        }
+
+        // Same field count + same watched keys: at least timestamp it so two
+        // identical-shape edits still produce different labels.
+        if (! $bits) {
+            $bits[] = 'saved '.gmdate('H:i:s').' UTC';
+        }
+
+        return implode(', ', $bits);
     }
 
     /**
