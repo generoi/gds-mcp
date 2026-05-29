@@ -407,6 +407,18 @@ final class WebFetchAbility
      */
     private static function applyXPath(string $html, string $xpathExpr): string|WP_Error
     {
+        // Hard cap on the XPath length to deflect runaway expressions
+        // (pathological backtracking can lock the libxml evaluator). Real
+        // selectors are short — 1000 chars is generous. Also reject
+        // expressions with stacked descendant axes (`//.//.//`) which are
+        // the cheapest way to make libxml spend O(n^k) time on a small page.
+        if (strlen($xpathExpr) > 1000) {
+            return new WP_Error('xpath_too_long', 'XPath expression exceeds 1000 chars; tighten the selector.');
+        }
+        if (preg_match('#//\.//.*//\.//#', $xpathExpr)) {
+            return new WP_Error('xpath_pathological', 'XPath uses stacked descendant axes that can DoS the evaluator; rewrite the selector.');
+        }
+
         $dom = new \DOMDocument;
         $prev = libxml_use_internal_errors(true);
         // LIBXML_NONET + LIBXML_NOENT = 0 blocks network fetches and entity
