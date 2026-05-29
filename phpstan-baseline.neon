@@ -1,0 +1,2341 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\AcfFieldsResource\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/AcfFieldsResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\AcfFieldsResource\:\:extractPostTypes\(\) has parameter \$locationGroups with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/AcfFieldsResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\AcfFieldsResource\:\:extractPostTypes\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/AcfFieldsResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\AcfFieldsResource\:\:formatField\(\) has parameter \$field with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/AcfFieldsResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\AcfFieldsResource\:\:formatField\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/AcfFieldsResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BlockCatalogResource\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BlockCatalogResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BulkUpdatePostsAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BulkUpdatePostsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BulkUpdatePostsAbility\:\:resolveTargetPosts\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BulkUpdatePostsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BulkUpdatePostsAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BulkUpdatePostsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BulkUpdatePostsAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BulkUpdatePostsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\BulkUpdatePostsAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/BulkUpdatePostsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\CapabilityPolicy\:\:applyCapability\(\) has parameter \$args with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/CapabilityPolicy.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\CapabilityPolicy\:\:applyCapability\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/CapabilityPolicy.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\DuplicatePostAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/DuplicatePostAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:enrichPostUrls\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:enrichPostUrls\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:executeCreate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:executeDelete\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:executeList\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:executeRead\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:executeUpdate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:getAvailableTypes\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericPostTypeAbility\:\:updateAcfFields\(\) has parameter \$fields with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericPostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:executeCreate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:executeDelete\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:executeList\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:executeRead\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:executeUpdate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:getAvailableTaxonomies\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GenericTaxonomyAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GenericTaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:blockHasStyle\(\) has parameter \$block with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:collectBlockExamples\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:collectBlockExamples\(\) has parameter \$examples with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:collectBlockExamples\(\) has parameter \$fingerprints with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:findBlockInstances\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:findBlockInstances\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:formatBlockDetail\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:getBlockStyles\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:structuralFingerprint\(\) has parameter \$block with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Property GeneroWP\\MCP\\Abilities\\GetBlockAbility\:\:\$structuralAttrs type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/GetBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\HelpAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/HelpAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\HelpAbility\:\:registerAbility\(\) has parameter \$args with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/HelpAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MailSendAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MailSendAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:listRevisions\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:readRevision\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:restoreRevision\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ManageRevisionsAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ManageRevisionsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:formatResponse\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:sideloadAndRespond\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:sideloadAndRespond\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:uploadFromBase64\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:uploadFromBase64\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:uploadFromUrl\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\MediaUploadAbility\:\:uploadFromUrl\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/MediaUploadAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:buildTree\(\) has parameter \$items with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:buildTree\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:executeCreate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:executeDelete\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:executeList\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:executeMove\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:executeRead\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:executeReorder\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:executeUpdate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromArchive\(\) has parameter \$linked with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromArchive\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromPost\(\) has parameter \$linked with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromPost\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromTaxonomy\(\) has parameter \$linked with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromTaxonomy\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromUrl\(\) has parameter \$linked with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedFromUrl\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedToRestFields\(\) has parameter \$linked with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:linkedToRestFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:optionalFieldsFromInput\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:optionalFieldsFromInput\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\NavMenuItemsAbility\:\:transformItem\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/NavMenuItemsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:applyDelete\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:applyInsert\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:applyInsert\(\) has parameter \$op with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:applyPatch\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:applyPatch\(\) has parameter \$op with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:deleteBlocks\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:hasPatchFields\(\) has parameter \$op with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:insertSibling\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:insertSibling\(\) has parameter \$newBlocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:normalizeOperations\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:normalizeOperations\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:parseMarkup\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:selectorToQuery\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:syncAttrsToInnerHtml\(\) has parameter \$block with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:syncAttrsToInnerHtml\(\) has parameter \$oldAttrs with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PatchBlockAbility\:\:walkBlocks\(\) has parameter \$blocks with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PatchBlockAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:executeCreate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:executeDelete\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:executeList\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:executeRead\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:executeUpdate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:normalizeInput\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:normalizeInput\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\PostTypeAbility\:\:updateAcfFields\(\) has parameter \$fields with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/PostTypeAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:buildMenuTree\(\) has parameter \$items with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:buildMenuTree\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:collectMenuPageIds\(\) has parameter \$items with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:collectMenuPageIds\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:getDisconnectedPages\(\) has parameter \$excludeIds with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:getDisconnectedPages\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\SiteMapResource\:\:getPrimaryMenu\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/SiteMapResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:executeCreate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:executeDelete\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:executeList\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:executeRead\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:executeUpdate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\TaxonomyAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/TaxonomyAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\ThemeJsonResource\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/ThemeJsonResource.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\WebFetchAbility\:\:addUserApprovedHosts\(\) has parameter \$hosts with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/WebFetchAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\WebFetchAbility\:\:addUserApprovedHosts\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/WebFetchAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\WebFetchAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/WebFetchAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\WebFetchAbility\:\:finalUrl\(\) has parameter \$response with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/WebFetchAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\WebFetchAbility\:\:hostMatchesAllowlist\(\) has parameter \$allowlist with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/WebFetchAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Abilities\\WebFetchAbility\:\:maybeSkipApproval\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Abilities/WebFetchAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\CacheTags\\ClearCacheAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/CacheTags/ClearCacheAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:createFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:deleteFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:duplicateFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:listFeeds\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:readFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\FeedsAbility\:\:updateFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/FeedsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:createForm\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:destructiveFieldChanges\(\) has parameter \$newFields with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:destructiveFieldChanges\(\) has parameter \$oldFields with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:listEntries\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:listForms\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:normalizeFormPayload\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:normalizeFormPayload\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:readForm\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:summarizeUpdateDelta\(\) has parameter \$after with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:summarizeUpdateDelta\(\) has parameter \$before with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\GravityForms\\GravityFormsAbility\:\:updateForm\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/GravityForms/GravityFormsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTermTranslationAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTermTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTermTranslationAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTermTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTermTranslationAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTermTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTermTranslationAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTermTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\CreateTranslationAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/CreateTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\LinkTranslationsAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/LinkTranslationsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\LinkTranslationsAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/LinkTranslationsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\LinkTranslationsAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/LinkTranslationsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\LinkTranslationsAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/LinkTranslationsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:getRestInputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:getRestInputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:getRestItemOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:getRestListOutputSchema\(\) has parameter \$extra with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:getRestListOutputSchema\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:restGet\(\) has parameter \$params with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:restPost\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:restPut\(\) has parameter \$body with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:restResponseData\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:restResponseOrError\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:stripBloatedFields\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListLanguagesAbility\:\:stripBloatedFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListLanguagesAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\ListStringTranslationsAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/ListStringTranslationsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\MachineTranslateAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/MachineTranslateAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\MachineTranslateAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/MachineTranslateAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\MachineTranslateAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/MachineTranslateAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\MachineTranslateAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/MachineTranslateAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\MachineTranslateAbility\:\:translatePost\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/MachineTranslateAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\MachineTranslateAbility\:\:translateStrings\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/MachineTranslateAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\TranslationAuditAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/TranslationAuditAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\UpdateStringTranslationAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/UpdateStringTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\UpdateStringTranslationAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/UpdateStringTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\UpdateStringTranslationAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/UpdateStringTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Polylang\\UpdateStringTranslationAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Polylang/UpdateStringTranslationAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\ManageRedirectsAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/ManageRedirectsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\ManageRedirectsAbility\:\:handleCreate\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/ManageRedirectsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\ManageRedirectsAbility\:\:handleCreate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/ManageRedirectsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\ManageRedirectsAbility\:\:reversible\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/ManageRedirectsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\ManageRedirectsAbility\:\:reversible\(\) has parameter \$result with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/ManageRedirectsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\ManageRedirectsAbility\:\:reversible\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/ManageRedirectsAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\Redirection\:\:create\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/Redirection.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\Redirection\:\:create\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/Redirection.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\Redirection\:\:list\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/Redirection.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\SafeRedirectManager\:\:create\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/SafeRedirectManager.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\SafeRedirectManager\:\:create\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/SafeRedirectManager.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\SafeRedirectManager\:\:list\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/SafeRedirectManager.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\YoastRedirects\:\:create\(\) has parameter \$input with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/YoastRedirects.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\YoastRedirects\:\:create\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/YoastRedirects.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Redirects\\Providers\\YoastRedirects\:\:list\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Redirects/Providers/YoastRedirects.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\Stream\\QueryActivityLogAbility\:\:execute\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/Stream/QueryActivityLogAbility.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\WooCommerce\\AbilitiesBridge\:\:grantInProcessPermission\(\) has parameter \$controller with no type specified\.$#'
+			identifier: missingType.parameter
+			count: 1
+			path: src/Integrations/WooCommerce/AbilitiesBridge.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\WooCommerce\\AbilitiesBridge\:\:markWooCommerceAbilitiesPublic\(\) has parameter \$args with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/WooCommerce/AbilitiesBridge.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Integrations\\WooCommerce\\AbilitiesBridge\:\:markWooCommerceAbilitiesPublic\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Integrations/WooCommerce/AbilitiesBridge.php
+
+		-
+			message: '#^Property GeneroWP\\MCP\\Plugin\:\:\$instance has no type specified\.$#'
+			identifier: missingType.property
+			count: 1
+			path: src/Plugin.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:bulk\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:deleteFeed\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:deleteFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:deleteForm\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:deleteForm\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:deleteRedirectionItem\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:deleteTerm\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:handle\(\) has parameter \$snapshot with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:handle\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:reattachObjects\(\) has parameter \$objectIds with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:recreateFeed\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:recreateFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:recreateTerm\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:recreateTerm\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreFeed\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreFeed\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreFeedProperties\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreForm\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreForm\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restorePost\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restorePost\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restorePostPartial\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restorePostPartial\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreRedirect\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreRedirect\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreString\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreString\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreTerm\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreTerm\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreTermMeta\(\) has parameter \$meta with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreTranslationLink\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreTranslationLink\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreYoastRedirect\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:restoreYoastRedirect\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:trash\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:trash\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:untrash\(\) has parameter \$data with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\RestoreSnapshot\:\:untrash\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/RestoreSnapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:partialPost\(\) has parameter \$metaKeys with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:partialPost\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:postFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:postTerms\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:termFields\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:termForRecreate\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:translationLinkBefore\(\) has parameter \$postIds with no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
+
+		-
+			message: '#^Method GeneroWP\\MCP\\Undo\\Snapshot\:\:translationLinkBefore\(\) return type has no value type specified in iterable type array\.$#'
+			identifier: missingType.iterableValue
+			count: 1
+			path: src/Undo/Snapshot.php
