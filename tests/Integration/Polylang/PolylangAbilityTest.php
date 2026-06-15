@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Tests\Integration\Polylang;
 
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Data;
 use WP_Syntex\Polylang_Pro\Modules\Machine_Translation\Factory;
 
 /**
@@ -240,5 +241,46 @@ class PolylangAbilityTest extends AbilityTestCase
         } else {
             $this->assertFalse(wp_has_ability('gds/translations-machine'));
         }
+    }
+
+    /**
+     * Regression: MachineTranslateAbility::translatePost() must hand WP_Post
+     * objects (not int IDs) to PLL_Export_Data_From_Posts::send_to_export().
+     *
+     * Passing an int ID makes Polylang's ACF block dispatcher call
+     * `new Blocks($post->ID)` where `$post` is the int, so `->ID` resolves to
+     * null and Polylang Pro throws a TypeError before DeepL is ever reached.
+     *
+     * This drives the same export path the ability uses, so it reproduces the
+     * crash independently of whether a DeepL service is configured.
+     */
+    public function test_machine_translate_export_accepts_post_object(): void
+    {
+        if (! class_exists(Factory::class)) {
+            $this->markTestSkipped('Polylang Pro machine translation module not available.');
+        }
+        if (! class_exists(\PLL_Export_Data_From_Posts::class) || ! class_exists(\PLL_Export_Container::class)) {
+            $this->markTestSkipped('Polylang export classes not available.');
+        }
+        $this->requireLanguage('fi');
+
+        // Post must contain blocks so Polylang's ACF dispatcher walks them.
+        $postId = $this->createPost([
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'post_title' => 'Block Source',
+            'post_content' => "<!-- wp:paragraph -->\n<p>Hello world.</p>\n<!-- /wp:paragraph -->",
+        ]);
+        $post = get_post($postId);
+        $targetLang = PLL()->model->get_language('fi');
+
+        $dataClass = Data::class;
+
+        // The fix: passing the WP_Post object must not throw.
+        $container = new \PLL_Export_Container($dataClass);
+        $exporter = new \PLL_Export_Data_From_Posts(PLL()->model);
+        $exporter->send_to_export($container, [$post], $targetLang);
+
+        $this->assertInstanceOf(\PLL_Export_Container::class, $container);
     }
 }
