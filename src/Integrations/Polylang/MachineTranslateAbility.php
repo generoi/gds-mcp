@@ -135,6 +135,13 @@ final class MachineTranslateAbility
             return new WP_Error('post_not_found', 'Source post not found.');
         }
 
+        // Polylang's post-translation save path calls get_default_post_to_edit(),
+        // which lives in wp-admin/includes/post.php and is not loaded in the
+        // REST/MCP/CLI context this ability runs in.
+        if (! function_exists('get_default_post_to_edit')) {
+            require_once ABSPATH.'wp-admin/includes/post.php';
+        }
+
         // Determine the undo branch BEFORE translating: if a translation in the
         // target language already exists it will be OVERWRITTEN (revert it via a
         // full post snapshot); otherwise a new post is created (undo by trashing
@@ -144,7 +151,10 @@ final class MachineTranslateAbility
 
         $container = new \PLL_Export_Container(Data::class);
         $exporter = new \PLL_Export_Data_From_Posts(\PLL()->model);
-        $exporter->send_to_export($container, [$postId], $targetLang);
+        // send_to_export() expects WP_Post[], not IDs. Passing an int ID makes
+        // Polylang's ACF block dispatcher call `new Blocks($post->ID)` where
+        // `$post` is the int and `->ID` resolves to null, throwing a TypeError.
+        $exporter->send_to_export($container, [$post], $targetLang);
 
         $processor = new Processor(\PLL(), $service->get_client());
         $result = $processor->translate($container);
