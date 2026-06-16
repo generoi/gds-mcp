@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Concerns\ResolvesPostId;
 use GeneroWP\MCP\Undo\Reversible;
 use GeneroWP\MCP\Undo\Snapshot;
 use WP_Block_Type_Registry;
@@ -10,6 +11,7 @@ use WP_HTML_Tag_Processor;
 
 final class PatchBlockAbility
 {
+    use ResolvesPostId;
     use Reversible;
 
     private const OPERATION_FIELDS = [
@@ -195,9 +197,11 @@ final class PatchBlockAbility
         // Capture the post's full state before overwriting its content.
         $before = Snapshot::postFields($postId);
 
+        // wp_update_post() runs its data through wp_unslash(), so serialized
+        // block content with backslashes is corrupted unless slashed first.
         $updateResult = wp_update_post([
             'ID' => $postId,
-            'post_content' => $newContent,
+            'post_content' => wp_slash($newContent),
         ], true);
 
         if (is_wp_error($updateResult)) {
@@ -223,73 +227,6 @@ final class PatchBlockAbility
     }
 
     /**
-     * Resolve the input id to a numeric post ID.
-     *
-     * Accepts an integer post id, or a composite template id "{theme}//{slug}"
-     * as exposed by /wp/v2/templates and /wp/v2/template-parts.
-     *
-     * Polylang Pro suffixes translated wp_template_part / wp_block slugs with
-     * "___{lang}" (e.g. "footer", "footer___sv"), so each slug is unique
-     * per language and no language disambiguation is needed at this layer.
-     */
-    private static function resolvePostId(mixed $rawId): int|WP_Error
-    {
-        if (is_string($rawId) && str_contains($rawId, '//')) {
-            return self::resolveTemplateCompositeId($rawId);
-        }
-
-        return (int) ($rawId ?? 0);
-    }
-
-    private static function resolveTemplateCompositeId(string $compositeId): int|WP_Error
-    {
-        [$theme, $slug] = array_pad(explode('//', $compositeId, 2), 2, '');
-        if ($theme === '' || $slug === '') {
-            return new WP_Error('invalid_template_id', "Template id '{$compositeId}' is not in the form '{theme}//{slug}'.");
-        }
-
-        $themeTerm = get_term_by('name', $theme, 'wp_theme');
-        if (! $themeTerm) {
-            return new WP_Error(
-                'template_not_customized',
-                "Template '{$compositeId}' has no DB post — theme '{$theme}' has no wp_theme term, "
-                .'so the template is file-based. Edit the theme file directly or customize via the Site Editor first.',
-            );
-        }
-
-        // Direct DB query: WP_Query / get_posts goes through Polylang's
-        // pre_get_posts filter for translated post types (wp_template_part is
-        // auto-registered as translated by Polylang Pro), which would hide
-        // language variants outside the current request language. The composite
-        // id already encodes the language via the "___{lang}" slug suffix, so
-        // we look up by post_name + wp_theme term and skip lang filtering.
-        global $wpdb;
-        $postId = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->term_relationships} tr ON tr.object_id = p.ID
-             INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_taxonomy_id = tr.term_taxonomy_id
-             WHERE p.post_name = %s
-               AND p.post_type IN ('wp_template', 'wp_template_part')
-               AND p.post_status IN ('publish', 'auto-draft', 'draft')
-               AND tt.term_id = %d
-             ORDER BY FIELD(p.post_status, 'publish', 'draft', 'auto-draft'), p.ID DESC
-             LIMIT 1",
-            $slug,
-            $themeTerm->term_id,
-        ));
-
-        if (! $postId) {
-            return new WP_Error(
-                'template_not_customized',
-                "Template '{$compositeId}' has no DB post — it's file-based. "
-                .'Customize it in the Site Editor first to create an override, or edit the theme file directly.',
-            );
-        }
-
-        return $postId;
-    }
-
-    /**
      * @param  array<string, mixed>  $input
      * @return list<array<string, mixed>>|WP_Error
      */
@@ -310,6 +247,9 @@ final class PatchBlockAbility
                 if ($action === 'insert' && empty($op['markup'])) {
                     return new WP_Error('missing_markup', "operations[{$i}] insert requires markup.");
                 }
+                if ($error = self::guardOccurrenceZeroContent($op, "operations[{$i}]")) {
+                    return $error;
+                }
                 $operations[] = $op;
             }
         }
@@ -323,6 +263,9 @@ final class PatchBlockAbility
             }
             if ($action === 'insert' && empty($singleOp['markup'])) {
                 return new WP_Error('missing_markup', 'Insert requires markup.');
+            }
+            if ($error = self::guardOccurrenceZeroContent($singleOp, 'patch')) {
+                return $error;
             }
 
             if ($action !== 'patch' || self::hasPatchFields($singleOp)) {
@@ -344,6 +287,35 @@ final class PatchBlockAbility
     {
         return isset($op['attrs']) || isset($op['set_attrs']) || isset($op['remove_attrs'])
             || isset($op['inner_html']) || isset($op['inner_blocks']);
+    }
+
+    /**
+     * Guard the destructive "broadcast" footgun: occurrence:0 (ALL) combined
+     * with inner_html / inner_blocks would write the SAME content into every
+     * matching block — e.g. occurrence:0 inner_html on core/paragraph overwrites
+     * every paragraph on the page with identical text. attrs/set_attrs/
+     * remove_attrs with occurrence:0 stay allowed — applying one attribute to
+     * all matches is a legitimate bulk edit.
+     *
+     * @param  array<string, mixed>  $op
+     */
+    private static function guardOccurrenceZeroContent(array $op, string $where): ?WP_Error
+    {
+        $action = $op['action'] ?? 'patch';
+        if ($action !== 'patch' || (int) ($op['occurrence'] ?? 1) !== 0) {
+            return null;
+        }
+
+        if (isset($op['inner_html']) || isset($op['inner_blocks'])) {
+            return new WP_Error(
+                'occurrence_zero_content',
+                "{$where}: occurrence:0 (ALL) cannot be combined with inner_html/inner_blocks — "
+                .'it would overwrite every matching block with identical content. Target a specific '
+                .'occurrence (1-based), or to change text wherever it appears use the gds/content-replace tool.',
+            );
+        }
+
+        return null;
     }
 
     // ── Patch ───────────────────────────────────────────────────────────────

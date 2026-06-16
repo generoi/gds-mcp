@@ -103,6 +103,7 @@ class Plugin
         Abilities\BlockCatalogResource::register();
         Abilities\GetBlockAbility::register();
         Abilities\PatchBlockAbility::register();
+        Abilities\ReplaceContentAbility::register();
         Abilities\SiteMapResource::register();
         Abilities\ThemeJsonResource::register();
         Abilities\WebFetchAbility::register();
