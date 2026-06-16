@@ -142,6 +142,39 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
         }
     }
 
+    public function test_occurrence_zero_with_inner_html_is_rejected(): void
+    {
+        // Regression: occurrence:0 + inner_html would broadcast identical text
+        // into every matching block (the "all paragraphs overwritten" footgun).
+        $before = get_post($this->postId)->post_content;
+
+        $result = (new PatchBlockAbility)->execute([
+            'id' => $this->postId,
+            'block_name' => 'core/paragraph',
+            'occurrence' => 0,
+            'inner_html' => '<p>Broadcast</p>',
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('occurrence_zero_content', $result->get_error_code());
+
+        // Nothing was written.
+        $this->assertSame($before, get_post($this->postId)->post_content);
+    }
+
+    public function test_occurrence_zero_with_inner_blocks_is_rejected(): void
+    {
+        $result = (new PatchBlockAbility)->execute([
+            'id' => $this->postId,
+            'block_name' => 'core/group',
+            'occurrence' => 0,
+            'inner_blocks' => '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->',
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('occurrence_zero_content', $result->get_error_code());
+    }
+
     public function test_nested_block_search(): void
     {
         $result = (new PatchBlockAbility)->execute([
