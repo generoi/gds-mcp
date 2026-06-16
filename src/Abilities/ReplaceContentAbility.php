@@ -5,6 +5,7 @@ namespace GeneroWP\MCP\Abilities;
 use GeneroWP\MCP\Concerns\ResolvesPostId;
 use GeneroWP\MCP\Undo\Reversible;
 use GeneroWP\MCP\Undo\Snapshot;
+use GeneroWP\MCP\Undo\Snapshots\PostFieldsSnapshot;
 use WP_Error;
 
 /**
@@ -147,11 +148,10 @@ final class ReplaceContentAbility
             return new WP_Error('missing_id', 'id is required.');
         }
 
-        $search = (string) ($input['search'] ?? '');
-        if ($search === '') {
+        $o = self::options($input);
+        if ($o['search'] === '') {
             return new WP_Error('missing_search', 'search must be a non-empty string.');
         }
-        $replace = (string) ($input['replace'] ?? '');
 
         $post = get_post($postId);
         if (! $post) {
@@ -161,78 +161,40 @@ final class ReplaceContentAbility
             return new WP_Error('forbidden', 'You do not have permission to edit this post.', ['status' => 403]);
         }
 
-        $wholeWord = (bool) ($input['whole_word'] ?? false);
-        $caseSensitive = (bool) ($input['case_sensitive'] ?? true);
-        $includeAttrs = (bool) ($input['include_attrs'] ?? false);
-        $dryRun = (bool) ($input['dry_run'] ?? false);
+        $plan = self::planPost($post, $o);
 
-        $ctx = self::buildContext($search, $replace, $wholeWord, $caseSensitive, $includeAttrs);
-
-        $blocks = parse_blocks($post->post_content);
-        self::walk($blocks, $ctx);
-
-        $count = $ctx['count'];
-        $samples = $ctx['samples'];
-
-        // expect_count guard: never write if the caller's expectation is wrong.
-        if (array_key_exists('expect_count', $input) && $input['expect_count'] !== null) {
-            $expected = (int) $input['expect_count'];
-            if ($count !== $expected) {
-                return new WP_Error(
-                    'unexpected_count',
-                    "Found {$count} match(es) but expected {$expected} — nothing was changed. "
-                    .'Re-run with dry_run to inspect the matches, then adjust search/whole_word or expect_count.',
-                    ['expected' => $expected, 'actual' => $count, 'samples' => $samples],
-                );
-            }
+        if ($error = self::expectCountError($input, $plan['count'], ['samples' => $plan['samples']])) {
+            return $error;
         }
-
-        if ($dryRun || $count === 0) {
-            return [
-                'success' => true,
-                'id' => $postId,
-                'search' => $search,
-                'replace' => $replace,
-                'replaced_count' => $count,
-                'dry_run' => $dryRun,
-                'samples' => $samples,
-            ];
-        }
-
-        $newContent = serialize_blocks($blocks);
-        $before = Snapshot::postFields($postId);
-
-        // wp_update_post() runs its data through wp_unslash(), so content with
-        // backslashes (code blocks, paths, escapes) is corrupted unless slashed.
-        $updateResult = wp_update_post([
-            'ID' => $postId,
-            'post_content' => wp_slash($newContent),
-        ], true);
-
-        if (is_wp_error($updateResult)) {
-            return $updateResult;
-        }
-
-        $updated = get_post($postId);
 
         $result = [
             'success' => true,
             'id' => $postId,
-            'search' => $search,
-            'replace' => $replace,
-            'replaced_count' => $count,
-            'dry_run' => false,
-            'samples' => $samples,
-            'content' => $updated->post_content,
-            'modified' => $updated->post_modified_gmt,
+            'search' => $o['search'],
+            'replace' => $o['replace'],
+            'replaced_count' => $plan['count'],
+            'dry_run' => $o['dryRun'],
+            'samples' => $plan['samples'],
         ];
 
-        if ($before) {
+        if ($o['dryRun'] || $plan['count'] === 0) {
+            return $result;
+        }
+
+        $write = self::writePost($postId, $plan['content']);
+        if (is_wp_error($write)) {
+            return $write;
+        }
+
+        $result['content'] = $write['updated']->post_content;
+        $result['modified'] = $write['updated']->post_modified_gmt;
+
+        if ($write['before']) {
             $result = $this->reversible(
                 $result,
                 'restore-post',
-                $before,
-                "Revert replacing \"{$search}\" with \"{$replace}\" in \"{$post->post_title}\"",
+                $write['before'],
+                "Revert replacing \"{$o['search']}\" with \"{$o['replace']}\" in \"{$post->post_title}\"",
             );
         }
 
@@ -250,11 +212,10 @@ final class ReplaceContentAbility
      */
     private function executeMulti(array $input): array|WP_Error
     {
-        $search = (string) ($input['search'] ?? '');
-        if ($search === '') {
+        $o = self::options($input);
+        if ($o['search'] === '') {
             return new WP_Error('missing_search', 'search must be a non-empty string.');
         }
-        $replace = (string) ($input['replace'] ?? '');
 
         $rawIds = [];
         if (isset($input['id']) && $input['id'] !== '') {
@@ -266,11 +227,6 @@ final class ReplaceContentAbility
         if (empty($rawIds)) {
             return new WP_Error('missing_id', 'Provide id or a non-empty ids array.');
         }
-
-        $wholeWord = (bool) ($input['whole_word'] ?? false);
-        $caseSensitive = (bool) ($input['case_sensitive'] ?? true);
-        $includeAttrs = (bool) ($input['include_attrs'] ?? false);
-        $dryRun = (bool) ($input['dry_run'] ?? false);
 
         // ── Plan pass: count + render new content per post, write nothing.
         $plans = [];
@@ -303,45 +259,29 @@ final class ReplaceContentAbility
                 continue;
             }
 
-            $ctx = self::buildContext($search, $replace, $wholeWord, $caseSensitive, $includeAttrs);
-            $blocks = parse_blocks($post->post_content);
-            self::walk($blocks, $ctx);
-
-            $count = $ctx['count'];
-            $total += $count;
-            self::mergeSamples($samples, $ctx['samples'], "#{$postId}");
-
-            $plans[$postId] = [
-                'count' => $count,
-                'content' => $count > 0 ? serialize_blocks($blocks) : null,
-            ];
-            $perPost[] = ['id' => $postId, 'title' => $post->post_title, 'matched' => $count];
+            $plan = self::planPost($post, $o);
+            $total += $plan['count'];
+            self::mergeSamples($samples, $plan['samples'], "#{$postId}");
+            $plans[$postId] = $plan;
+            $perPost[] = ['id' => $postId, 'title' => $post->post_title, 'matched' => $plan['count']];
         }
 
         // ── Combined expect_count guard — abort before any write.
-        if (array_key_exists('expect_count', $input) && $input['expect_count'] !== null) {
-            $expected = (int) $input['expect_count'];
-            if ($total !== $expected) {
-                return new WP_Error(
-                    'unexpected_count',
-                    "Found {$total} match(es) across ".count($plans)." post(s) but expected {$expected} — "
-                    .'nothing was changed. Re-run with dry_run to inspect the matches.',
-                    ['expected' => $expected, 'actual' => $total, 'samples' => $samples, 'posts' => $perPost],
-                );
-            }
+        if ($error = self::expectCountError($input, $total, ['samples' => $samples, 'posts' => $perPost])) {
+            return $error;
         }
 
         $result = [
             'success' => true,
-            'search' => $search,
-            'replace' => $replace,
+            'search' => $o['search'],
+            'replace' => $o['replace'],
             'replaced_count' => $total,
-            'dry_run' => $dryRun,
+            'dry_run' => $o['dryRun'],
             'posts' => $perPost,
             'samples' => $samples,
         ];
 
-        if ($dryRun || $total === 0) {
+        if ($o['dryRun'] || $total === 0) {
             return $result;
         }
 
@@ -354,13 +294,11 @@ final class ReplaceContentAbility
                 continue;
             }
 
-            $before = Snapshot::postFields($postId);
-            $updateResult = wp_update_post(['ID' => $postId, 'post_content' => wp_slash($plan['content'])], true);
-
-            if (is_wp_error($updateResult)) {
+            $write = self::writePost($postId, $plan['content']);
+            if (is_wp_error($write)) {
                 foreach ($perPost as &$row) {
                     if ($row['id'] === $postId) {
-                        $row['error'] = 'update failed: '.$updateResult->get_error_message();
+                        $row['error'] = 'update failed: '.$write->get_error_message();
                         unset($row['matched']);
                     }
                 }
@@ -369,8 +307,8 @@ final class ReplaceContentAbility
                 continue;
             }
 
-            if ($before) {
-                $undoItems[] = ['kind' => 'restore-post', 'data' => $before];
+            if ($write['before']) {
+                $undoItems[] = ['kind' => 'restore-post', 'data' => $write['before']];
             }
             $written++;
         }
@@ -390,12 +328,100 @@ final class ReplaceContentAbility
                     $result,
                     'bulk',
                     ['items' => $undoItems],
-                    sprintf('Revert replacing "%s" with "%s" across %d post(s)', $search, $replace, $written),
+                    sprintf('Revert replacing "%s" with "%s" across %d post(s)', $o['search'], $o['replace'], $written),
                 );
             }
         }
 
         return $result;
+    }
+
+    /**
+     * Normalise the matching options out of the raw input.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array{search: string, replace: string, wholeWord: bool, caseSensitive: bool, includeAttrs: bool, dryRun: bool}
+     */
+    private static function options(array $input): array
+    {
+        return [
+            'search' => (string) ($input['search'] ?? ''),
+            'replace' => (string) ($input['replace'] ?? ''),
+            'wholeWord' => (bool) ($input['whole_word'] ?? false),
+            'caseSensitive' => (bool) ($input['case_sensitive'] ?? true),
+            'includeAttrs' => (bool) ($input['include_attrs'] ?? false),
+            'dryRun' => (bool) ($input['dry_run'] ?? false),
+        ];
+    }
+
+    /**
+     * Plan a replacement for one post: count matches, gather context samples,
+     * and render the new content. Writes nothing.
+     *
+     * @param  array{search: string, replace: string, wholeWord: bool, caseSensitive: bool, includeAttrs: bool, dryRun: bool}  $o
+     * @return array{count: int, samples: list<string>, content: string}
+     */
+    private static function planPost(\WP_Post $post, array $o): array
+    {
+        $ctx = self::buildContext($o['search'], $o['replace'], $o['wholeWord'], $o['caseSensitive'], $o['includeAttrs']);
+        $blocks = parse_blocks($post->post_content);
+        self::walk($blocks, $ctx);
+
+        return [
+            'count' => $ctx['count'],
+            'samples' => $ctx['samples'],
+            'content' => $ctx['count'] > 0 ? serialize_blocks($blocks) : '',
+        ];
+    }
+
+    /**
+     * Snapshot then write a post's content. wp_update_post() runs its data
+     * through wp_unslash(), so content with backslashes (code blocks, paths,
+     * escapes) is corrupted unless slashed first.
+     *
+     * @return array{before: PostFieldsSnapshot|null, updated: \WP_Post}|WP_Error
+     */
+    private static function writePost(int $postId, string $content): array|WP_Error
+    {
+        $before = Snapshot::postFields($postId);
+
+        $updateResult = wp_update_post(['ID' => $postId, 'post_content' => wp_slash($content)], true);
+        if (is_wp_error($updateResult)) {
+            return $updateResult;
+        }
+
+        $updated = get_post($postId);
+        if (! $updated) {
+            return new WP_Error('post_not_found', 'Post vanished during update.');
+        }
+
+        return ['before' => $before, 'updated' => $updated];
+    }
+
+    /**
+     * The expect_count guard: returns an error (so the caller writes nothing)
+     * when an expectation was given and the real count differs from it.
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $extra  Extra data to attach (samples, posts).
+     */
+    private static function expectCountError(array $input, int $actual, array $extra = []): ?WP_Error
+    {
+        if (! array_key_exists('expect_count', $input) || $input['expect_count'] === null) {
+            return null;
+        }
+
+        $expected = (int) $input['expect_count'];
+        if ($actual === $expected) {
+            return null;
+        }
+
+        return new WP_Error(
+            'unexpected_count',
+            "Found {$actual} match(es) but expected {$expected} — nothing was changed. "
+            .'Re-run with dry_run to inspect the matches.',
+            ['expected' => $expected, 'actual' => $actual] + $extra,
+        );
     }
 
     /**
@@ -460,8 +486,9 @@ final class ReplaceContentAbility
                         $block['innerContent'][$i] = self::replaceInTextNodes($chunk, $ctx);
                     }
                 }
-                // Keep innerHTML consistent with the (replaced) string chunks.
-                $block['innerHTML'] = implode('', array_filter($block['innerContent'], 'is_string'));
+                // serialize_blocks() reads innerContent, not innerHTML — no
+                // need to keep innerHTML in sync; $blocks is serialized and
+                // discarded immediately after this pass.
             } elseif (isset($block['innerHTML']) && $block['innerHTML'] !== '') {
                 // Freeform / classic content has innerHTML but no chunked innerContent.
                 $new = self::replaceInTextNodes($block['innerHTML'], $ctx);
