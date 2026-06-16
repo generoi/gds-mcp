@@ -197,9 +197,11 @@ final class PatchBlockAbility
         // Capture the post's full state before overwriting its content.
         $before = Snapshot::postFields($postId);
 
+        // wp_update_post() runs its data through wp_unslash(), so serialized
+        // block content with backslashes is corrupted unless slashed first.
         $updateResult = wp_update_post([
             'ID' => $postId,
-            'post_content' => $newContent,
+            'post_content' => wp_slash($newContent),
         ], true);
 
         if (is_wp_error($updateResult)) {

@@ -38,8 +38,33 @@ class ReplaceContentAbilityTest extends WP_UnitTestCase
         $this->assertFalse($result['dry_run']);
 
         $content = get_post($this->postId)->post_content;
-        $this->assertStringNotContainsString('ilman ', $content);
         $this->assertSame(4, substr_count($content, 'Vilman'));
+        $this->assertStringContainsString('Pintakäsittelyä Vilman epävarmuutta', $content);
+        $this->assertStringContainsString('jatkuu Vilman katkoksia', $content);
+        // The nested (group) paragraph was reached too.
+        $this->assertStringContainsString('esikäsittely Vilman maalausta', $content);
+    }
+
+    public function test_preserves_backslashes_in_content(): void
+    {
+        // wp_update_post() unslashes its input; the ability must wp_slash() so
+        // backslashes (code blocks, paths) survive the write.
+        wp_update_post([
+            'ID' => $this->postId,
+            'post_content' => wp_slash('<!-- wp:paragraph --><p>Path C:\Users\test needs ilman.</p><!-- /wp:paragraph -->'),
+        ]);
+
+        $result = (new ReplaceContentAbility)->execute([
+            'id' => $this->postId,
+            'search' => 'ilman',
+            'replace' => 'Vilman',
+        ]);
+
+        $this->assertSame(1, $result['replaced_count']);
+
+        $content = get_post($this->postId)->post_content;
+        $this->assertStringContainsString('C:\Users\test', $content);
+        $this->assertStringContainsString('Vilman', $content);
     }
 
     public function test_whole_word_does_not_match_inside_longer_words(): void

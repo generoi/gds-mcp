@@ -202,9 +202,11 @@ final class ReplaceContentAbility
         $newContent = serialize_blocks($blocks);
         $before = Snapshot::postFields($postId);
 
+        // wp_update_post() runs its data through wp_unslash(), so content with
+        // backslashes (code blocks, paths, escapes) is corrupted unless slashed.
         $updateResult = wp_update_post([
             'ID' => $postId,
-            'post_content' => $newContent,
+            'post_content' => wp_slash($newContent),
         ], true);
 
         if (is_wp_error($updateResult)) {
@@ -353,7 +355,7 @@ final class ReplaceContentAbility
             }
 
             $before = Snapshot::postFields($postId);
-            $updateResult = wp_update_post(['ID' => $postId, 'post_content' => $plan['content']], true);
+            $updateResult = wp_update_post(['ID' => $postId, 'post_content' => wp_slash($plan['content'])], true);
 
             if (is_wp_error($updateResult)) {
                 foreach ($perPost as &$row) {
