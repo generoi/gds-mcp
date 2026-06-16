@@ -130,6 +130,7 @@ final class MachineTranslateAbility
      */
     private function translatePost(int $postId, object $targetLang, object $service, string $language): array|WP_Error
     {
+        $polylang = \PLL();
         $post = get_post($postId);
         if (! $post) {
             return new WP_Error('post_not_found', 'Source post not found.');
@@ -150,13 +151,21 @@ final class MachineTranslateAbility
         $beforeSnapshot = $existingId ? Snapshot::postFields((int) $existingId) : null;
 
         $container = new \PLL_Export_Container(Data::class);
-        $exporter = new \PLL_Export_Data_From_Posts(\PLL()->model);
+        $exporter = new \PLL_Export_Data_From_Posts($polylang->model);
         // send_to_export() expects WP_Post[], not IDs. Passing an int ID makes
         // Polylang's ACF block dispatcher call `new Blocks($post->ID)` where
         // `$post` is the int and `->ID` resolves to null, throwing a TypeError.
-        $exporter->send_to_export($container, [$post], $targetLang);
+        //
+        // When a translation already exists, Polylang's default export skips the
+        // source post (it treats "already translated" as "nothing to export").
+        // That breaks re-runs and overwrites — include_translated_items keeps the
+        // source post in the export so block attributes and content are re-sent.
+        $exporter->send_to_export($container, [$post], $targetLang, [
+            'include_translated_items' => true,
+        ]);
 
-        $processor = new Processor(\PLL(), $service->get_client());
+        // Processor::__construct() takes PLL_Base by reference; assign PLL() first.
+        $processor = new Processor($polylang, $service->get_client());
         $result = $processor->translate($container);
 
         if ($result->has_errors()) {
@@ -210,6 +219,7 @@ final class MachineTranslateAbility
      */
     private function translateStrings(string $group, object $targetLang, object $service, string $language): array|WP_Error
     {
+        $polylang = \PLL();
         $sources = \PLL_Admin_Strings::get_strings();
 
         if ($group !== '') {
@@ -244,10 +254,11 @@ final class MachineTranslateAbility
         }
 
         $container = new \PLL_Export_Container(Data::class);
-        $exporter = new \PLL_Export_Data_From_Strings(\PLL()->model);
+        $exporter = new \PLL_Export_Data_From_Strings($polylang->model);
         $exporter->send_to_export($container, $sources, $targetLang, true);
 
-        $processor = new Processor(\PLL(), $service->get_client());
+        // Processor::__construct() takes PLL_Base by reference; assign PLL() first.
+        $processor = new Processor($polylang, $service->get_client());
         $result = $processor->translate($container);
 
         if ($result->has_errors()) {

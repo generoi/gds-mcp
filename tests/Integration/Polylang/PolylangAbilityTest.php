@@ -283,4 +283,54 @@ class PolylangAbilityTest extends AbilityTestCase
 
         $this->assertInstanceOf(\PLL_Export_Container::class, $container);
     }
+
+    /**
+     * Regression: re-translating a post that already has a target-language
+     * translation must still export the source post (block attributes, content).
+     *
+     * Polylang's send_to_export() drops posts that already have a translation
+     * unless include_translated_items is true — MachineTranslateAbility passes it.
+     */
+    public function test_machine_translate_export_includes_source_when_translation_exists(): void
+    {
+        if (! class_exists(\PLL_Export_Data_From_Posts::class) || ! class_exists(\PLL_Export_Container::class)) {
+            $this->markTestSkipped('Polylang export classes not available.');
+        }
+        $this->requireLanguage('fi');
+
+        $sourceId = $this->createPost([
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'post_title' => 'English source',
+            'post_content' => "<!-- wp:paragraph -->\n<p>Block content.</p>\n<!-- /wp:paragraph -->",
+        ]);
+        pll_set_post_language($sourceId, 'en');
+
+        $translationId = $this->createPost([
+            'post_type' => 'post',
+            'post_status' => 'draft',
+            'post_title' => 'Finnish draft',
+        ]);
+        pll_set_post_language($translationId, 'fi');
+        pll_save_post_translations([
+            'en' => $sourceId,
+            'fi' => $translationId,
+        ]);
+
+        $sourcePost = get_post($sourceId);
+        $targetLang = PLL()->model->get_language('fi');
+        $exporter = new \PLL_Export_Data_From_Posts(PLL()->model);
+
+        $withoutFlag = new \PLL_Export_Container(Data::class);
+        $exporter->send_to_export($withoutFlag, [$sourcePost], $targetLang);
+        $this->assertSame(0, count($withoutFlag), 'Default export skips source when translation exists.');
+
+        $withFlag = new \PLL_Export_Container(Data::class);
+        $exporter->send_to_export($withFlag, [$sourcePost], $targetLang, [
+            'include_translated_items' => true,
+        ]);
+        $this->assertGreaterThan(0, count($withFlag), 'include_translated_items must keep the source post in export.');
+
+        wp_delete_post($translationId, true);
+    }
 }
