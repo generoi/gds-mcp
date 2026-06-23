@@ -24,11 +24,11 @@ final class ThemeJsonResource
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
-                'uri' => 'theme://json',
-                'mimeType' => 'application/json',
                 'mcp' => [
                     'type' => 'resource',
                     'public' => true,
+                    'uri' => 'theme://json',
+                    'mimeType' => 'application/json',
                 ],
                 'annotations' => [
                     'readonly' => true,

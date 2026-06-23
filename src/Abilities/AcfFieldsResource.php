@@ -30,11 +30,11 @@ final class AcfFieldsResource
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
-                'uri' => 'acf://fields',
-                'mimeType' => 'application/json',
                 'mcp' => [
                     'type' => 'resource',
                     'public' => true,
+                    'uri' => 'acf://fields',
+                    'mimeType' => 'application/json',
                 ],
                 'annotations' => [
                     'readonly' => true,
