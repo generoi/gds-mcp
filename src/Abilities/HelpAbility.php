@@ -47,7 +47,9 @@ final class HelpAbility
             'label' => $args['label'] ?? '',
             'description' => $args['description'] ?? '',
             'type' => $type,
-            'uri' => $meta['uri'] ?? null,
+            // Resource URI lives at meta.mcp.uri (canonical, per WordPress/mcp-adapter
+            // >= 0.5.0). Fall back to the deprecated top-level meta.uri for safety.
+            'uri' => $meta['mcp']['uri'] ?? $meta['uri'] ?? null,
         ];
     }
 

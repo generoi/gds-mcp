@@ -25,9 +25,12 @@ final class BlockCatalogResource
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
-                'uri' => 'blocks://catalog',
-                'mimeType' => 'application/json',
-                'mcp' => ['type' => 'resource', 'public' => true],
+                'mcp' => [
+                    'type' => 'resource',
+                    'public' => true,
+                    'uri' => 'blocks://catalog',
+                    'mimeType' => 'application/json',
+                ],
                 'annotations' => ['readonly' => true, 'destructive' => false, 'idempotent' => true],
             ],
         ]);

@@ -30,11 +30,11 @@ final class SiteMapResource
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
-                'uri' => 'site://pages',
-                'mimeType' => 'application/json',
                 'mcp' => [
                     'type' => 'resource',
                     'public' => true,
+                    'uri' => 'site://pages',
+                    'mimeType' => 'application/json',
                 ],
                 'annotations' => [
                     'readonly' => true,
