@@ -24,6 +24,13 @@ final class ThemeJsonResource
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
+                // Provide the resource URI/mimeType in BOTH locations for adapter
+                // cross-compatibility: WordPress/mcp-adapter >= 0.5.0 reads meta.mcp.uri
+                // (canonical), while < 0.5.0 reads only top-level meta.uri. Keeping both
+                // works on every adapter version without triggering 0.5.0 deprecation
+                // notices (the mcp.* copy is matched first).
+                'uri' => 'theme://json',
+                'mimeType' => 'application/json',
                 'mcp' => [
                     'type' => 'resource',
                     'public' => true,
