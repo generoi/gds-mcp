@@ -30,11 +30,12 @@ final class AcfFieldsResource
             'permission_callback' => '__return_true',
             'execute_callback' => [new self, 'execute'],
             'meta' => [
-                // Provide the resource URI/mimeType in BOTH locations for adapter
-                // cross-compatibility: WordPress/mcp-adapter >= 0.5.0 reads meta.mcp.uri
-                // (canonical), while < 0.5.0 reads only top-level meta.uri. Keeping both
+                // Provide uri/mimeType/annotations in BOTH locations for adapter
+                // cross-compatibility: WordPress/mcp-adapter >= 0.5.0 reads meta.mcp.*
+                // (canonical), while < 0.5.0 reads only top-level meta.*. Keeping both
                 // works on every adapter version without triggering 0.5.0 deprecation
-                // notices (the mcp.* copy is matched first).
+                // notices (the mcp.* copy is matched first). The top-level annotations
+                // copy is also what RegisterAbilityAsMcpTool still reads in 0.5.0.
                 'uri' => 'acf://fields',
                 'mimeType' => 'application/json',
                 'mcp' => [
@@ -42,6 +43,11 @@ final class AcfFieldsResource
                     'public' => true,
                     'uri' => 'acf://fields',
                     'mimeType' => 'application/json',
+                    'annotations' => [
+                        'readonly' => true,
+                        'destructive' => false,
+                        'idempotent' => true,
+                    ],
                 ],
                 'annotations' => [
                     'readonly' => true,
