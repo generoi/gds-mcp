@@ -168,6 +168,22 @@ curl https://example.com/.well-known/oauth-protected-resource/wp-json/mcp/mcp-ad
 claude mcp add -s local --transport http my-site https://example.com/wp-json/mcp/mcp-adapter-default-server
 ```
 
+#### Connecting, for the person doing it
+
+Send them this, with the URL filled in. They need nothing from you but a WordPress account on the site.
+
+1. In Claude, open **Settings → Connectors** and choose **Add custom connector** (in Claude Desktop it's the same screen; on claude.ai it's under your profile menu).
+2. Paste the site's MCP URL — `https://example.com/wp-json/mcp/mcp-adapter-default-server` — give it a name, and click **Add**.
+3. Claude opens the site in a browser window. Sign in with your normal WordPress account if you are not already, then check the page that appears: it names the application asking, the account you are signed in as, and where it will send you back. Click **Allow access**.
+4. That's it — the connector shows as connected, and Claude can read and write whatever your account can, including drafts and private posts.
+
+Two things worth knowing:
+
+- **You are connecting as yourself.** Claude gets exactly your permissions, no more. If you cannot edit something in wp-admin, Claude cannot either.
+- **You can disconnect at any time**, from either end: remove the connector in Claude, or open **Users → MCP connections** in wp-admin and click **Revoke**. Revoking takes effect immediately.
+
+If step 3 says your account is not allowed to connect, ask a site administrator — connecting needs the same permission as editing posts.
+
 **Requirements**
 
 - HTTPS (localhost and `local`/`development` environments are exempt)
