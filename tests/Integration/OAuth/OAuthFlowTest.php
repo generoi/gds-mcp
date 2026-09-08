@@ -256,9 +256,35 @@ class OAuthFlowTest extends TestCase
         wp_set_current_user(0);
 
         $response = $this->authorize($client['client_id'], '', ['code_challenge_method' => 'plain']);
+        $location = (string) $response->location();
 
-        $this->assertStringContainsString('wp-login.php', (string) $response->location());
-        $this->assertStringNotContainsString('claude.ai', (string) $response->location());
+        // The visitor goes to this site's login screen. The callback appears
+        // only as a parameter of the address they return to afterwards, which
+        // is this site's own authorization endpoint.
+        $this->assertStringContainsString('wp-login.php', $location);
+        $this->assertSame(
+            wp_parse_url(home_url(), PHP_URL_HOST),
+            wp_parse_url($location, PHP_URL_HOST),
+            'An anonymous visitor must never be redirected off-site'
+        );
+    }
+
+    public function test_login_redirect_carries_the_request_but_not_the_consent(): void
+    {
+        $client = $this->registerClient();
+        wp_set_current_user(0);
+
+        $response = $this->authorize($client['client_id'], $this->challenge('v'));
+        parse_str((string) wp_parse_url((string) $response->location(), PHP_URL_QUERY), $login);
+        parse_str((string) wp_parse_url((string) ($login['redirect_to'] ?? ''), PHP_URL_QUERY), $back);
+
+        // Everything needed to resume, so a consent POST with an expired
+        // cookie is not stranded — but not the consent itself, or logging in
+        // would authorize without ever showing the form.
+        $this->assertSame($client['client_id'], $back['client_id'] ?? null);
+        $this->assertSame($this->resource, $back['resource'] ?? null);
+        $this->assertArrayHasKey('code_challenge', $back);
+        $this->assertArrayNotHasKey('consent', $back);
     }
 
     public function test_consent_screen_refuses_to_be_framed(): void
@@ -345,6 +371,34 @@ class OAuthFlowTest extends TestCase
         $this->assertSame($this->editor, BearerAuth::authenticate(false));
     }
 
+    public function test_query_variable_sites_advertise_a_document_per_server(): void
+    {
+        // Their REST URLs all share the path core gives them, /index.php, so
+        // the path cannot tell two servers apart and the route has to.
+        $one = 'https://example.org/index.php?rest_route=/mcp/server-one';
+        $two = 'https://example.org/index.php?rest_route=/mcp/server-two';
+        add_filter('gds-mcp/oauth_resources', fn (): array => [$one, $two]);
+
+        $this->assertStringEndsWith('/mcp/server-one', Metadata::protectedResourceUrl($one));
+        $this->assertStringEndsWith('/mcp/server-two', Metadata::protectedResourceUrl($two));
+
+        // …and the document that URL points at has to resolve.
+        $document = $this->capture(fn () => Metadata::serveProtectedResource('/mcp/server-two'))->data();
+        $this->assertSame($two, $document['resource']);
+    }
+
+    public function test_a_rest_base_that_is_only_the_site_path_matches_nothing(): void
+    {
+        // A filtered-away prefix on a subdirectory install leaves a base of
+        // /blog, which is a prefix of every path on the site — it must not be
+        // treated as the REST API.
+        $this->moveSiteTo('https://example.org/blog');
+        add_filter('rest_url', fn (): string => 'https://example.org/blog/', 30);
+
+        $this->assertNull(Metadata::restBase());
+        $this->assertNull(Metadata::routeForPath('/blog/wp-admin/admin-ajax.php'));
+    }
+
     public function test_plain_permalinks_have_no_rest_path_to_match(): void
     {
         $tokens = $this->connect();
@@ -360,17 +414,22 @@ class OAuthFlowTest extends TestCase
         $this->assertFalse(BearerAuth::authenticate(false));
     }
 
-    public function test_a_legacy_client_index_survives_the_next_registration(): void
+    public function test_registration_that_is_still_being_used_is_not_pruned(): void
     {
-        // The index used to be a plain list of ids. Entries of unknown vintage
-        // are not a reason to delete a registration somebody is connected
-        // through.
-        $client = $this->registerClient();
-        update_option('gds_mcp_oauth_clients', [$client['client_id']]);
+        $stale = $this->registerClient();
+        $live = $this->registerClient();
+
+        // Backdate both past the pruning horizon, then use one of them.
+        update_option('gds_mcp_oauth_clients', [
+            $stale['client_id'] => time() - (400 * DAY_IN_SECONDS),
+            $live['client_id'] => time() - (400 * DAY_IN_SECONDS),
+        ]);
+        Clients::touch($live['client_id']);
 
         $this->registerClient();
 
-        $this->assertNotNull(Clients::get($client['client_id']));
+        $this->assertNull(Clients::get($stale['client_id']));
+        $this->assertNotNull(Clients::get($live['client_id']), 'A client in use must survive pruning');
     }
 
     public function test_audience_check_is_not_skipped_by_an_earlier_successful_filter(): void
@@ -543,6 +602,60 @@ class OAuthFlowTest extends TestCase
         );
     }
 
+    public function test_losing_the_capability_stops_an_existing_token(): void
+    {
+        $tokens = $this->connect();
+        $this->assertSame($this->editor, $this->authenticate($tokens['access_token']));
+
+        // Someone who leaves is demoted rather than deleted, so their posts
+        // keep an author. Their connection must not outlive the demotion.
+        (new \WP_User($this->editor))->set_role('subscriber');
+
+        $this->authenticate($tokens['access_token']);
+        $GLOBALS['wp']->query_vars['rest_route'] = Metadata::routeOf($this->resource);
+        $refused = BearerAuth::enforceAudience(null);
+
+        $this->assertInstanceOf(\WP_Error::class, $refused);
+        $this->assertSame(401, $refused->get_error_data()['status']);
+
+        $_POST = [
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $tokens['refresh_token'],
+            'client_id' => 'gmc_whatever',
+        ];
+        $this->assertSame('invalid_grant', $this->post([Token::class, 'handle'])->data()['error']);
+    }
+
+    public function test_re_authorizing_reuses_the_same_connection(): void
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = $this->registerClient();
+
+        $this->authorize($client['client_id'], $this->challenge($verifier));
+        $this->authorize($client['client_id'], $this->challenge($verifier));
+
+        // Otherwise the connections screen fills with identically named rows
+        // and revoking the one you recognise leaves the others live.
+        $this->assertCount(1, Grants::all($this->editor));
+    }
+
+    public function test_a_dead_connection_is_swept_up(): void
+    {
+        $tokens = $this->connect();
+        $grantId = (string) array_key_first(Grants::all($this->editor));
+
+        // Its refresh token is gone and nothing has used it since before one
+        // could have lasted.
+        $grant = Grants::all($this->editor)[$grantId];
+        delete_option('gds_mcp_oauth_rt_'.$grant['refresh']);
+        $this->setGrantLastUsed($grantId, time() - (Grants::REFRESH_TTL + DAY_IN_SECONDS));
+
+        Grants::purgeExpired();
+
+        $this->assertSame([], Grants::all($this->editor));
+        $this->assertFalse($this->authenticate($tokens['access_token']));
+    }
+
     public function test_unknown_token_authenticates_nobody(): void
     {
         $this->assertFalse($this->authenticate('gmat_not-a-real-token'));
@@ -632,6 +745,17 @@ class OAuthFlowTest extends TestCase
         ]);
 
         return Grants::issueAccessToken($this->editor, $grantId);
+    }
+
+    /**
+     * Backdate a grant, which is otherwise only written through code paths
+     * that stamp the current time.
+     */
+    private function setGrantLastUsed(string $grantId, int $timestamp): void
+    {
+        $grant = Grants::all($this->editor)[$grantId];
+        $grant['last_used'] = $timestamp;
+        update_user_meta($this->editor, Grants::META_PREFIX.$grantId, $grant);
     }
 
     /**

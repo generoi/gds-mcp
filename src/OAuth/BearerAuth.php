@@ -21,9 +21,9 @@ final class BearerAuth
     public static function register(): void
     {
         add_filter('determine_current_user', [self::class, 'authenticate']);
-        // Early, so the audience is settled before anything else weighs in.
-        // What keeps the check in the chain is that it passes a non-error
-        // result through rather than deferring to it — see enforceAudience().
+        // Runs early and passes a non-error result through instead of
+        // short-circuiting on it, so a filter answering `true` — "some auth
+        // method succeeded" — cannot take the audience check out of the chain.
         add_filter('rest_authentication_errors', [self::class, 'enforceAudience'], 1);
         add_filter('rest_post_dispatch', [self::class, 'challenge'], 10, 3);
 
@@ -62,7 +62,7 @@ final class BearerAuth
         $audience = Metadata::routeOf($payload['grant']['resource']);
         $route = self::requestedRoute();
 
-        if ($audience === '' || $route === null || ! hash_equals($audience, $route)) {
+        if ($audience === null || $route === null || ! hash_equals($audience, $route)) {
             return $user;
         }
 
@@ -79,13 +79,13 @@ final class BearerAuth
     }
 
     /**
-     * Re-check the audience against the route WordPress actually dispatches.
+     * Where a bearer token authenticated this request, re-check its audience
+     * against the route WordPress actually parsed.
      *
      * `authenticate()` has to work the route out for itself, because the
-     * current user can be resolved before the request is parsed. This runs
-     * once per REST request with the parsed route in hand, so it is the
-     * authoritative check; the two disagreeing means the route was rewritten
-     * in between.
+     * current user can be resolved before the request is parsed; this filter
+     * has the parsed route in hand. A request authenticated any other way
+     * passes straight through.
      *
      * @param  mixed  $errors  Authentication result so far.
      * @return mixed
@@ -94,6 +94,16 @@ final class BearerAuth
     {
         if (self::$audience === null || is_wp_error($errors)) {
             return $errors;
+        }
+
+        // Checked here rather than while the user was being resolved, where a
+        // capability check can re-enter that resolution through `user_has_cap`.
+        if (! Grants::mayConnect(get_current_user_id())) {
+            return new WP_Error(
+                'rest_connection_not_permitted',
+                __('This account is no longer allowed to connect an MCP client.', 'gds-mcp'),
+                ['status' => 401]
+            );
         }
 
         $route = isset($GLOBALS['wp']->query_vars['rest_route'])
@@ -128,12 +138,7 @@ final class BearerAuth
             return $response;
         }
 
-        $route = untrailingslashit($request->get_route());
-        if (! Metadata::isResourceRoute($route)) {
-            return $response;
-        }
-
-        $resource = Metadata::resolveResource(rest_url($route));
+        $resource = Metadata::resourceForRoute($request->get_route());
         if ($resource === null) {
             return $response;
         }

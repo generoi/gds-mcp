@@ -23,7 +23,8 @@ use Closure;
  * `/wp-json/` entirely, and OAuth error bodies have a shape of their own that
  * the REST error envelope would rewrite.
  *
- * Disabled unless the site defines `GDS_MCP_OAUTH` as true.
+ * Disabled unless the site defines `GDS_MCP_OAUTH` as true, or the
+ * `gds-mcp/oauth_enabled` filter says otherwise.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9728 Protected resource metadata
  * @see https://www.rfc-editor.org/rfc/rfc8414 Authorization server metadata
@@ -40,6 +41,14 @@ final class Server
     public static function register(): void
     {
         if (! self::enabled()) {
+            // Nothing handles the event once the module is off, and a
+            // scheduled event with no handler fires for ever.
+            add_action('init', static function (): void {
+                if (wp_next_scheduled('gds_mcp_oauth_cleanup')) {
+                    wp_clear_scheduled_hook('gds_mcp_oauth_cleanup');
+                }
+            });
+
             return;
         }
 
@@ -106,8 +115,9 @@ final class Server
         // RFC 8414 §3: for an issuer with a path component the metadata lives
         // at /.well-known/oauth-authorization-server{path}. Serve the bare path
         // too, which is what a root-installed site advertises.
-        // …and clients also try the OpenID-style location under the issuer
-        // itself. A site at the root serves both from the same request path.
+        // A subdirectory install is also probed at
+        // <home>/.well-known/oauth-authorization-server; on a root install both
+        // conditions describe the same request path.
         if ($path === '/.well-known/oauth-authorization-server'.$home
             || $local === '/.well-known/oauth-authorization-server') {
             return fn () => Metadata::serveAuthorizationServer();
@@ -168,13 +178,13 @@ final class Server
      *
      * @param  array<string, mixed>  $source
      */
-    public static function param(array $source, string $key, int $max = 2048): string
+    public static function param(array $source, string $key): string
     {
         if (! isset($source[$key]) || ! is_string($source[$key])) {
             return '';
         }
 
-        return substr(self::clean(wp_unslash($source[$key])), 0, $max);
+        return substr(self::clean(wp_unslash($source[$key])), 0, 2048);
     }
 
     /**
@@ -213,8 +223,8 @@ final class Server
     }
 
     /**
-     * OAuth requires TLS; local development environments are exempt so the
-     * flow can be exercised over a self-signed DDEV certificate.
+     * OAuth requires TLS; loopback hosts and local environments are exempt so
+     * the flow can be exercised over plain http in development.
      */
     public static function isSecure(): bool
     {
@@ -230,6 +240,16 @@ final class Server
         }
 
         return in_array(wp_get_environment_type(), ['local', 'development'], true);
+    }
+
+    /**
+     * Refuse to do anything credential-shaped over plaintext.
+     */
+    public static function requireTls(): void
+    {
+        if (! self::isSecure()) {
+            throw self::error('invalid_request', 'This endpoint requires HTTPS.', 400);
+        }
     }
 
     /**
@@ -252,7 +272,7 @@ final class Server
             return;
         }
 
-        throw ResponseException::noContent(204, [
+        throw ResponseException::noContent([
             'Access-Control-Allow-Origin' => '*',
             'Access-Control-Allow-Methods' => $methods.', OPTIONS',
             'Access-Control-Allow-Headers' => 'Content-Type, Authorization, MCP-Protocol-Version',

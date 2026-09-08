@@ -5,8 +5,9 @@ namespace GeneroWP\MCP\OAuth;
 use WP\MCP\Core\McpAdapter;
 
 /**
- * Discovery documents. A client that cannot read these never starts the flow,
- * so both are public and cheap.
+ * Discovery documents, and the arithmetic that decides which MCP endpoint a
+ * URL or route belongs to. A client that cannot read these documents never
+ * starts the flow, so both are public and served uncached.
  */
 final class Metadata
 {
@@ -48,7 +49,12 @@ final class Metadata
          *
          * @param  string[]  $resources
          */
-        return array_values(array_unique((array) apply_filters('gds-mcp/oauth_resources', $resources)));
+        $resources = (array) apply_filters('gds-mcp/oauth_resources', $resources);
+
+        // Normalised here rather than at each comparison: a filtered value with
+        // a trailing slash would otherwise match nothing a client sends, and
+        // the client would be told `invalid_target` with no way to see why.
+        return array_values(array_unique(array_map('untrailingslashit', $resources)));
     }
 
     /**
@@ -71,22 +77,27 @@ final class Metadata
     }
 
     /**
-     * Is this REST route one of the MCP endpoints?
+     * The MCP endpoint a REST route belongs to, or null for any other route.
+     *
+     * Resolving by route rather than by rebuilding the URL is what makes this
+     * work for a site that advertises a fronting URL through the
+     * `gds-mcp/oauth_resources` filter, where the route is all the two have in
+     * common.
      */
-    public static function isResourceRoute(string $route): bool
+    public static function resourceForRoute(string $route): ?string
     {
         $route = untrailingslashit($route);
         if ($route === '') {
-            return false;
+            return null;
         }
 
         foreach (self::resources() as $resource) {
             if (self::routeOf($resource) === $route) {
-                return true;
+                return $resource;
             }
         }
 
-        return false;
+        return null;
     }
 
     /**
@@ -120,7 +131,12 @@ final class Metadata
         // An empty base is the same as none: it would otherwise be a prefix of
         // every path on the site, and so make every path look like the REST
         // API. A filtered-away `rest_url_prefix` gets here.
-        return untrailingslashit((string) wp_parse_url($url, PHP_URL_PATH)) ?: null;
+        $base = untrailingslashit((string) wp_parse_url($url, PHP_URL_PATH));
+
+        // A base that adds nothing to the site's own path is not a base: it
+        // would be a prefix of every path on the site, and so make every path
+        // look like the REST API.
+        return $base === '' || $base === Server::homePath() ? null : $base;
     }
 
     /**
@@ -165,10 +181,9 @@ final class Metadata
      *
      * WordPress dispatches REST requests by the `rest_route` query variable,
      * not by URL path, so this — and not the path — is what a token's audience
-     * has to be checked against. Returns '' when the URL is not a REST URL,
-     * which callers must treat as "matches nothing".
+     * has to be checked against. Null when the URL is not a REST URL.
      */
-    public static function routeOf(string $resource): string
+    public static function routeOf(string $resource): ?string
     {
         // Plain-permalink sites address REST as /index.php?rest_route=/…
         parse_str((string) wp_parse_url($resource, PHP_URL_QUERY), $query);
@@ -178,7 +193,7 @@ final class Metadata
 
         // …every other site carries it in the path, under a base that also
         // includes the site's own directory and any index.php in the way.
-        return self::routeForPath(self::pathOf($resource)) ?? '';
+        return self::routeForPath(self::pathOf($resource));
     }
 
     /**
@@ -194,11 +209,15 @@ final class Metadata
         // a subdirectory install would repeat that prefix and point at a URL
         // WordPress never sees.
         //
-        // A site addressing REST by query variable has no distinguishing path,
-        // so the route stands in for it: without that every server on such a
-        // site would advertise one document, and all but the first would hand
-        // clients a token bound to the wrong endpoint.
-        $suffix = self::pathOf($resource) ?: self::routeOf($resource);
+        // A site addressing REST by query variable has no path to tell its
+        // servers apart — every one of them is `/index.php`, which core spells
+        // out rather than leaving empty — so the route stands in for it.
+        // Without that, all but the first server would advertise a document
+        // naming somebody else's endpoint.
+        parse_str((string) wp_parse_url($resource, PHP_URL_QUERY), $query);
+        $suffix = empty($query['rest_route'])
+            ? self::pathOf($resource)
+            : (string) self::routeOf($resource);
 
         return Server::origin().'/.well-known/oauth-protected-resource'.$suffix;
     }

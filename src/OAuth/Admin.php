@@ -29,7 +29,10 @@ final class Admin
 
     public static function render(): void
     {
-        $manageAll = current_user_can('list_users');
+        // `edit_users`, not `list_users`: seeing every connection is only
+        // useful if you can also revoke one, and on multisite a site
+        // administrator has the latter without the former.
+        $manageAll = current_user_can('edit_users');
         $users = $manageAll ? Grants::users() : [wp_get_current_user()];
 
         echo '<div class="wrap"><h1>'.esc_html__('MCP connections', 'gds-mcp').'</h1>';
@@ -37,6 +40,13 @@ final class Admin
             'Applications you have authorized to use this site as your WordPress account.',
             'gds-mcp'
         ).'</p>';
+
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading a flag to show a notice.
+        if (isset($_GET['revoked'])) {
+            echo '<div class="notice notice-success is-dismissible"><p>'
+                .esc_html__('The connection was revoked. Its tokens no longer work.', 'gds-mcp')
+                .'</p></div>';
+        }
 
         echo '<table class="widefat striped"><thead><tr>'
             .'<th>'.esc_html__('Application', 'gds-mcp').'</th>'
@@ -50,7 +60,11 @@ final class Admin
             foreach (Grants::all($user->ID) as $grantId => $grant) {
                 $rows++;
                 echo '<tr>';
-                echo '<td>'.esc_html($grant['client_name']).'</td>';
+                echo '<td>'.esc_html($grant['client_name']);
+                if (! Grants::isLive($grant)) {
+                    echo ' <em>'.esc_html__('(expired)', 'gds-mcp').'</em>';
+                }
+                echo '<br><code>'.esc_html($grant['client_id']).'</code></td>';
                 if ($manageAll) {
                     echo '<td>'.esc_html($user->user_login).'</td>';
                 }
@@ -62,7 +76,8 @@ final class Admin
         }
 
         if ($rows === 0) {
-            echo '<tr><td colspan="5">'.esc_html__('No applications connected.', 'gds-mcp').'</td></tr>';
+            echo '<tr><td colspan="'.($manageAll ? 5 : 4).'">'
+                .esc_html__('No applications connected.', 'gds-mcp').'</td></tr>';
         }
 
         echo '</tbody></table></div>';

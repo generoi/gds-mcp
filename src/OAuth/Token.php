@@ -13,6 +13,7 @@ final class Token
     public static function handle(): void
     {
         Server::handlePreflight('POST');
+        Server::requireTls();
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             throw Server::error('invalid_request', 'POST required.', 405);
@@ -23,15 +24,18 @@ final class Token
         // by a WordPress nonce.
         $grantType = isset($_POST['grant_type']) ? sanitize_text_field(wp_unslash($_POST['grant_type'])) : '';
 
-        throw match ($grantType) {
+        match ($grantType) {
             'authorization_code' => self::exchangeCode(),
             'refresh_token' => self::refresh(),
-            default => Server::error('unsupported_grant_type', 'Unsupported grant_type.'),
+            default => throw Server::error('unsupported_grant_type', 'Unsupported grant_type.'),
         };
         // phpcs:enable WordPress.Security.NonceVerification.Missing
     }
 
-    private static function exchangeCode(): ResponseException
+    /**
+     * @return never
+     */
+    private static function exchangeCode(): void
     {
         $code = self::param('code');
         $verifier = self::param('code_verifier');
@@ -40,7 +44,7 @@ final class Token
 
         $payload = Grants::consumeCode($code);
         if ($payload === null) {
-            return Server::error('invalid_grant', 'The authorization code is invalid or has expired.');
+            throw Server::error('invalid_grant', 'The authorization code is invalid or has expired.');
         }
 
         // The code is bound to the client and callback it was issued for, and
@@ -48,26 +52,29 @@ final class Token
         if (! hash_equals($payload['client_id'], $clientId)
             || ($redirectUri !== '' && ! hash_equals($payload['redirect_uri'], $redirectUri))
             || ! self::verifyPkce($verifier, $payload['code_challenge'])) {
-            return Server::error('invalid_grant', 'The authorization code does not match this request.');
+            throw Server::error('invalid_grant', 'The authorization code does not match this request.');
         }
 
         // RFC 8707 §2.2: a token request may narrow the audience, never widen
         // it beyond what the code was issued for.
         $resource = self::param('resource');
         if ($resource !== '' && ! hash_equals((string) $payload['resource'], untrailingslashit($resource))) {
-            return Server::error('invalid_target', 'The requested resource is not the one this code was issued for.');
+            throw Server::error('invalid_target', 'The requested resource is not the one this code was issued for.');
         }
 
-        return self::tokens((int) $payload['user'], (string) $payload['grant']);
+        self::tokens((int) $payload['user'], (string) $payload['grant']);
     }
 
-    private static function refresh(): ResponseException
+    /**
+     * @return never
+     */
+    private static function refresh(): void
     {
         $payload = Grants::readRefreshToken(self::param('refresh_token'));
         if ($payload === null) {
             // invalid_grant specifically: on anything else the client keeps
             // retrying a token it can never redeem instead of re-authorizing.
-            return Server::error('invalid_grant', 'The refresh token is invalid or has expired.');
+            throw Server::error('invalid_grant', 'The refresh token is invalid or has expired.');
         }
 
         // RFC 6749 §6: the client identifies itself on a refresh. A public
@@ -75,34 +82,36 @@ final class Token
         // the client it was issued to.
         $clientId = self::param('client_id');
         if ($clientId === '') {
-            return Server::error('invalid_client', 'A client_id is required to refresh.', 401);
+            throw Server::error('invalid_client', 'A client_id is required to refresh.', 401);
         }
 
         if (! hash_equals($payload['grant']['client_id'], $clientId)) {
-            return Server::error('invalid_grant', 'The refresh token belongs to another client.');
+            throw Server::error('invalid_grant', 'The refresh token belongs to another client.');
         }
 
         // A connection that never re-authorizes is still in use, and pruning
         // measures the age of the connection.
         Clients::touch($clientId);
 
-        return self::tokens($payload['user'], $payload['grant_id']);
+        self::tokens($payload['user'], $payload['grant_id']);
     }
 
     /**
      * Mint a fresh pair. The refresh token rotates on every use, as required
      * for public clients.
+     *
+     * @return never
      */
-    private static function tokens(int $userId, string $grantId): ResponseException
+    private static function tokens(int $userId, string $grantId): void
     {
         $refreshToken = Grants::issueRefreshToken($userId, $grantId);
         if ($refreshToken === null) {
-            return Server::error('invalid_grant', 'This authorization has been revoked.');
+            throw Server::error('invalid_grant', 'This authorization has been revoked.');
         }
 
         $accessToken = Grants::issueAccessToken($userId, $grantId);
 
-        return ResponseException::json([
+        throw ResponseException::json([
             'access_token' => $accessToken,
             'token_type' => 'Bearer',
             'expires_in' => Grants::ACCESS_TTL,
@@ -118,6 +127,7 @@ final class Token
     public static function handleRevocation(): void
     {
         Server::handlePreflight('POST');
+        Server::requireTls();
 
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
             throw Server::error('invalid_request', 'POST required.', 405);

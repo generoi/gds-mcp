@@ -37,8 +37,10 @@ final class ResponseException extends RuntimeException
             array_merge([
                 'Content-Type' => 'application/json; charset=utf-8',
                 'Cache-Control' => 'no-store',
-                // Discovery documents are read cross-origin by browser-based
-                // clients; every document served here is public.
+                // Browser-based clients read these cross-origin. Safe on every
+                // JSON the module serves: `*` forbids credentials, and the
+                // token and registration endpoints answer a request that
+                // carried a secret the calling page does not have.
                 'Access-Control-Allow-Origin' => '*',
             ], $headers),
             (string) wp_json_encode($data)
@@ -71,9 +73,9 @@ final class ResponseException extends RuntimeException
     /**
      * @param  array<string, string>  $headers
      */
-    public static function noContent(int $status, array $headers = []): self
+    public static function noContent(array $headers = []): self
     {
-        return new self($status, $headers, '');
+        return new self(204, $headers, '');
     }
 
     /**
@@ -100,6 +102,13 @@ final class ResponseException extends RuntimeException
     {
         status_header($this->status);
         foreach ($this->headers as $name => $value) {
+            // PHP refuses a multi-line header value, but it refuses it with a
+            // warning and no header at all; skipping one that could never be
+            // valid keeps that out of the response.
+            if (preg_match('/[\r\n\0]/', $value)) {
+                continue;
+            }
+
             header($name.': '.$value);
         }
 

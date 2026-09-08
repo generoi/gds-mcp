@@ -71,6 +71,20 @@ final class Grants
      */
     public static function create(int $userId, array $grant): string
     {
+        // Re-authorizing an application is the same connection, not another
+        // one. Without this a client that re-consents — Claude registers a
+        // fresh client per connection, so this is routine — leaves a row per
+        // attempt, all reading the same name, and revoking the one somebody
+        // recognises leaves the rest live.
+        foreach (self::all($userId) as $existingId => $existing) {
+            if ($existing['client_id'] === $grant['client_id']
+                && $existing['resource'] === $grant['resource']) {
+                self::touch($userId, $existingId);
+
+                return $existingId;
+            }
+        }
+
         $grantId = bin2hex(random_bytes(8));
 
         add_user_meta($userId, self::META_PREFIX.$grantId, $grant + [
@@ -209,6 +223,23 @@ final class Grants
         ];
     }
 
+    /**
+     * Is the user still allowed to hold a connection at all?
+     *
+     * The gate is checked when someone consents, but roles change afterwards:
+     * an editor who leaves and is demoted to subscriber — rather than deleted,
+     * so their posts keep an author — would otherwise keep a working token for
+     * as long as the client kept refreshing it.
+     *
+     * Deliberately not called while resolving the current user: capability
+     * checks fire `user_has_cap`, and a plugin listening there that asks who
+     * the current user is would re-enter that resolution and never come back.
+     */
+    public static function mayConnect(int $userId): bool
+    {
+        return user_can($userId, Server::capability());
+    }
+
     // ── Refresh tokens ───────────────────────────────────────────
 
     /**
@@ -265,7 +296,7 @@ final class Grants
         }
 
         $grant = self::get((int) $payload['user'], (string) $payload['grant']);
-        if ($grant === null) {
+        if ($grant === null || ! self::mayConnect((int) $payload['user'])) {
             return null;
         }
 
@@ -273,8 +304,9 @@ final class Grants
     }
 
     /**
-     * Drop refresh tokens that outlived their expiry. Access tokens and codes
-     * are transients and clean themselves up.
+     * Drop refresh tokens that outlived their expiry, and the grants they were
+     * the last live part of. Access tokens and codes are transients and clean
+     * themselves up.
      */
     public static function purgeExpired(): void
     {
@@ -293,6 +325,34 @@ final class Grants
                 delete_option($row->option_name);
             }
         }
+
+        // A grant whose refresh token is gone and which nothing has used for
+        // longer than one could have lasted is a dead connection. Left alone
+        // it stays on the connections screen for ever, indistinguishable from
+        // a live one.
+        foreach (self::users() as $user) {
+            foreach (self::all($user->ID) as $grantId => $grant) {
+                if (self::isLive($grant)) {
+                    continue;
+                }
+
+                self::revoke($user->ID, (string) $grantId);
+            }
+        }
+    }
+
+    /**
+     * Could this grant still mint a token?
+     *
+     * @param  array<string, mixed>  $grant
+     */
+    public static function isLive(array $grant): bool
+    {
+        if (! empty($grant['refresh']) && get_option(self::REFRESH_PREFIX.$grant['refresh']) !== false) {
+            return true;
+        }
+
+        return ($grant['last_used'] ?? 0) > time() - self::REFRESH_TTL;
     }
 
     private static function touch(int $userId, string $grantId): void

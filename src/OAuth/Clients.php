@@ -66,7 +66,13 @@ final class Clients
 
         $client = [
             'client_id' => 'gmc_'.bin2hex(random_bytes(16)),
-            'client_name' => sanitize_text_field((string) ($body['client_name'] ?? 'MCP client')),
+            // Shown on the consent screen, where a long name could crowd out
+            // the callback URL a person is meant to read.
+            'client_name' => mb_substr(
+                sanitize_text_field((string) ($body['client_name'] ?? 'MCP client')),
+                0,
+                80
+            ),
             'redirect_uris' => $redirectUris,
             'grant_types' => ['authorization_code', 'refresh_token'],
             'response_types' => ['code'],
@@ -120,6 +126,12 @@ final class Clients
 
     public static function isAllowedRedirectUri(string $uri): bool
     {
+        // A registered URI is later used verbatim, including as a Location
+        // header, so nothing that could break out of one is allowed in.
+        if ($uri !== Server::clean($uri)) {
+            return false;
+        }
+
         $parts = wp_parse_url($uri);
         if (! is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
             return false;
@@ -171,21 +183,8 @@ final class Clients
     private static function index(): array
     {
         $index = get_option(self::INDEX_OPTION, []);
-        if (! is_array($index)) {
-            return [];
-        }
 
-        $normalised = [];
-        foreach ($index as $key => $value) {
-            // Earlier builds stored a plain list of ids with no timestamps.
-            // Treat those as used now — an unknown vintage is not a reason to
-            // delete a registration somebody may still be connected through —
-            // and let the next authorization date them properly.
-            [$clientId, $used] = is_int($key) ? [(string) $value, time()] : [(string) $key, (int) $value];
-            $normalised[$clientId] = $used;
-        }
-
-        return $normalised;
+        return is_array($index) ? array_map('intval', $index) : [];
     }
 
     /**
