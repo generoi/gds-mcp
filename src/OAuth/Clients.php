@@ -178,9 +178,10 @@ final class Clients
         $normalised = [];
         foreach ($index as $key => $value) {
             // Earlier builds stored a plain list of ids with no timestamps.
-            // Age those out on the next write rather than keeping them for
-            // ever: an integer key would otherwise never compare as stale.
-            [$clientId, $used] = is_int($key) ? [(string) $value, 0] : [(string) $key, (int) $value];
+            // Treat those as used now — an unknown vintage is not a reason to
+            // delete a registration somebody may still be connected through —
+            // and let the next authorization date them properly.
+            [$clientId, $used] = is_int($key) ? [(string) $value, time()] : [(string) $key, (int) $value];
             $normalised[$clientId] = $used;
         }
 

@@ -82,6 +82,10 @@ final class Token
             return Server::error('invalid_grant', 'The refresh token belongs to another client.');
         }
 
+        // A connection that never re-authorizes is still in use, and pruning
+        // measures the age of the connection.
+        Clients::touch($clientId);
+
         return self::tokens($payload['user'], $payload['grant_id']);
     }
 

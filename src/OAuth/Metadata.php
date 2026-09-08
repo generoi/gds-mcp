@@ -97,11 +97,17 @@ final class Metadata
     public static function restBase(): ?string
     {
         // `determine_current_user` can fire before the rewrite rules are set
-        // up, and rest_url() reads them. The conventional layout is the right
-        // answer then: a site that does not use it addresses REST by query
-        // variable, which is matched separately.
+        // up, and rest_url() reads them — so make the same decision it does,
+        // from the option it is derived from.
         if (! isset($GLOBALS['wp_rewrite'])) {
-            return Server::homePath().'/'.rest_get_url_prefix();
+            $structure = (string) get_option('permalink_structure');
+            if ($structure === '') {
+                return null;
+            }
+
+            return Server::homePath()
+                .(str_starts_with($structure, '/index.php') ? '/index.php' : '')
+                .'/'.rest_get_url_prefix();
         }
 
         $url = rest_url('/');
@@ -111,7 +117,42 @@ final class Metadata
             return null;
         }
 
-        return untrailingslashit((string) wp_parse_url($url, PHP_URL_PATH));
+        // An empty base is the same as none: it would otherwise be a prefix of
+        // every path on the site, and so make every path look like the REST
+        // API. A filtered-away `rest_url_prefix` gets here.
+        return untrailingslashit((string) wp_parse_url($url, PHP_URL_PATH)) ?: null;
+    }
+
+    /**
+     * The REST route a request path resolves to, or null when the path is not
+     * under the REST base at all.
+     *
+     * The base is also matched with the site's own directory removed, because
+     * WordPress strips the home path only when the request actually carries it
+     * (`WP::parse_request()`): a proxy publishing the site under a path can
+     * hand the origin a URI without it, and WordPress still routes that to
+     * REST.
+     */
+    public static function routeForPath(string $path): ?string
+    {
+        $base = self::restBase();
+        if ($base === null || $base === '') {
+            return null;
+        }
+
+        $home = Server::homePath();
+        $bases = [$base];
+        if ($home !== '' && str_starts_with($base, $home)) {
+            $bases[] = substr($base, strlen($home));
+        }
+
+        foreach (array_unique($bases) as $candidate) {
+            if ($candidate !== '' && str_starts_with($path, $candidate.'/')) {
+                return untrailingslashit(substr($path, strlen($candidate)));
+            }
+        }
+
+        return null;
     }
 
     public static function pathOf(string $resource): string
@@ -137,12 +178,7 @@ final class Metadata
 
         // …every other site carries it in the path, under a base that also
         // includes the site's own directory and any index.php in the way.
-        $base = self::restBase();
-        $path = self::pathOf($resource);
-
-        return $base !== null && str_starts_with($path, $base.'/')
-            ? untrailingslashit(substr($path, strlen($base)))
-            : '';
+        return self::routeForPath(self::pathOf($resource)) ?? '';
     }
 
     /**
@@ -157,7 +193,14 @@ final class Metadata
         // resource's path appended — not under the site's own path, which for
         // a subdirectory install would repeat that prefix and point at a URL
         // WordPress never sees.
-        return Server::origin().'/.well-known/oauth-protected-resource'.self::pathOf($resource);
+        //
+        // A site addressing REST by query variable has no distinguishing path,
+        // so the route stands in for it: without that every server on such a
+        // site would advertise one document, and all but the first would hand
+        // clients a token bound to the wrong endpoint.
+        $suffix = self::pathOf($resource) ?: self::routeOf($resource);
+
+        return Server::origin().'/.well-known/oauth-protected-resource'.$suffix;
     }
 
     /**
@@ -169,6 +212,18 @@ final class Metadata
         Server::handlePreflight('GET');
 
         $resource = self::resolveResource($suffix === '' ? null : Server::origin().$suffix);
+
+        // The suffix may be a route rather than a path — see
+        // protectedResourceUrl() for the sites where it is.
+        if ($resource === null && $suffix !== '') {
+            foreach (self::resources() as $candidate) {
+                if (self::routeOf($candidate) === untrailingslashit($suffix)) {
+                    $resource = $candidate;
+
+                    break;
+                }
+            }
+        }
 
         if ($resource === null) {
             throw Server::error('not_found', 'Unknown protected resource.', 404);

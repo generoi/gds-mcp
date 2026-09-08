@@ -291,19 +291,98 @@ class OAuthFlowTest extends TestCase
         $this->assertSame('0', $this->query($redirect->location())['state']);
     }
 
-    public function test_route_resolution_handles_a_site_in_a_subdirectory(): void
+    public function test_token_authenticates_on_a_site_in_a_subdirectory(): void
     {
-        // A subdirectory install carries the site path in front of the REST
-        // base, and a token that cannot resolve its own route authenticates
-        // nothing at all.
-        add_filter('home_url', fn (): string => 'https://example.org/blog');
-        add_filter('rest_url', fn (): string => 'https://example.org/blog/wp-json/');
+        $token = $this->tokenFor('https://example.org/blog/wp-json/mcp/test-server');
+        $this->moveSiteTo('https://example.org/blog');
 
         $this->assertSame('/blog/wp-json', Metadata::restBase());
-        $this->assertSame(
-            '/mcp/test-server',
-            Metadata::routeOf('https://example.org/blog/wp-json/mcp/test-server')
-        );
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$token;
+        $_SERVER['REQUEST_URI'] = '/blog/wp-json/mcp/test-server';
+
+        $this->assertSame($this->editor, BearerAuth::authenticate(false));
+    }
+
+    public function test_token_authenticates_when_a_proxy_strips_the_site_path(): void
+    {
+        // WordPress removes the home path only when the request carries it, so
+        // a proxy publishing the site under /blog can hand the origin a bare
+        // /wp-json URI and WordPress still routes it to REST.
+        $token = $this->tokenFor('https://example.org/blog/wp-json/mcp/test-server');
+        $this->moveSiteTo('https://example.org/blog');
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$token;
+        $_SERVER['REQUEST_URI'] = '/wp-json/mcp/test-server';
+
+        $this->assertSame($this->editor, BearerAuth::authenticate(false));
+    }
+
+    public function test_token_does_not_cross_between_sites_sharing_an_origin(): void
+    {
+        // Sites on a subdirectory network share scheme, host and route; the
+        // path is the only thing telling their grants apart.
+        $token = $this->tokenFor('https://example.org/site-a/wp-json/mcp/test-server');
+        $this->moveSiteTo('https://example.org/site-b');
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$token;
+        $_SERVER['REQUEST_URI'] = '/site-a/wp-json/mcp/test-server';
+
+        $this->assertFalse(BearerAuth::authenticate(false));
+    }
+
+    public function test_token_authenticates_through_the_rest_route_query_form(): void
+    {
+        // The front controller is the one place outside the REST base where
+        // WordPress reads `rest_route` as a route, and it is how a
+        // plain-permalink site addresses REST at all.
+        $tokens = $this->connect();
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
+        $_SERVER['REQUEST_URI'] = '/?rest_route='.Metadata::routeOf($this->resource);
+        $_GET['rest_route'] = Metadata::routeOf($this->resource);
+
+        $this->assertSame($this->editor, BearerAuth::authenticate(false));
+    }
+
+    public function test_plain_permalinks_have_no_rest_path_to_match(): void
+    {
+        $tokens = $this->connect();
+        $this->set_permalink_structure('');
+
+        $this->assertNull(Metadata::restBase());
+
+        // With no rewrite rules, /wp-json/… is an ordinary front-end request
+        // that WordPress never routes to REST, so it must not authenticate.
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
+        $_SERVER['REQUEST_URI'] = '/wp-json/mcp/test-server';
+
+        $this->assertFalse(BearerAuth::authenticate(false));
+    }
+
+    public function test_a_legacy_client_index_survives_the_next_registration(): void
+    {
+        // The index used to be a plain list of ids. Entries of unknown vintage
+        // are not a reason to delete a registration somebody is connected
+        // through.
+        $client = $this->registerClient();
+        update_option('gds_mcp_oauth_clients', [$client['client_id']]);
+
+        $this->registerClient();
+
+        $this->assertNotNull(Clients::get($client['client_id']));
+    }
+
+    public function test_audience_check_is_not_skipped_by_an_earlier_successful_filter(): void
+    {
+        $tokens = $this->connect();
+        $this->assertSame($this->editor, $this->authenticate($tokens['access_token']));
+
+        // A third-party auth plugin returning `true` says "authenticated", not
+        // "authorized for this route" — the audience still has to be enforced.
+        $GLOBALS['wp']->query_vars['rest_route'] = '/wp/v2/users';
+
+        $this->assertInstanceOf(\WP_Error::class, BearerAuth::enforceAudience(true));
     }
 
     public function test_opaque_state_survives_intact(): void
@@ -507,6 +586,32 @@ class OAuthFlowTest extends TestCase
         $code = $this->query($this->authorize($clientId, $this->challenge($verifier))->location())['code'];
 
         return $this->exchange($clientId, $code, $verifier);
+    }
+
+    /**
+     * Mint an access token for a grant against an arbitrary resource, without
+     * walking the flow — for the layouts the flow itself cannot reach here.
+     */
+    private function tokenFor(string $resource): string
+    {
+        $grantId = Grants::create($this->editor, [
+            'client_id' => 'gmc_'.bin2hex(random_bytes(4)),
+            'client_name' => 'Test client',
+            'resource' => $resource,
+            'scopes' => Metadata::SCOPES,
+        ]);
+
+        return Grants::issueAccessToken($this->editor, $grantId);
+    }
+
+    /**
+     * Pretend the site lives at another URL, path and all.
+     */
+    private function moveSiteTo(string $home): void
+    {
+        add_filter('gds-mcp/oauth_resources', fn (): array => [$home.'/wp-json/mcp/test-server']);
+        add_filter('home_url', fn (string $url, string $path): string => $home.$path, 20, 2);
+        add_filter('rest_url', fn (string $url, string $path): string => $home.'/wp-json'.$path, 20, 2);
     }
 
     /**

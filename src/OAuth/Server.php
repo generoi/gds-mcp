@@ -152,7 +152,7 @@ final class Server
         // parser: `//evil.com/wp-json/…` is a path to WordPress, but a URL
         // parser reads it as a host, and the two must not disagree about
         // which request this is.
-        $path = strtok(strtok($uri, '?') ?: '', '#') ?: '';
+        $path = explode('?', $uri, 2)[0];
 
         return '/'.trim($path, '/');
     }

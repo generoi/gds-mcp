@@ -171,7 +171,7 @@ claude mcp add -s local --transport http my-site https://example.com/wp-json/mcp
 **Requirements**
 
 - HTTPS (localhost and `local`/`development` environments are exempt)
-- Pretty permalinks, so the MCP endpoint has a real path rather than `?rest_route=`
+- Pretty permalinks: the authorization, token and registration endpoints are paths under `/mcp-oauth/`, and a site with plain permalinks has no rewrite rules to route them
 - `/.well-known/` must reach WordPress. The common nginx recipe denies every dotted path (`location ~ /\. { deny all; }`) — see `.ddev/nginx/well-known.conf` in the kaskipuu project for the override. Kinsta passes it through as-is.
 
 **Managing access**

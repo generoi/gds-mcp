@@ -21,8 +21,9 @@ final class BearerAuth
     public static function register(): void
     {
         add_filter('determine_current_user', [self::class, 'authenticate']);
-        // Ahead of core's own authentication filters (90, 100), so a plugin
-        // that answers earlier cannot take this check out of the chain.
+        // Early, so the audience is settled before anything else weighs in.
+        // What keeps the check in the chain is that it passes a non-error
+        // result through rather than deferring to it — see enforceAudience().
         add_filter('rest_authentication_errors', [self::class, 'enforceAudience'], 1);
         add_filter('rest_post_dispatch', [self::class, 'challenge'], 10, 3);
 
@@ -161,20 +162,16 @@ final class BearerAuth
      */
     private static function requestedRoute(): ?string
     {
-        $home = Server::homePath();
-        $base = Metadata::restBase();
         $path = Server::requestPath();
-        $pretty = $base !== null && str_starts_with($path, $base.'/');
+        $route = Metadata::routeForPath($path);
 
-        // `rest_route` names a route only where WordPress reads it as one: at
-        // the site's front controller, which is how a plain-permalink site
-        // addresses REST. Anywhere else — admin-ajax.php, admin-post.php,
-        // wp-comments-post.php — it is an ordinary parameter, and honouring it
-        // there would authenticate a request no REST check ever sees, since
-        // `rest_authentication_errors` fires only inside serve_request().
-        $index = in_array($path, [$home === '' ? '/' : $home, $home.'/index.php'], true);
-
-        if (! $pretty && ! $index) {
+        // `rest_route` names a route only where WordPress reads it as one:
+        // under the REST base, or at a front controller. Anywhere else —
+        // admin-ajax.php, admin-post.php, wp-comments-post.php — it is an
+        // ordinary parameter, and honouring it there would authenticate a
+        // request no REST check ever sees, since `rest_authentication_errors`
+        // fires only inside serve_request().
+        if ($route === null && ! self::isFrontController($path)) {
             return null;
         }
 
@@ -187,7 +184,30 @@ final class BearerAuth
         }
         // phpcs:enable WordPress.Security.NonceVerification
 
-        return $pretty ? untrailingslashit(substr($path, strlen((string) $base))) : null;
+        return $route;
+    }
+
+    /**
+     * Is this path one of the scripts that boots WordPress and lets it route
+     * the request — as opposed to one that serves a request of its own?
+     */
+    private static function isFrontController(string $path): bool
+    {
+        $home = Server::homePath();
+        $site = untrailingslashit((string) wp_parse_url(site_url(), PHP_URL_PATH));
+
+        // The home path is included with and without the site's own directory:
+        // WordPress strips it only when the request carries it, and core may
+        // live somewhere else again, as it does under Bedrock.
+        $fronts = [
+            $home === '' ? '/' : $home,
+            $home.'/index.php',
+            '/',
+            '/index.php',
+            $site.'/index.php',
+        ];
+
+        return in_array($path, array_unique($fronts), true);
     }
 
     private static function bearerToken(): ?string
