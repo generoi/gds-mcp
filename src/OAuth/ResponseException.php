@@ -23,7 +23,10 @@ final class ResponseException extends RuntimeException
         public readonly array $headers,
         public readonly string $body,
     ) {
-        parent::__construct($body, $status);
+        // Deliberately not the body: a token response would otherwise be the
+        // exception message, and anything logging a caught Throwable around
+        // parse_request would write both tokens out in the clear.
+        parent::__construct('OAuth response', $status);
     }
 
     /**

@@ -54,7 +54,31 @@ final class Metadata
         // Normalised here rather than at each comparison: a filtered value with
         // a trailing slash would otherwise match nothing a client sends, and
         // the client would be told `invalid_target` with no way to see why.
-        return array_values(array_unique(array_map('untrailingslashit', $resources)));
+        $resources = array_values(array_unique(array_map('untrailingslashit', $resources)));
+
+        // A resource a token could never be used against is worse than no
+        // resource: the flow completes, the client stores a token, and every
+        // call it makes 401s in a loop with nothing logged. Refuse it here,
+        // where the site's author can see why.
+        return array_values(array_filter($resources, static function (string $resource): bool {
+            if (self::routeOf($resource) !== null
+                && str_starts_with($resource, untrailingslashit(home_url()).'/')) {
+                return true;
+            }
+
+            _doing_it_wrong(
+                __METHOD__,
+                sprintf(
+                    'The MCP resource %s is not under this site\'s REST API, so no token issued for it could '
+                    .'ever authenticate. Front the endpoint with a rewrite rather than the '
+                    .'gds-mcp/oauth_resources filter.',
+                    esc_html($resource)
+                ),
+                '1.0.0'
+            );
+
+            return false;
+        }));
     }
 
     /**

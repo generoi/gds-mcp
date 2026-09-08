@@ -178,6 +178,8 @@ claude mcp add -s local --transport http my-site https://example.com/wp-json/mcp
 
 - **Users → MCP connections** lists connected applications and revokes them. Revoking kills that grant's access and refresh tokens immediately. Everyone sees their own; anyone who can manage users sees all.
 - Connecting requires `edit_posts` by default — filter `gds-mcp/oauth_capability` to change it. What a token may then *do* is governed per ability by `CapabilityPolicy`, exactly as for a cookie session.
+- **Enabling OAuth raises the MCP endpoint's own floor to that same capability**, for every client including ones using an application password. The adapter's default is `read`, which would otherwise let a subscriber reach the endpoint the consent screen refuses them.
+- Deactivating the plugin revokes every connection, and uninstalling removes the grants, refresh tokens and client registrations. Deactivation is a real revocation, not a pause.
 - Access tokens last an hour, refresh tokens 30 days and rotate on every use. Tokens are stored hashed and are bound to the MCP endpoint they were issued for, so a leaked token is not a general-purpose site credential.
 
 ### HTTP with an application password

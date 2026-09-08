@@ -70,8 +70,14 @@ final class Token
      */
     private static function refresh(): void
     {
-        $payload = Grants::readRefreshToken(self::param('refresh_token'));
+        $presented = self::param('refresh_token');
+        $payload = Grants::readRefreshToken($presented);
         if ($payload === null) {
+            // A token that was already exchanged turning up again ends the
+            // whole connection: rotation means it should never be seen twice,
+            // so the likeliest reading is that a copy of it leaked.
+            Grants::revokeOnReuse($presented);
+
             // invalid_grant specifically: on anything else the client keeps
             // retrying a token it can never redeem instead of re-authorizing.
             throw Server::error('invalid_grant', 'The refresh token is invalid or has expired.');
@@ -93,7 +99,7 @@ final class Token
         // measures the age of the connection.
         Clients::touch($clientId);
 
-        self::tokens($payload['user'], $payload['grant_id']);
+        self::tokens($payload['user'], $payload['grant_id'], self::param('refresh_token'));
     }
 
     /**
@@ -102,9 +108,9 @@ final class Token
      *
      * @return never
      */
-    private static function tokens(int $userId, string $grantId): void
+    private static function tokens(int $userId, string $grantId, ?string $replaces = null): void
     {
-        $refreshToken = Grants::issueRefreshToken($userId, $grantId);
+        $refreshToken = Grants::issueRefreshToken($userId, $grantId, $replaces);
         if ($refreshToken === null) {
             throw Server::error('invalid_grant', 'This authorization has been revoked.');
         }

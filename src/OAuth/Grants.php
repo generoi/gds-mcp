@@ -135,11 +135,26 @@ final class Grants
             return false;
         }
 
-        if (! empty($grant['refresh'])) {
-            delete_option(self::REFRESH_PREFIX.$grant['refresh']);
+        // Every live token the grant holds, not just the most recent: two
+        // copies of one application share a grant, and revoking has to end
+        // both.
+        foreach (self::refreshHashes($grant) as $hash) {
+            delete_option(self::REFRESH_PREFIX.$hash);
         }
 
         return delete_user_meta($userId, self::META_PREFIX.$grantId);
+    }
+
+    /**
+     * End every connection on the site.
+     */
+    public static function revokeAll(): void
+    {
+        foreach (self::users() as $user) {
+            foreach (array_keys(self::all($user->ID)) as $grantId) {
+                self::revoke($user->ID, (string) $grantId);
+            }
+        }
     }
 
     /**
@@ -243,23 +258,31 @@ final class Grants
     // ── Refresh tokens ───────────────────────────────────────────
 
     /**
-     * Issue a refresh token, replacing any the grant already had.
+     * Issue a refresh token for a grant.
      *
-     * Public clients must rotate refresh tokens, so the previous one is
-     * invalidated in the same step that mints its replacement. Null when the
-     * grant is gone — revoked while the exchange was in flight — so the caller
-     * fails the request rather than answering with a hollow token the client
-     * would store and never be able to redeem.
+     * A grant holds a set of live refresh tokens rather than one, because a
+     * grant is per application, not per running copy of it: a client whose
+     * registration is persisted — a second machine sharing a config file, a
+     * second profile, a re-authorization while the first session is still
+     * going — authorizes against the same grant, and minting for one copy must
+     * not log the other one out.
+     *
+     * Rotation happens against the token presented on a refresh: that one is
+     * invalidated in the same step that mints its replacement, as public
+     * clients require. Everything else in the set is left alone, and revoking
+     * the grant still takes all of them at once.
+     *
+     * Null when the grant is gone — revoked while the exchange was in flight —
+     * so the caller fails the request rather than answering with a hollow
+     * token the client would store and never be able to redeem.
+     *
+     * @param  string|null  $replaces  Refresh token being exchanged, if any.
      */
-    public static function issueRefreshToken(int $userId, string $grantId): ?string
+    public static function issueRefreshToken(int $userId, string $grantId, ?string $replaces = null): ?string
     {
         $grant = self::get($userId, $grantId);
         if ($grant === null) {
             return null;
-        }
-
-        if (! empty($grant['refresh'])) {
-            delete_option(self::REFRESH_PREFIX.$grant['refresh']);
         }
 
         $token = 'gmrt_'.self::secret();
@@ -272,7 +295,32 @@ final class Grants
             false
         );
 
-        $grant['refresh'] = $hash;
+        $spent = $replaces === null ? null : self::hash($replaces);
+        $live = [];
+        foreach (self::refreshHashes($grant) as $existing) {
+            if ($existing === $spent) {
+                // Kept as a tombstone rather than deleted: a rotated token
+                // turning up again means either a client bug or a copy of it
+                // in someone else's hands, and the two are indistinguishable
+                // from here — so the reuse has to be detectable.
+                update_option(
+                    self::REFRESH_PREFIX.$existing,
+                    ['user' => $userId, 'grant' => $grantId, 'exp' => time() + self::REFRESH_TTL, 'spent' => true],
+                    false
+                );
+
+                continue;
+            }
+
+            if (get_option(self::REFRESH_PREFIX.$existing) === false) {
+                continue;
+            }
+
+            $live[] = $existing;
+        }
+
+        $live[] = $hash;
+        $grant['refresh'] = $live;
 
         // A revoke that landed while this was in flight wins: drop the token
         // just minted rather than putting the grant back.
@@ -286,12 +334,46 @@ final class Grants
     }
 
     /**
+     * End the whole connection because one of its refresh tokens was
+     * presented a second time.
+     *
+     * Rotation means a spent token should never be seen again. When one is,
+     * either the client is broken or somebody else has a copy — and there is
+     * no way to tell which from here, so the safe reading is that the token
+     * leaked (RFC 9700 §4.14.2).
+     */
+    public static function revokeOnReuse(string $token): bool
+    {
+        $payload = get_option(self::REFRESH_PREFIX.self::hash($token));
+        if (! is_array($payload) || empty($payload['spent'])) {
+            return false;
+        }
+
+        self::revoke((int) $payload['user'], (string) $payload['grant']);
+
+        return true;
+    }
+
+    /**
+     * Hashes of the refresh tokens a grant holds.
+     *
+     * @param  array<string, mixed>  $grant
+     * @return string[]
+     */
+    private static function refreshHashes(array $grant): array
+    {
+        $refresh = $grant['refresh'] ?? null;
+
+        return array_values(array_filter((array) $refresh, 'is_string'));
+    }
+
+    /**
      * @return array{user: int, grant_id: string, grant: array<string, mixed>}|null
      */
     public static function readRefreshToken(string $token): ?array
     {
         $payload = get_option(self::REFRESH_PREFIX.self::hash($token));
-        if (! is_array($payload) || $payload['exp'] < time()) {
+        if (! is_array($payload) || $payload['exp'] < time() || ! empty($payload['spent'])) {
             return null;
         }
 
@@ -348,8 +430,10 @@ final class Grants
      */
     public static function isLive(array $grant): bool
     {
-        if (! empty($grant['refresh']) && get_option(self::REFRESH_PREFIX.$grant['refresh']) !== false) {
-            return true;
+        foreach (self::refreshHashes($grant) as $hash) {
+            if (get_option(self::REFRESH_PREFIX.$hash) !== false) {
+                return true;
+            }
         }
 
         return ($grant['last_used'] ?? 0) > time() - self::REFRESH_TTL;

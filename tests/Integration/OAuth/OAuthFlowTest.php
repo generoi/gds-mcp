@@ -375,8 +375,8 @@ class OAuthFlowTest extends TestCase
     {
         // Their REST URLs all share the path core gives them, /index.php, so
         // the path cannot tell two servers apart and the route has to.
-        $one = 'https://example.org/index.php?rest_route=/mcp/server-one';
-        $two = 'https://example.org/index.php?rest_route=/mcp/server-two';
+        $one = home_url('/index.php?rest_route=/mcp/server-one');
+        $two = home_url('/index.php?rest_route=/mcp/server-two');
         add_filter('gds-mcp/oauth_resources', fn (): array => [$one, $two]);
 
         $this->assertStringEndsWith('/mcp/server-one', Metadata::protectedResourceUrl($one));
@@ -572,6 +572,69 @@ class OAuthFlowTest extends TestCase
         $this->assertSame('invalid_grant', $this->post([Token::class, 'handle'])->data()['error']);
     }
 
+    public function test_two_copies_of_one_client_do_not_log_each_other_out(): void
+    {
+        // A client that persists its registration — a second machine sharing a
+        // config file, or a re-authorization while the first session is still
+        // going — authorizes against the same grant. Minting for one copy must
+        // not invalidate the other's refresh token.
+        $clientId = null;
+        $first = $this->connect($clientId);
+        $second = $this->connectAs((string) $clientId);
+
+        $this->assertCount(1, Grants::all($this->editor), 'Both copies share one connection');
+
+        foreach ([$first['refresh_token'], $second['refresh_token']] as $refreshToken) {
+            $_POST = [
+                'grant_type' => 'refresh_token',
+                'refresh_token' => $refreshToken,
+                'client_id' => (string) $clientId,
+            ];
+            $response = $this->post([Token::class, 'handle']);
+            $this->assertSame(200, $response->status, $response->body);
+        }
+    }
+
+    public function test_replaying_a_spent_refresh_token_ends_the_connection(): void
+    {
+        $clientId = null;
+        $tokens = $this->connect($clientId);
+
+        $_POST = [
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $tokens['refresh_token'],
+            'client_id' => (string) $clientId,
+        ];
+        $rotated = $this->post([Token::class, 'handle'])->data();
+
+        // The spent token turning up again means a copy of it is loose, and
+        // nothing here can tell that from a buggy client — so the whole
+        // connection goes, the replacement included.
+        $this->assertSame('invalid_grant', $this->post([Token::class, 'handle'])->data()['error']);
+        $this->assertSame([], Grants::all($this->editor));
+
+        $_POST['refresh_token'] = $rotated['refresh_token'];
+        $this->assertSame('invalid_grant', $this->post([Token::class, 'handle'])->data()['error']);
+    }
+
+    public function test_revoking_ends_every_copy_of_the_client(): void
+    {
+        $clientId = null;
+        $first = $this->connect($clientId);
+        $second = $this->connectAs((string) $clientId);
+
+        Grants::revoke($this->editor, (string) array_key_first(Grants::all($this->editor)));
+
+        foreach ([$first['refresh_token'], $second['refresh_token']] as $refreshToken) {
+            $_POST = [
+                'grant_type' => 'refresh_token',
+                'refresh_token' => $refreshToken,
+                'client_id' => (string) $clientId,
+            ];
+            $this->assertSame('invalid_grant', $this->post([Token::class, 'handle'])->data()['error']);
+        }
+    }
+
     public function test_a_revoked_grant_is_not_resurrected_by_a_refresh_in_flight(): void
     {
         // A refresh that read the grant before the revoke landed must not put
@@ -647,7 +710,9 @@ class OAuthFlowTest extends TestCase
         // Its refresh token is gone and nothing has used it since before one
         // could have lasted.
         $grant = Grants::all($this->editor)[$grantId];
-        delete_option('gds_mcp_oauth_rt_'.$grant['refresh']);
+        foreach ((array) $grant['refresh'] as $hash) {
+            delete_option('gds_mcp_oauth_rt_'.$hash);
+        }
         $this->setGrantLastUsed($grantId, time() - (Grants::REFRESH_TTL + DAY_IN_SECONDS));
 
         Grants::purgeExpired();
@@ -709,8 +774,10 @@ class OAuthFlowTest extends TestCase
 
         $this->assertSame(['S256'], $document['code_challenge_methods_supported']);
         $this->assertSame(['authorization_code', 'refresh_token'], $document['grant_types_supported']);
-        $this->assertNotEmpty($document['registration_endpoint']);
-        $this->assertNotEmpty($document['token_endpoint']);
+        // The wire contract clients depend on, not merely "something is set".
+        $this->assertSame(home_url('/mcp-oauth/register'), $document['registration_endpoint']);
+        $this->assertSame(home_url('/mcp-oauth/token'), $document['token_endpoint']);
+        $this->assertSame(home_url('/mcp-oauth/authorize'), $document['authorization_endpoint']);
     }
 
     // ── Helpers ──────────────────────────────────────────────────
@@ -723,8 +790,22 @@ class OAuthFlowTest extends TestCase
      */
     private function connect(&$clientId = null): array
     {
-        $verifier = 'verifier-'.wp_generate_password(43, false);
         $client = $this->registerClient();
+        $clientId = $client['client_id'];
+
+        return $this->connectAs($client['client_id']);
+    }
+
+    /**
+     * Connect through an already-registered client, as a second copy of it
+     * would.
+     *
+     * @return array<string, mixed>
+     */
+    private function connectAs(string $registeredClientId): array
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = ['client_id' => $registeredClientId];
         $clientId = $client['client_id'];
         $code = $this->query($this->authorize($clientId, $this->challenge($verifier))->location())['code'];
 
