@@ -10,13 +10,20 @@ namespace GeneroWP\MCP\OAuth;
  * database backup cannot be replayed against the MCP endpoint. Tokens carry no
  * claims of their own; every lookup re-reads the grant, which is what makes
  * revocation immediate.
+ *
+ * Each grant is its own user meta row rather than one array of them all: a
+ * revoke and a token refresh arriving together would otherwise both read the
+ * whole set and write it back, and whichever wrote last would win. Losing that
+ * race means a grant somebody revoked comes back with a fresh 30-day refresh
+ * token — at exactly the moment revocation matters most. For the same reason
+ * the mutating paths update the row in place and never re-create it.
  */
 final class Grants
 {
     /**
-     * User meta holding that user's grants, keyed by grant id.
+     * Prefix of the user meta row holding one grant.
      */
-    public const META_KEY = '_gds_mcp_oauth_grants';
+    public const META_PREFIX = '_gds_mcp_oauth_grant_';
 
     public const CODE_TTL = 60;
 
@@ -66,13 +73,11 @@ final class Grants
     {
         $grantId = bin2hex(random_bytes(8));
 
-        $grants = self::all($userId);
-        $grants[$grantId] = $grant + [
+        add_user_meta($userId, self::META_PREFIX.$grantId, $grant + [
             'created' => time(),
             'last_used' => time(),
             'refresh' => null,
-        ];
-        update_user_meta($userId, self::META_KEY, $grants);
+        ], true);
 
         return $grantId;
     }
@@ -82,7 +87,9 @@ final class Grants
      */
     public static function get(int $userId, string $grantId): ?array
     {
-        return self::all($userId)[$grantId] ?? null;
+        $grant = get_user_meta($userId, self::META_PREFIX.$grantId, true);
+
+        return is_array($grant) ? $grant : null;
     }
 
     /**
@@ -90,26 +97,35 @@ final class Grants
      */
     public static function all(int $userId): array
     {
-        $grants = get_user_meta($userId, self::META_KEY, true);
+        $grants = [];
 
-        return is_array($grants) ? $grants : [];
+        foreach (get_user_meta($userId) as $key => $values) {
+            if (! str_starts_with((string) $key, self::META_PREFIX)) {
+                continue;
+            }
+
+            // The keyless form of get_user_meta() returns raw rows.
+            $grant = maybe_unserialize((string) ($values[0] ?? ''));
+            if (is_array($grant)) {
+                $grants[substr((string) $key, strlen(self::META_PREFIX))] = $grant;
+            }
+        }
+
+        return $grants;
     }
 
     public static function revoke(int $userId, string $grantId): bool
     {
-        $grants = self::all($userId);
-        if (! isset($grants[$grantId])) {
+        $grant = self::get($userId, $grantId);
+        if ($grant === null) {
             return false;
         }
 
-        if (! empty($grants[$grantId]['refresh'])) {
-            delete_option(self::REFRESH_PREFIX.$grants[$grantId]['refresh']);
+        if (! empty($grant['refresh'])) {
+            delete_option(self::REFRESH_PREFIX.$grant['refresh']);
         }
 
-        unset($grants[$grantId]);
-        update_user_meta($userId, self::META_KEY, $grants);
-
-        return true;
+        return delete_user_meta($userId, self::META_PREFIX.$grantId);
     }
 
     /**
@@ -119,10 +135,38 @@ final class Grants
      */
     public static function users(): array
     {
-        return get_users([
-            'meta_key' => self::META_KEY,
-            'meta_compare' => 'EXISTS',
-        ]);
+        global $wpdb;
+
+        $ids = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT DISTINCT user_id FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
+                $wpdb->esc_like(self::META_PREFIX).'%'
+            )
+        );
+
+        return $ids ? get_users(['include' => array_map('intval', $ids)]) : [];
+    }
+
+    /**
+     * Write a grant back, but only where one is still there.
+     *
+     * `update_user_meta()` would insert the row if it had been deleted, which
+     * is how a revoke loses to a token refresh that started before it.
+     *
+     * @param  array<string, mixed>  $grant
+     */
+    private static function update(int $userId, string $grantId, array $grant): bool
+    {
+        global $wpdb;
+
+        $wpdb->update(
+            $wpdb->usermeta,
+            ['meta_value' => maybe_serialize($grant)],
+            ['user_id' => $userId, 'meta_key' => self::META_PREFIX.$grantId]
+        );
+        wp_cache_delete($userId, 'user_meta');
+
+        return self::get($userId, $grantId) !== null;
     }
 
     // ── Access tokens ────────────────────────────────────────────
@@ -178,13 +222,13 @@ final class Grants
      */
     public static function issueRefreshToken(int $userId, string $grantId): ?string
     {
-        $grants = self::all($userId);
-        if (! isset($grants[$grantId])) {
+        $grant = self::get($userId, $grantId);
+        if ($grant === null) {
             return null;
         }
 
-        if (! empty($grants[$grantId]['refresh'])) {
-            delete_option(self::REFRESH_PREFIX.$grants[$grantId]['refresh']);
+        if (! empty($grant['refresh'])) {
+            delete_option(self::REFRESH_PREFIX.$grant['refresh']);
         }
 
         $token = 'gmrt_'.self::secret();
@@ -197,8 +241,15 @@ final class Grants
             false
         );
 
-        $grants[$grantId]['refresh'] = $hash;
-        update_user_meta($userId, self::META_KEY, $grants);
+        $grant['refresh'] = $hash;
+
+        // A revoke that landed while this was in flight wins: drop the token
+        // just minted rather than putting the grant back.
+        if (! self::update($userId, $grantId, $grant)) {
+            delete_option(self::REFRESH_PREFIX.$hash);
+
+            return null;
+        }
 
         return $token;
     }
@@ -246,13 +297,13 @@ final class Grants
 
     private static function touch(int $userId, string $grantId): void
     {
-        $grants = self::all($userId);
-        if (! isset($grants[$grantId])) {
+        $grant = self::get($userId, $grantId);
+        if ($grant === null) {
             return;
         }
 
-        $grants[$grantId]['last_used'] = time();
-        update_user_meta($userId, self::META_KEY, $grants);
+        $grant['last_used'] = time();
+        self::update($userId, $grantId, $grant);
     }
 
     private static function secret(): string

@@ -513,6 +513,36 @@ class OAuthFlowTest extends TestCase
         $this->assertSame('invalid_grant', $this->post([Token::class, 'handle'])->data()['error']);
     }
 
+    public function test_a_revoked_grant_is_not_resurrected_by_a_refresh_in_flight(): void
+    {
+        // A refresh that read the grant before the revoke landed must not put
+        // it back — the whole point of the revoke button.
+        $tokens = $this->connect();
+        $grantId = array_key_first(Grants::all($this->editor));
+
+        Grants::revoke($this->editor, (string) $grantId);
+
+        $this->assertNull(Grants::issueRefreshToken($this->editor, (string) $grantId));
+        $this->assertSame([], Grants::all($this->editor));
+        $this->assertFalse($this->authenticate($tokens['access_token']));
+    }
+
+    public function test_grants_are_independent_of_one_another(): void
+    {
+        $first = $this->connect();
+        $second = $this->connect();
+        $this->assertCount(2, Grants::all($this->editor));
+
+        Grants::revoke($this->editor, (string) array_key_first(Grants::all($this->editor)));
+
+        // Revoking one connection leaves the other working.
+        $this->assertCount(1, Grants::all($this->editor));
+        $this->assertSame(
+            $this->editor,
+            $this->authenticate($second['access_token']) ?: $this->authenticate($first['access_token'])
+        );
+    }
+
     public function test_unknown_token_authenticates_nobody(): void
     {
         $this->assertFalse($this->authenticate('gmat_not-a-real-token'));
