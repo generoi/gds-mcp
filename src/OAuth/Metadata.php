@@ -90,6 +90,30 @@ final class Metadata
     }
 
     /**
+     * The REST route a resource URL resolves to, e.g. `/mcp/my-server`.
+     *
+     * WordPress dispatches REST requests by the `rest_route` query variable,
+     * not by URL path, so this — and not the path — is what a token's audience
+     * has to be checked against. Returns '' when the URL is not a REST URL,
+     * which callers must treat as "matches nothing".
+     */
+    public static function routeOf(string $resource): string
+    {
+        // Plain-permalink sites address REST as /index.php?rest_route=/…
+        parse_str((string) wp_parse_url($resource, PHP_URL_QUERY), $query);
+        if (! empty($query['rest_route']) && is_string($query['rest_route'])) {
+            return untrailingslashit($query['rest_route']);
+        }
+
+        $prefix = '/'.rest_get_url_prefix();
+        $path = self::pathOf($resource);
+
+        return str_starts_with($path, $prefix.'/')
+            ? untrailingslashit(substr($path, strlen($prefix)))
+            : '';
+    }
+
+    /**
      * URL of the protected resource metadata document for one resource.
      *
      * Claude is told about this document in the WWW-Authenticate challenge, so
@@ -97,7 +121,11 @@ final class Metadata
      */
     public static function protectedResourceUrl(string $resource): string
     {
-        return home_url('/.well-known/oauth-protected-resource'.self::pathOf($resource));
+        // RFC 9728 §3.1 puts the document at the origin root with the
+        // resource's path appended — not under the site's own path, which for
+        // a subdirectory install would repeat that prefix and point at a URL
+        // WordPress never sees.
+        return Server::origin().'/.well-known/oauth-protected-resource'.self::pathOf($resource);
     }
 
     /**

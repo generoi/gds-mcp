@@ -39,6 +39,12 @@ class OAuthFlowTest extends TestCase
 
         $this->editor = self::factory()->user->create(['role' => 'editor']);
         wp_set_current_user($this->editor);
+
+        // The audience a bearer token proved is per-request state; tests share
+        // a process, so clear it between them.
+        $audience = new \ReflectionProperty(BearerAuth::class, 'audience');
+        $audience->setAccessible(true);
+        $audience->setValue(null, null);
     }
 
     protected function tearDown(): void
@@ -241,6 +247,54 @@ class OAuthFlowTest extends TestCase
         $this->assertStringContainsString('wp-login.php', (string) $response->location());
     }
 
+    public function test_logged_out_visitor_is_never_bounced_to_the_client(): void
+    {
+        // Anyone can register a client with any https callback, so an error
+        // redirect fired before login would make this endpoint an open
+        // redirector wearing the site's own domain.
+        $client = $this->registerClient();
+        wp_set_current_user(0);
+
+        $response = $this->authorize($client['client_id'], '', ['code_challenge_method' => 'plain']);
+
+        $this->assertStringContainsString('wp-login.php', (string) $response->location());
+        $this->assertStringNotContainsString('claude.ai', (string) $response->location());
+    }
+
+    public function test_consent_screen_refuses_to_be_framed(): void
+    {
+        $client = $this->registerClient();
+
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_GET = [
+            'response_type' => 'code',
+            'client_id' => $client['client_id'],
+            'redirect_uri' => self::REDIRECT_URI,
+            'resource' => $this->resource,
+            'code_challenge' => $this->challenge('v'),
+            'code_challenge_method' => 'S256',
+        ];
+        $response = $this->capture(fn () => Authorize::handle());
+
+        $this->assertStringContainsString('Authorize MCP access', $response->body);
+
+        $this->assertSame('DENY', $response->headers['X-Frame-Options']);
+        $this->assertSame("frame-ancestors 'none'", $response->headers['Content-Security-Policy']);
+    }
+
+    public function test_opaque_state_survives_intact(): void
+    {
+        // sanitize_text_field() deletes percent-encoded sequences; a client
+        // whose state is URL-encoded would get it back mangled and read that
+        // as a CSRF failure.
+        $state = 'a%2Fb%20c+d~e';
+        $client = $this->registerClient();
+
+        $redirect = $this->authorize($client['client_id'], $this->challenge('v'), ['state' => $state]);
+
+        $this->assertSame($state, $this->query($redirect->location())['state']);
+    }
+
     // ── Tokens in use ────────────────────────────────────────────
 
     public function test_token_only_works_against_the_endpoint_it_was_issued_for(): void
@@ -254,6 +308,60 @@ class OAuthFlowTest extends TestCase
             BearerAuth::authenticate(false),
             'A token scoped to the MCP endpoint must not authenticate elsewhere.'
         );
+    }
+
+    public function test_rest_route_parameter_cannot_redirect_a_token_to_another_endpoint(): void
+    {
+        $tokens = $this->connect();
+
+        // WordPress dispatches REST requests by the `rest_route` query var,
+        // which overrides the route the permalink rewrite derives from the
+        // path — so a request addressed to the MCP endpoint can be served by
+        // any other route. Reading the path alone would authenticate it.
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
+        $_SERVER['REQUEST_URI'] = Metadata::pathOf($this->resource).'?rest_route=/wp/v2/users';
+        $_GET['rest_route'] = '/wp/v2/users';
+
+        $this->assertFalse(BearerAuth::authenticate(false));
+    }
+
+    public function test_rest_route_in_the_body_cannot_redirect_a_token_either(): void
+    {
+        $tokens = $this->connect();
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
+        $_SERVER['REQUEST_URI'] = Metadata::pathOf($this->resource);
+        $_POST['rest_route'] = '/wp/v2/users';
+
+        $this->assertFalse(BearerAuth::authenticate(false));
+    }
+
+    public function test_audience_is_re_checked_against_the_dispatched_route(): void
+    {
+        $tokens = $this->connect();
+        $this->assertSame($this->editor, $this->authenticate($tokens['access_token']));
+
+        // Whatever the token proved at authentication time, the route
+        // WordPress ends up dispatching is the one that counts.
+        $GLOBALS['wp']->query_vars['rest_route'] = '/wp/v2/users';
+        $error = BearerAuth::enforceAudience(null);
+
+        $this->assertInstanceOf(\WP_Error::class, $error);
+        $this->assertSame(401, $error->get_error_data()['status']);
+
+        $GLOBALS['wp']->query_vars['rest_route'] = Metadata::routeOf($this->resource);
+        $this->assertNull(BearerAuth::enforceAudience(null));
+    }
+
+    public function test_revoking_an_access_token_ends_the_authorization(): void
+    {
+        $tokens = $this->connect();
+
+        $_POST = ['token' => $tokens['access_token']];
+        $this->post([Token::class, 'handleRevocation']);
+
+        $this->assertFalse($this->authenticate($tokens['access_token']));
+        $this->assertSame([], Grants::all($this->editor));
     }
 
     public function test_revoking_a_grant_invalidates_its_tokens(): void
@@ -371,7 +479,7 @@ class OAuthFlowTest extends TestCase
     private function authorize(string $clientId, string $challenge, array $overrides = []): ResponseException
     {
         $_SERVER['REQUEST_METHOD'] = 'POST';
-        $_REQUEST = array_merge([
+        $_POST = array_merge([
             'response_type' => 'code',
             'client_id' => $clientId,
             'redirect_uri' => self::REDIRECT_URI,

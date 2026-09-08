@@ -51,6 +51,13 @@ final class Token
             return Server::error('invalid_grant', 'The authorization code does not match this request.');
         }
 
+        // RFC 8707 §2.2: a token request may narrow the audience, never widen
+        // it beyond what the code was issued for.
+        $resource = self::param('resource');
+        if ($resource !== '' && ! hash_equals((string) $payload['resource'], untrailingslashit($resource))) {
+            return Server::error('invalid_target', 'The requested resource is not the one this code was issued for.');
+        }
+
         return self::tokens((int) $payload['user'], (string) $payload['grant']);
     }
 
@@ -63,8 +70,15 @@ final class Token
             return Server::error('invalid_grant', 'The refresh token is invalid or has expired.');
         }
 
+        // RFC 6749 §6: the client identifies itself on a refresh. A public
+        // client has no secret, so this is all that ties a refresh token to
+        // the client it was issued to.
         $clientId = self::param('client_id');
-        if ($clientId !== '' && ! hash_equals($payload['grant']['client_id'], $clientId)) {
+        if ($clientId === '') {
+            return Server::error('invalid_client', 'A client_id is required to refresh.', 401);
+        }
+
+        if (! hash_equals($payload['grant']['client_id'], $clientId)) {
             return Server::error('invalid_grant', 'The refresh token belongs to another client.');
         }
 
@@ -77,8 +91,12 @@ final class Token
      */
     private static function tokens(int $userId, string $grantId): ResponseException
     {
-        $accessToken = Grants::issueAccessToken($userId, $grantId);
         $refreshToken = Grants::issueRefreshToken($userId, $grantId);
+        if ($refreshToken === null) {
+            return Server::error('invalid_grant', 'This authorization has been revoked.');
+        }
+
+        $accessToken = Grants::issueAccessToken($userId, $grantId);
 
         return ResponseException::json([
             'access_token' => $accessToken,
@@ -97,12 +115,19 @@ final class Token
     {
         Server::handlePreflight('POST');
 
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            throw Server::error('invalid_request', 'POST required.', 405);
+        }
+
         $token = self::param('token');
 
+        // Either token type may be presented, and `token_type_hint` is only a
+        // hint — so try both. Revoking one ends the whole authorization, which
+        // is what a client disconnecting means by it.
         if ($token !== '') {
-            $refresh = Grants::readRefreshToken($token);
-            if ($refresh !== null) {
-                Grants::revoke($refresh['user'], $refresh['grant_id']);
+            $grant = Grants::readRefreshToken($token) ?? Grants::readAccessToken($token);
+            if ($grant !== null) {
+                Grants::revoke($grant['user'], $grant['grant_id']);
             }
         }
 
@@ -123,6 +148,6 @@ final class Token
     private static function param(string $key): string
     {
         // phpcs:ignore WordPress.Security.NonceVerification.Missing -- see handle().
-        return isset($_POST[$key]) ? sanitize_text_field(wp_unslash($_POST[$key])) : '';
+        return Server::param($_POST, $key);
     }
 }

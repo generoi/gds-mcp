@@ -14,9 +14,14 @@ use Closure;
  * their own capabilities, instead of the whole organisation sharing one
  * credential.
  *
- * Endpoints are served from `parse_request` rather than the REST API: the
- * discovery documents and the token endpoint must be reachable while logged
- * out, and sites routinely lock down `/wp-json/` for anonymous visitors.
+ * Endpoints are served from `parse_request` rather than the REST API, because
+ * the authorization endpoint cannot live there: `rest_cookie_check_errors()`
+ * calls `wp_set_current_user(0)` for any cookie-authenticated request that
+ * carries no `wp_rest` nonce, and a client redirecting a browser to the
+ * consent screen has no nonce to send — the endpoint would see every visitor
+ * as logged out. The discovery documents also sit at `/.well-known/`, outside
+ * `/wp-json/` entirely, and OAuth error bodies have a shape of their own that
+ * the REST error envelope would rewrite.
  *
  * Disabled unless the site defines `GDS_MCP_OAUTH` as true.
  *
@@ -101,8 +106,10 @@ final class Server
         // RFC 8414 §3: for an issuer with a path component the metadata lives
         // at /.well-known/oauth-authorization-server{path}. Serve the bare path
         // too, which is what a root-installed site advertises.
+        // …and clients also try the OpenID-style location under the issuer
+        // itself. A site at the root serves both from the same request path.
         if ($path === '/.well-known/oauth-authorization-server'.$home
-            || $path === '/.well-known/oauth-authorization-server') {
+            || $local === '/.well-known/oauth-authorization-server') {
             return fn () => Metadata::serveAuthorizationServer();
         }
 
@@ -139,10 +146,38 @@ final class Server
      */
     public static function requestPath(): string
     {
-        $uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : '';
-        $path = (string) wp_parse_url($uri, PHP_URL_PATH);
+        $uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+        $path = (string) wp_parse_url(self::clean($uri), PHP_URL_PATH);
 
         return '/'.trim($path, '/');
+    }
+
+    /**
+     * Read an OAuth parameter from a request array without mangling it.
+     *
+     * `sanitize_text_field()` deletes percent-encoded sequences and collapses
+     * whitespace. Applied to an opaque `state`, a PKCE verifier or a token it
+     * silently rewrites a value that is then compared byte for byte, so these
+     * are only stripped of control characters — which is what would let a
+     * value break out into a header — and length-capped.
+     *
+     * @param  array<string, mixed>  $source
+     */
+    public static function param(array $source, string $key, int $max = 2048): string
+    {
+        if (! isset($source[$key]) || ! is_string($source[$key])) {
+            return '';
+        }
+
+        return substr(self::clean(wp_unslash($source[$key])), 0, $max);
+    }
+
+    /**
+     * Strip control characters, including the CR and LF of header injection.
+     */
+    public static function clean(string $value): string
+    {
+        return trim((string) preg_replace('/[\x00-\x1F\x7F]/', '', $value));
     }
 
     /**
@@ -178,7 +213,10 @@ final class Server
      */
     public static function isSecure(): bool
     {
-        if (is_ssl() || str_starts_with(home_url(), 'https://')) {
+        // The request itself has to be encrypted, not merely the canonical
+        // URL: a site reachable over both schemes would otherwise hand out
+        // consent screens and tokens in the clear.
+        if (is_ssl()) {
             return true;
         }
 

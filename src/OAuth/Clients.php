@@ -17,9 +17,18 @@ final class Clients
     private const INDEX_OPTION = 'gds_mcp_oauth_clients';
 
     /**
-     * Registrations kept before the oldest are dropped.
+     * Registrations kept before the oldest are dropped. Generous, because a
+     * client whose registration is evicted while someone is still connected
+     * to it cannot re-authorize: it is told its client_id is unknown, which
+     * is a dead end rather than an instruction to register again.
      */
-    private const MAX_CLIENTS = 200;
+    private const MAX_CLIENTS = 2000;
+
+    /**
+     * Age past which an unused registration is pruned. Long enough to outlast
+     * a refresh token, so a live connection is never swept up.
+     */
+    private const MAX_AGE = 60 * DAY_IN_SECONDS;
 
     /**
      * @param  string|null  $rawBody  Registration body; read from the request when omitted.
@@ -147,12 +156,21 @@ final class Clients
 
         $index = get_option(self::INDEX_OPTION, []);
         $index = is_array($index) ? $index : [];
-        $index[] = $client['client_id'];
+        $index[$client['client_id']] = $client['client_id_issued_at'];
 
-        if (count($index) > self::MAX_CLIENTS) {
-            foreach (array_splice($index, 0, count($index) - self::MAX_CLIENTS) as $stale) {
-                delete_option(self::OPTION_PREFIX.$stale);
-            }
+        $cutoff = time() - self::MAX_AGE;
+        $stale = array_keys(array_filter($index, static fn ($issued): bool => $issued < $cutoff));
+
+        // Only if age alone has not kept the store in check.
+        if (count($index) - count($stale) > self::MAX_CLIENTS) {
+            asort($index);
+            $overflow = array_slice(array_keys($index), 0, count($index) - self::MAX_CLIENTS);
+            $stale = array_unique(array_merge($stale, $overflow));
+        }
+
+        foreach ($stale as $clientId) {
+            delete_option(self::OPTION_PREFIX.$clientId);
+            unset($index[$clientId]);
         }
 
         update_option(self::INDEX_OPTION, $index, false);

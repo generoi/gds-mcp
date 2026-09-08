@@ -54,7 +54,16 @@ final class ResponseException extends RuntimeException
     {
         return new self(
             $status,
-            ['Content-Type' => 'text/html; charset=utf-8', 'Cache-Control' => 'no-store'],
+            [
+                'Content-Type' => 'text/html; charset=utf-8',
+                'Cache-Control' => 'no-store',
+                // The consent screen grants the visitor's own account in one
+                // click, and it renders outside wp-admin and wp-login, where
+                // WordPress would send these itself. Framed, that click can be
+                // stolen — the nonce rides along with it.
+                'X-Frame-Options' => 'DENY',
+                'Content-Security-Policy' => "frame-ancestors 'none'",
+            ],
             $body
         );
     }

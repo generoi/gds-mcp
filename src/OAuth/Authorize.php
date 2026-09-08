@@ -38,6 +38,14 @@ final class Authorize
             throw self::fail(__('The client asked to be sent to an address it has not registered.', 'gds-mcp'));
         }
 
+        // Sign in before anything that reports an error by redirecting to the
+        // client: bouncing an anonymous visitor to an address that anyone can
+        // self-register would make this endpoint an open redirector wearing
+        // the site's own domain.
+        if (! is_user_logged_in()) {
+            throw ResponseException::redirect(wp_login_url(Server::currentUrl()));
+        }
+
         if ($params['response_type'] !== 'code') {
             throw self::reject($redirectUri, $params['state'], 'unsupported_response_type');
         }
@@ -49,10 +57,6 @@ final class Authorize
         $resource = Metadata::resolveResource($params['resource']);
         if ($resource === null) {
             throw self::reject($redirectUri, $params['state'], 'invalid_target', 'Unknown MCP resource.');
-        }
-
-        if (! is_user_logged_in()) {
-            throw ResponseException::redirect(wp_login_url(Server::currentUrl()));
         }
 
         if (! current_user_can(Server::capability())) {
@@ -109,10 +113,29 @@ final class Authorize
             'resource' => $resource,
         ]);
 
-        return ResponseException::redirect(add_query_arg(
-            array_filter(['code' => $code, 'state' => $params['state']]),
-            $redirectUri
-        ));
+        return ResponseException::redirect(
+            self::callback($redirectUri, ['code' => $code, 'state' => $params['state']])
+        );
+    }
+
+    /**
+     * Build a callback URL.
+     *
+     * `add_query_arg()` is not usable here: it defers to `build_query()`,
+     * which appends values unencoded, so a `state` carrying an `&` or a `#` —
+     * both legal in an opaque value — would arrive at the client truncated or
+     * split into extra parameters.
+     *
+     * @param  array<string, string>  $params
+     */
+    private static function callback(string $uri, array $params): string
+    {
+        $query = http_build_query(array_filter($params), '', '&', PHP_QUERY_RFC3986);
+        if ($query === '') {
+            return $uri;
+        }
+
+        return $uri.(str_contains($uri, '?') ? '&' : '?').$query;
     }
 
     /**
@@ -120,19 +143,21 @@ final class Authorize
      */
     private static function params(): array
     {
-        // phpcs:disable WordPress.Security.NonceVerification.Recommended -- OAuth
-        // parameters arrive from the client, not from a WordPress form; the
-        // consent POST carries its own nonce, checked in consent().
-        $get = fn (string $key): string => isset($_REQUEST[$key])
-            ? sanitize_text_field(wp_unslash($_REQUEST[$key]))
-            : '';
+        // phpcs:disable WordPress.Security.NonceVerification -- OAuth parameters
+        // arrive from the client, not from a WordPress form; the consent POST
+        // carries its own nonce, checked in consent().
+        //
+        // Read from the actual method's array rather than $_REQUEST, whose
+        // contents depend on php.ini's request_order — a configuration that
+        // includes cookies would let a cookie on a sibling subdomain override
+        // the client and callback the visitor is being asked to approve.
+        $source = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' ? $_POST : $_GET;
+        $get = fn (string $key): string => Server::param($source, $key);
 
         return [
             'response_type' => $get('response_type'),
             'client_id' => $get('client_id'),
-            'redirect_uri' => isset($_REQUEST['redirect_uri'])
-                ? esc_url_raw(wp_unslash($_REQUEST['redirect_uri']))
-                : '',
+            'redirect_uri' => esc_url_raw($get('redirect_uri')),
             'state' => $get('state'),
             'scope' => $get('scope'),
             'resource' => $get('resource'),
@@ -153,14 +178,11 @@ final class Authorize
         string $error,
         string $description = ''
     ): ResponseException {
-        return ResponseException::redirect(add_query_arg(
-            array_filter([
-                'error' => $error,
-                'error_description' => $description,
-                'state' => $state,
-            ]),
-            $redirectUri
-        ));
+        return ResponseException::redirect(self::callback($redirectUri, [
+            'error' => $error,
+            'error_description' => $description,
+            'state' => $state,
+        ]));
     }
 
     /**
@@ -172,13 +194,9 @@ final class Authorize
         string $redirectUri = '',
         string $state = ''
     ): ResponseException {
-        $back = '';
-        if ($redirectUri !== '') {
-            $back = add_query_arg(
-                array_filter(['error' => 'access_denied', 'state' => $state]),
-                $redirectUri
-            );
-        }
+        $back = $redirectUri === ''
+            ? ''
+            : self::callback($redirectUri, ['error' => 'access_denied', 'state' => $state]);
 
         return self::page(
             __('Authorization failed', 'gds-mcp'),

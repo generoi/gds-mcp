@@ -144,7 +144,7 @@ final class Grants
      * Resolve a bearer token to its user and grant, or null if it is unknown,
      * expired, or its grant has been revoked.
      *
-     * @return array{user: int, grant: array<string, mixed>}|null
+     * @return array{user: int, grant_id: string, grant: array<string, mixed>}|null
      */
     public static function readAccessToken(string $token): ?array
     {
@@ -158,7 +158,11 @@ final class Grants
             return null;
         }
 
-        return ['user' => (int) $payload['user'], 'grant' => $grant];
+        return [
+            'user' => (int) $payload['user'],
+            'grant_id' => (string) $payload['grant'],
+            'grant' => $grant,
+        ];
     }
 
     // ── Refresh tokens ───────────────────────────────────────────
@@ -167,13 +171,16 @@ final class Grants
      * Issue a refresh token, replacing any the grant already had.
      *
      * Public clients must rotate refresh tokens, so the previous one is
-     * invalidated in the same step that mints its replacement.
+     * invalidated in the same step that mints its replacement. Null when the
+     * grant is gone — revoked while the exchange was in flight — so the caller
+     * fails the request rather than answering with a hollow token the client
+     * would store and never be able to redeem.
      */
-    public static function issueRefreshToken(int $userId, string $grantId): string
+    public static function issueRefreshToken(int $userId, string $grantId): ?string
     {
         $grants = self::all($userId);
         if (! isset($grants[$grantId])) {
-            return '';
+            return null;
         }
 
         if (! empty($grants[$grantId]['refresh'])) {
