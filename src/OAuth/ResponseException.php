@@ -1,0 +1,120 @@
+<?php
+
+namespace GeneroWP\MCP\OAuth;
+
+use RuntimeException;
+
+/**
+ * A finished HTTP response, thrown from an endpoint and sent at the router
+ * boundary.
+ *
+ * OAuth endpoints answer and stop — they never fall through to WordPress.
+ * Carrying that as an exception instead of `exit` keeps the handlers callable
+ * from tests, where a redirect target or an error code is the thing under
+ * test.
+ */
+final class ResponseException extends RuntimeException
+{
+    /**
+     * @param  array<string, string>  $headers
+     */
+    private function __construct(
+        public readonly int $status,
+        public readonly array $headers,
+        public readonly string $body,
+    ) {
+        // Deliberately not the body: a token response would otherwise be the
+        // exception message, and anything logging a caught Throwable around
+        // parse_request would write both tokens out in the clear.
+        parent::__construct('OAuth response', $status);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<string, string>  $headers
+     */
+    public static function json(array $data, int $status = 200, array $headers = []): self
+    {
+        return new self(
+            $status,
+            array_merge([
+                'Content-Type' => 'application/json; charset=utf-8',
+                'Cache-Control' => 'no-store',
+                // Browser-based clients read these cross-origin. Safe on every
+                // JSON the module serves: `*` forbids credentials, and the
+                // token and registration endpoints answer a request that
+                // carried a secret the calling page does not have.
+                'Access-Control-Allow-Origin' => '*',
+            ], $headers),
+            (string) wp_json_encode($data)
+        );
+    }
+
+    public static function redirect(string $url): self
+    {
+        return new self(302, ['Location' => $url, 'Cache-Control' => 'no-store'], '');
+    }
+
+    public static function html(string $body, int $status = 200): self
+    {
+        return new self(
+            $status,
+            [
+                'Content-Type' => 'text/html; charset=utf-8',
+                'Cache-Control' => 'no-store',
+                // The consent screen grants the visitor's own account in one
+                // click, and it renders outside wp-admin and wp-login, where
+                // WordPress would send these itself. Framed, that click can be
+                // stolen — the nonce rides along with it.
+                'X-Frame-Options' => 'DENY',
+                'Content-Security-Policy' => "frame-ancestors 'none'",
+            ],
+            $body
+        );
+    }
+
+    /**
+     * @param  array<string, string>  $headers
+     */
+    public static function noContent(array $headers = []): self
+    {
+        return new self(204, $headers, '');
+    }
+
+    /**
+     * Where a redirect response points, or null for anything else.
+     */
+    public function location(): ?string
+    {
+        return $this->headers['Location'] ?? null;
+    }
+
+    /**
+     * Decoded body of a JSON response.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function data(): ?array
+    {
+        $data = json_decode($this->body, true);
+
+        return is_array($data) ? $data : null;
+    }
+
+    public function send(): void
+    {
+        status_header($this->status);
+        foreach ($this->headers as $name => $value) {
+            // PHP refuses a multi-line header value, but it refuses it with a
+            // warning and no header at all; skipping one that could never be
+            // valid keeps that out of the response.
+            if (preg_match('/[\r\n\0]/', $value)) {
+                continue;
+            }
+
+            header($name.': '.$value);
+        }
+
+        echo $this->body; // phpcs:ignore WordPress.Security.EscapeOutput -- Built escaped by the endpoint.
+    }
+}

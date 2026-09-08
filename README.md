@@ -141,7 +141,50 @@ Polylang also adds `lang` and `translations` fields to all REST responses automa
 }
 ```
 
-### HTTP (production, remote access)
+### OAuth (production, remote access — recommended)
+
+With OAuth enabled, anyone adds the site as a **custom connector** by URL alone: no application password, no base64, no `npx`. Each person signs in with their own WordPress account and gets a token carrying their own capabilities. It works in Claude Desktop, claude.ai, mobile and Claude Code.
+
+**1. Enable it** — the module is off unless the site says otherwise:
+
+```php
+// Bedrock config/application.php
+Config::define('GDS_MCP_OAUTH', env('GDS_MCP_OAUTH') ?? true);
+
+// Or plain WordPress, in wp-config.php
+define('GDS_MCP_OAUTH', true);
+```
+
+**2. Check discovery answers** — a client that cannot read these never starts:
+
+```bash
+curl https://example.com/.well-known/oauth-authorization-server
+curl https://example.com/.well-known/oauth-protected-resource/wp-json/mcp/mcp-adapter-default-server
+```
+
+**3. Connect** — in Claude, add a custom connector pointing at `https://example.com/wp-json/mcp/mcp-adapter-default-server`. Claude registers itself, sends the person to `wp-login.php` if needed, and shows a consent screen. Claude Code takes the same URL:
+
+```bash
+claude mcp add -s local --transport http my-site https://example.com/wp-json/mcp/mcp-adapter-default-server
+```
+
+**Requirements**
+
+- HTTPS (localhost and `local`/`development` environments are exempt)
+- Pretty permalinks: the authorization, token and registration endpoints are paths under `/mcp-oauth/`, and a site with plain permalinks has no rewrite rules to route them
+- `/.well-known/` must reach WordPress. The common nginx recipe denies every dotted path (`location ~ /\. { deny all; }`) — see `.ddev/nginx/well-known.conf` in the kaskipuu project for the override. Kinsta passes it through as-is.
+
+**Managing access**
+
+- **Users → MCP connections** lists connected applications and revokes them. Revoking kills that grant's access and refresh tokens immediately. Everyone sees their own; anyone who can manage users sees all.
+- Connecting requires `edit_posts` by default — filter `gds-mcp/oauth_capability` to change it. What a token may then *do* is governed per ability by `CapabilityPolicy`, exactly as for a cookie session.
+- **Enabling OAuth raises the MCP endpoint's own floor to that same capability**, for every client including ones using an application password. The adapter's default is `read`, which would otherwise let a subscriber reach the endpoint the consent screen refuses them.
+- Deactivating the plugin revokes every connection, and uninstalling removes the grants, refresh tokens and client registrations. Deactivation is a real revocation, not a pause.
+- Access tokens last an hour, refresh tokens 30 days and rotate on every use. Tokens are stored hashed and are bound to the MCP endpoint they were issued for, so a leaked token is not a general-purpose site credential.
+
+### HTTP with an application password
+
+Still the simplest option for a shared machine-to-machine credential, or where OAuth cannot be enabled.
 
 **1. Create an application password:**
 

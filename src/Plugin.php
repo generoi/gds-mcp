@@ -32,6 +32,12 @@ class Plugin
         // by mutating abilities and replayed via the gds-mcp/restore_snapshot
         // filter).
         Undo\RestoreSnapshot::register();
+
+        // OAuth: let remote MCP clients (Claude Desktop, claude.ai, Claude
+        // Code) authenticate as their own WordPress user instead of sharing an
+        // application password. Opt in per site with the GDS_MCP_OAUTH constant.
+        OAuth\Server::register();
+
         add_action('plugins_loaded', [$this, 'bootstrapMcpAdapter'], 20);
 
         // Clear cached schemas when plugins change (abilities may differ)

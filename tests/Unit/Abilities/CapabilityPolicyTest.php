@@ -21,6 +21,20 @@ class CapabilityPolicyTest extends WP_UnitTestCase
         $this->assertSame('manage_options', CapabilityPolicy::capabilityFor('gds/feeds-delete'));
     }
 
+    public function test_nav_menu_abilities_require_edit_theme_options(): void
+    {
+        // nav_menu_item is an edit_theme_options object in core, and these
+        // abilities either check nothing of their own or write before their
+        // REST controller checks.
+        foreach (['create', 'update', 'delete', 'move', 'reorder'] as $operation) {
+            $this->assertSame(
+                'edit_theme_options',
+                CapabilityPolicy::capabilityFor('gds/nav-menu-items-'.$operation),
+                $operation.' must be gated'
+            );
+        }
+    }
+
     public function test_other_abilities_are_left_untouched(): void
     {
         // These enforce caps internally or via their REST controller, or are

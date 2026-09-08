@@ -17,6 +17,29 @@ if (! defined('PLL_ADMIN')) {
 }
 
 /**
+ * Locate a plugin file by its `slug/file.php` name.
+ *
+ * `wp-env` installs plugins listed by download URL into a directory named
+ * after the zip — `redirection.latest-stable` rather than `redirection` — while
+ * CI installs the same plugins by slug. A plugin that is not found here does
+ * not fail: its tests skip, silently, so both spellings are tried.
+ */
+function gds_mcp_plugin_file(string $plugin): ?string
+{
+    $pluginsDir = dirname(__DIR__, 2);
+    [$slug, $file] = explode('/', $plugin, 2);
+
+    foreach ([$slug, $slug.'.latest-stable'] as $dir) {
+        $path = $pluginsDir.'/'.$dir.'/'.$file;
+        if (file_exists($path)) {
+            return $path;
+        }
+    }
+
+    return null;
+}
+
+/**
  * Load gds-mcp and integration plugins in muplugins_loaded.
  *
  * wp-phpunit uses a fresh DB where no plugins are "activated".
@@ -38,8 +61,8 @@ tests_add_filter('muplugins_loaded', function () {
     ];
 
     foreach ($integrations as $plugin) {
-        $path = $pluginsDir.'/'.$plugin;
-        if (file_exists($path)) {
+        $path = gds_mcp_plugin_file($plugin);
+        if ($path !== null) {
             require_once $path;
         }
     }
@@ -80,13 +103,14 @@ if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
     $model = PLL()->model;
 
     // Find the languages definition file (Pro or free).
-    $pluginsDir = dirname(__DIR__, 2);
-    foreach (['polylang-pro/vendor/wpsyntex/polylang/settings/languages.php', 'polylang/settings/languages.php'] as $path) {
-        $languagesFile = $pluginsDir.'/'.$path;
-        if (file_exists($languagesFile)) {
+    foreach ([
+        'polylang-pro/vendor/wpsyntex/polylang/settings/languages.php',
+        'polylang/settings/languages.php',
+    ] as $path) {
+        $languagesFile = gds_mcp_plugin_file($path);
+        if ($languagesFile !== null) {
             break;
         }
-        $languagesFile = null;
     }
     $knownLanguages = $languagesFile ? include $languagesFile : [];
 
@@ -108,17 +132,33 @@ if (function_exists('PLL') && PLL() && isset(PLL()->model)) {
 }
 
 // Create Redirection DB tables and default group.
-$redirectionDbFile = dirname(__DIR__, 2).'/redirection/database/database.php';
-if (class_exists('Red_Item') && file_exists($redirectionDbFile)) {
-    require_once $redirectionDbFile;
-    $schemaFile = dirname(__DIR__, 2).'/redirection/database/schema/latest.php';
-    if (file_exists($schemaFile)) {
-        require_once $schemaFile;
-    }
+if (class_exists('Red_Item')) {
     require_once ABSPATH.'wp-admin/includes/upgrade.php';
-    if (class_exists('Red_Latest_Database')) {
-        (new Red_Latest_Database)->install();
+
+    // Redirection 5.5 moved its database code under includes/ and namespaced
+    // the schema class; both layouts are tried so the tests run against either.
+    $schemas = [
+        ['redirection/includes/database/schema/class-latest.php', 'Redirection\\Database\\Schema\\Latest'],
+        ['redirection/database/schema/latest.php', 'Red_Latest_Database'],
+    ];
+
+    foreach ($schemas as [$file, $class]) {
+        $schemaFile = gds_mcp_plugin_file($file);
+        if ($schemaFile === null) {
+            continue;
+        }
+
+        if (! class_exists($class)) {
+            require_once $schemaFile;
+        }
+
+        if (class_exists($class)) {
+            (new $class)->install();
+
+            break;
+        }
     }
+
     // Redirection requires group 1 for creating redirects.
     if (class_exists('Red_Group') && ! Red_Group::get(1)) {
         Red_Group::create('Redirections', 1);

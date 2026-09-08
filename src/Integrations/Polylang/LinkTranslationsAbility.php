@@ -100,6 +100,20 @@ final class LinkTranslationsAbility
             return $error;
         }
 
+        // Linking rewrites each post's language and translation group, so it
+        // takes the same permission editing those posts does. Checked here
+        // because this ability writes through the pll_* helpers rather than a
+        // REST controller, and nothing else in the path checks at all.
+        foreach ($normalized as $id) {
+            if (! current_user_can('edit_post', $id)) {
+                return new WP_Error(
+                    'forbidden',
+                    sprintf('You do not have permission to edit post %d.', $id),
+                    ['status' => 403]
+                );
+            }
+        }
+
         // Guard destructive relinks. pll_save_post_translations OVERWRITES the
         // group and pll_set_post_language can strip a post from its current
         // group — both unrevisioned and invisible. Refuse to silently orphan
