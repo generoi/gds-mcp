@@ -96,6 +96,8 @@ final class Authorize
             return self::reject($redirectUri, $params['state'], 'access_denied');
         }
 
+        Clients::touch($client['client_id']);
+
         $userId = get_current_user_id();
         $grantId = Grants::create($userId, [
             'client_id' => $client['client_id'],
@@ -130,7 +132,10 @@ final class Authorize
      */
     private static function callback(string $uri, array $params): string
     {
-        $query = http_build_query(array_filter($params), '', '&', PHP_QUERY_RFC3986);
+        // Only absent values are dropped: "0" is a legal opaque state, and a
+        // client that gets it back missing reads that as a CSRF failure.
+        $params = array_filter($params, static fn (string $value): bool => $value !== '');
+        $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
         if ($query === '') {
             return $uri;
         }

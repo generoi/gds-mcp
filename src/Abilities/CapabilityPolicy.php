@@ -81,13 +81,24 @@ final class CapabilityPolicy
      * __return_true` and no internal check, so an editor could edit/delete
      * forms and feeds (breaking integrations) or read submissions (PII).
      *
+     * The nav-menu abilities are the other exception: create and update
+     * delegate to WP_REST_Menu_Items_Controller, which checks capabilities,
+     * but delete, move and reorder call wp_delete_post()/wp_update_post()
+     * directly, and neither of those checks anything. Core registers
+     * `nav_menu_item` as an `edit_theme_options` object, so without this an
+     * author could take the site's navigation apart.
+     *
      * @return array<string, string>
      */
     private static function map(): array
     {
         $manage = 'manage_options';
+        $theme = 'edit_theme_options';
 
         return [
+            'gds/nav-menu-items-delete' => $theme,
+            'gds/nav-menu-items-move' => $theme,
+            'gds/nav-menu-items-reorder' => $theme,
             'gds/forms-list' => $manage,
             'gds/forms-read' => $manage,
             'gds/forms-create' => $manage,

@@ -25,8 +25,9 @@ final class Clients
     private const MAX_CLIENTS = 2000;
 
     /**
-     * Age past which an unused registration is pruned. Long enough to outlast
-     * a refresh token, so a live connection is never swept up.
+     * Age past which a registration nobody has authorized against is pruned.
+     * Measured from last use, so a connection that keeps being re-authorized
+     * is never swept up.
      */
     private const MAX_AGE = 60 * DAY_IN_SECONDS;
 
@@ -148,14 +149,52 @@ final class Clients
     }
 
     /**
+     * Mark a registration as still in use, so pruning measures the age of the
+     * connection rather than the age of the registration.
+     */
+    public static function touch(string $clientId): void
+    {
+        $index = self::index();
+        if (! isset($index[$clientId])) {
+            return;
+        }
+
+        $index[$clientId] = time();
+        update_option(self::INDEX_OPTION, $index, false);
+    }
+
+    /**
+     * Registration ids mapped to when each was last used.
+     *
+     * @return array<string, int>
+     */
+    private static function index(): array
+    {
+        $index = get_option(self::INDEX_OPTION, []);
+        if (! is_array($index)) {
+            return [];
+        }
+
+        $normalised = [];
+        foreach ($index as $key => $value) {
+            // Earlier builds stored a plain list of ids with no timestamps.
+            // Age those out on the next write rather than keeping them for
+            // ever: an integer key would otherwise never compare as stale.
+            [$clientId, $used] = is_int($key) ? [(string) $value, 0] : [(string) $key, (int) $value];
+            $normalised[$clientId] = $used;
+        }
+
+        return $normalised;
+    }
+
+    /**
      * @param  array<string, mixed>  $client
      */
     private static function save(array $client): void
     {
         add_option(self::OPTION_PREFIX.$client['client_id'], $client, '', false);
 
-        $index = get_option(self::INDEX_OPTION, []);
-        $index = is_array($index) ? $index : [];
+        $index = self::index();
         $index[$client['client_id']] = $client['client_id_issued_at'];
 
         $cutoff = time() - self::MAX_AGE;

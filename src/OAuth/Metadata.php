@@ -71,17 +71,47 @@ final class Metadata
     }
 
     /**
-     * Is this request aimed at one of the MCP endpoints?
+     * Is this REST route one of the MCP endpoints?
      */
-    public static function isResourcePath(string $path): bool
+    public static function isResourceRoute(string $route): bool
     {
+        $route = untrailingslashit($route);
+        if ($route === '') {
+            return false;
+        }
+
         foreach (self::resources() as $resource) {
-            if (self::pathOf($resource) === untrailingslashit($path)) {
+            if (self::routeOf($resource) === $route) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Path the site's REST API is served from, e.g. `/wp-json` or
+     * `/blog/index.php/wp-json`. Null on a site with plain permalinks, which
+     * has no REST path at all — only the `rest_route` query variable.
+     */
+    public static function restBase(): ?string
+    {
+        // `determine_current_user` can fire before the rewrite rules are set
+        // up, and rest_url() reads them. The conventional layout is the right
+        // answer then: a site that does not use it addresses REST by query
+        // variable, which is matched separately.
+        if (! isset($GLOBALS['wp_rewrite'])) {
+            return Server::homePath().'/'.rest_get_url_prefix();
+        }
+
+        $url = rest_url('/');
+
+        parse_str((string) wp_parse_url($url, PHP_URL_QUERY), $query);
+        if (! empty($query['rest_route'])) {
+            return null;
+        }
+
+        return untrailingslashit((string) wp_parse_url($url, PHP_URL_PATH));
     }
 
     public static function pathOf(string $resource): string
@@ -105,11 +135,13 @@ final class Metadata
             return untrailingslashit($query['rest_route']);
         }
 
-        $prefix = '/'.rest_get_url_prefix();
+        // …every other site carries it in the path, under a base that also
+        // includes the site's own directory and any index.php in the way.
+        $base = self::restBase();
         $path = self::pathOf($resource);
 
-        return str_starts_with($path, $prefix.'/')
-            ? untrailingslashit(substr($path, strlen($prefix)))
+        return $base !== null && str_starts_with($path, $base.'/')
+            ? untrailingslashit(substr($path, strlen($base)))
             : '';
     }
 

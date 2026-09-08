@@ -146,8 +146,13 @@ final class Server
      */
     public static function requestPath(): string
     {
-        $uri = isset($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
-        $path = (string) wp_parse_url(self::clean($uri), PHP_URL_PATH);
+        $uri = isset($_SERVER['REQUEST_URI']) ? self::clean(wp_unslash($_SERVER['REQUEST_URI'])) : '';
+
+        // Split the way WP::parse_request() does rather than with a URL
+        // parser: `//evil.com/wp-json/…` is a path to WordPress, but a URL
+        // parser reads it as a host, and the two must not disagree about
+        // which request this is.
+        $path = strtok(strtok($uri, '?') ?: '', '#') ?: '';
 
         return '/'.trim($path, '/');
     }

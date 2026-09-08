@@ -282,6 +282,30 @@ class OAuthFlowTest extends TestCase
         $this->assertSame("frame-ancestors 'none'", $response->headers['Content-Security-Policy']);
     }
 
+    public function test_a_state_of_zero_still_comes_back(): void
+    {
+        $client = $this->registerClient();
+
+        $redirect = $this->authorize($client['client_id'], $this->challenge('v'), ['state' => '0']);
+
+        $this->assertSame('0', $this->query($redirect->location())['state']);
+    }
+
+    public function test_route_resolution_handles_a_site_in_a_subdirectory(): void
+    {
+        // A subdirectory install carries the site path in front of the REST
+        // base, and a token that cannot resolve its own route authenticates
+        // nothing at all.
+        add_filter('home_url', fn (): string => 'https://example.org/blog');
+        add_filter('rest_url', fn (): string => 'https://example.org/blog/wp-json/');
+
+        $this->assertSame('/blog/wp-json', Metadata::restBase());
+        $this->assertSame(
+            '/mcp/test-server',
+            Metadata::routeOf('https://example.org/blog/wp-json/mcp/test-server')
+        );
+    }
+
     public function test_opaque_state_survives_intact(): void
     {
         // sanitize_text_field() deletes percent-encoded sequences; a client
@@ -332,6 +356,37 @@ class OAuthFlowTest extends TestCase
         $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
         $_SERVER['REQUEST_URI'] = Metadata::pathOf($this->resource);
         $_POST['rest_route'] = '/wp/v2/users';
+
+        $this->assertFalse(BearerAuth::authenticate(false));
+    }
+
+    public function test_token_does_not_authenticate_outside_the_rest_api(): void
+    {
+        $tokens = $this->connect();
+
+        // admin-ajax.php and admin-post.php dispatch on is_user_logged_in()
+        // without ever parsing the request, so `rest_authentication_errors`
+        // never runs there — the route named in the query string has to count
+        // for nothing.
+        foreach (['/wp-admin/admin-ajax.php', '/wp-admin/admin-post.php', '/wp-comments-post.php'] as $entry) {
+            $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
+            $_SERVER['REQUEST_URI'] = $entry.'?action=whatever';
+            $_GET = ['rest_route' => Metadata::routeOf($this->resource)];
+
+            $this->assertFalse(BearerAuth::authenticate(false), $entry.' must not authenticate');
+        }
+    }
+
+    public function test_a_host_smuggled_into_the_path_does_not_authenticate(): void
+    {
+        $tokens = $this->connect();
+
+        // A URL parser reads `//evil.com/wp-json/…` as a host plus path;
+        // WordPress reads the whole thing as a path and never routes it to
+        // REST. Authenticating it would put the token's user on a request the
+        // REST checks never see.
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
+        $_SERVER['REQUEST_URI'] = '//evil.com'.Metadata::pathOf($this->resource);
 
         $this->assertFalse(BearerAuth::authenticate(false));
     }

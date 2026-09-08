@@ -21,7 +21,9 @@ final class BearerAuth
     public static function register(): void
     {
         add_filter('determine_current_user', [self::class, 'authenticate']);
-        add_filter('rest_authentication_errors', [self::class, 'enforceAudience'], 20);
+        // Ahead of core's own authentication filters (90, 100), so a plugin
+        // that answers earlier cannot take this check out of the chain.
+        add_filter('rest_authentication_errors', [self::class, 'enforceAudience'], 1);
         add_filter('rest_post_dispatch', [self::class, 'challenge'], 10, 3);
 
         // A browser-resident client reads the challenge off a cross-origin
@@ -63,10 +65,10 @@ final class BearerAuth
             return $user;
         }
 
-        // Resource URLs are absolute, so a grant made on one site of a
-        // multisite network cannot be replayed on another that shares the
-        // route.
-        if (! str_starts_with($payload['grant']['resource'], Server::origin().'/')) {
+        // Pinned to the site's own home URL, path included: on a subdirectory
+        // network every site shares an origin, and the route is identical, so
+        // the path is the only thing telling two sites' grants apart.
+        if (! str_starts_with($payload['grant']['resource'], untrailingslashit(home_url()).'/')) {
             return $user;
         }
 
@@ -89,7 +91,7 @@ final class BearerAuth
      */
     public static function enforceAudience($errors)
     {
-        if ($errors !== null || self::$audience === null) {
+        if (self::$audience === null || is_wp_error($errors)) {
             return $errors;
         }
 
@@ -125,12 +127,12 @@ final class BearerAuth
             return $response;
         }
 
-        $path = untrailingslashit((string) wp_parse_url(rest_url($request->get_route()), PHP_URL_PATH));
-        if (! Metadata::isResourcePath($path)) {
+        $route = untrailingslashit($request->get_route());
+        if (! Metadata::isResourceRoute($route)) {
             return $response;
         }
 
-        $resource = Metadata::resolveResource(Server::origin().$path);
+        $resource = Metadata::resolveResource(rest_url($route));
         if ($resource === null) {
             return $response;
         }
@@ -159,21 +161,33 @@ final class BearerAuth
      */
     private static function requestedRoute(): ?string
     {
+        $home = Server::homePath();
+        $base = Metadata::restBase();
+        $path = Server::requestPath();
+        $pretty = $base !== null && str_starts_with($path, $base.'/');
+
+        // `rest_route` names a route only where WordPress reads it as one: at
+        // the site's front controller, which is how a plain-permalink site
+        // addresses REST. Anywhere else — admin-ajax.php, admin-post.php,
+        // wp-comments-post.php — it is an ordinary parameter, and honouring it
+        // there would authenticate a request no REST check ever sees, since
+        // `rest_authentication_errors` fires only inside serve_request().
+        $index = in_array($path, [$home === '' ? '/' : $home, $home.'/index.php'], true);
+
+        if (! $pretty && ! $index) {
+            return null;
+        }
+
         // phpcs:disable WordPress.Security.NonceVerification -- Reads the route
         // WordPress itself will dispatch; changes nothing.
         foreach ([$_POST, $_GET] as $source) {
             if (isset($source['rest_route']) && is_string($source['rest_route'])) {
-                return untrailingslashit(sanitize_text_field(wp_unslash($source['rest_route'])));
+                return untrailingslashit(Server::param($source, 'rest_route'));
             }
         }
         // phpcs:enable WordPress.Security.NonceVerification
 
-        $prefix = '/'.rest_get_url_prefix();
-        $path = Server::requestPath();
-
-        return str_starts_with($path, $prefix.'/')
-            ? untrailingslashit(substr($path, strlen($prefix)))
-            : null;
+        return $pretty ? untrailingslashit(substr($path, strlen((string) $base))) : null;
     }
 
     private static function bearerToken(): ?string
