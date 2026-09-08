@@ -1,0 +1,459 @@
+<?php
+
+namespace GeneroWP\MCP\Tests\Integration\OAuth;
+
+use GeneroWP\MCP\OAuth\Authorize;
+use GeneroWP\MCP\OAuth\BearerAuth;
+use GeneroWP\MCP\OAuth\Clients;
+use GeneroWP\MCP\OAuth\Grants;
+use GeneroWP\MCP\OAuth\Metadata;
+use GeneroWP\MCP\OAuth\ResponseException;
+use GeneroWP\MCP\OAuth\Token;
+use GeneroWP\MCP\Tests\TestCase;
+use WP_REST_Request;
+use WP_REST_Response;
+
+/**
+ * The authorization code flow end to end, plus the ways it is supposed to
+ * fail: a replayed code, a wrong PKCE verifier, a stale refresh token, a
+ * revoked grant, and a token pointed at the wrong endpoint.
+ */
+class OAuthFlowTest extends TestCase
+{
+    private const REDIRECT_URI = 'https://claude.ai/api/mcp/auth_callback';
+
+    private string $resource;
+
+    private int $editor;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Pretty permalinks, so rest_url() produces /wp-json/… paths like a
+        // real site rather than an index.php query string.
+        $this->set_permalink_structure('/%postname%/');
+
+        $this->resource = untrailingslashit(rest_url('mcp/test-server'));
+        add_filter('gds-mcp/oauth_resources', fn (): array => [$this->resource]);
+
+        $this->editor = self::factory()->user->create(['role' => 'editor']);
+        wp_set_current_user($this->editor);
+    }
+
+    protected function tearDown(): void
+    {
+        $_GET = $_POST = $_REQUEST = [];
+        // Left in place rather than unset: WordPress reads REQUEST_URI on
+        // shutdown (cron) and warns when it is missing entirely.
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['REQUEST_URI'] = '/';
+        unset($_SERVER['HTTP_AUTHORIZATION']);
+
+        parent::tearDown();
+    }
+
+    // ── Happy path ───────────────────────────────────────────────
+
+    public function test_authorization_code_flow_issues_a_usable_bearer_token(): void
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = $this->registerClient();
+
+        $redirect = $this->authorize($client['client_id'], $this->challenge($verifier));
+        $this->assertStringStartsWith(self::REDIRECT_URI, (string) $redirect->location());
+
+        $query = $this->query($redirect->location());
+        $this->assertArrayHasKey('code', $query);
+        $this->assertSame('opaque-state', $query['state']);
+
+        $tokens = $this->exchange($client['client_id'], $query['code'], $verifier);
+        $this->assertSame('Bearer', $tokens['token_type']);
+        $this->assertSame(Grants::ACCESS_TTL, $tokens['expires_in']);
+        $this->assertNotEmpty($tokens['refresh_token']);
+
+        $this->assertSame(
+            $this->editor,
+            $this->authenticate($tokens['access_token']),
+            'The bearer token should resolve to the user who consented.'
+        );
+    }
+
+    public function test_refresh_rotates_the_refresh_token(): void
+    {
+        $tokens = $this->connect($clientId);
+
+        $_POST = [
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $tokens['refresh_token'],
+            'client_id' => $clientId,
+        ];
+        $refreshed = $this->post([Token::class, 'handle'])->data();
+
+        $this->assertNotSame($tokens['refresh_token'], $refreshed['refresh_token']);
+        $this->assertSame($this->editor, $this->authenticate($refreshed['access_token']));
+
+        // Replaying the spent refresh token must not mint anything.
+        $_POST['refresh_token'] = $tokens['refresh_token'];
+        $error = $this->post([Token::class, 'handle']);
+        $this->assertSame(400, $error->status);
+        $this->assertSame('invalid_grant', $error->data()['error']);
+    }
+
+    // ── Codes ────────────────────────────────────────────────────
+
+    public function test_authorization_code_cannot_be_replayed(): void
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = $this->registerClient();
+        $code = $this->query($this->authorize($client['client_id'], $this->challenge($verifier))->location())['code'];
+
+        $this->exchange($client['client_id'], $code, $verifier);
+
+        $_POST = [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'code_verifier' => $verifier,
+            'client_id' => $client['client_id'],
+            'redirect_uri' => self::REDIRECT_URI,
+        ];
+        $error = $this->post([Token::class, 'handle']);
+
+        $this->assertSame(400, $error->status);
+        $this->assertSame('invalid_grant', $error->data()['error']);
+    }
+
+    public function test_wrong_pkce_verifier_is_rejected(): void
+    {
+        $client = $this->registerClient();
+        $code = $this->query(
+            $this->authorize($client['client_id'], $this->challenge('the-real-verifier'))->location()
+        )['code'];
+
+        $_POST = [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'code_verifier' => 'not-the-real-verifier',
+            'client_id' => $client['client_id'],
+            'redirect_uri' => self::REDIRECT_URI,
+        ];
+        $error = $this->post([Token::class, 'handle']);
+
+        $this->assertSame('invalid_grant', $error->data()['error']);
+    }
+
+    public function test_code_cannot_be_redeemed_by_another_client(): void
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = $this->registerClient();
+        $other = $this->registerClient();
+        $code = $this->query($this->authorize($client['client_id'], $this->challenge($verifier))->location())['code'];
+
+        $_POST = [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'code_verifier' => $verifier,
+            'client_id' => $other['client_id'],
+            'redirect_uri' => self::REDIRECT_URI,
+        ];
+        $error = $this->post([Token::class, 'handle']);
+
+        $this->assertSame('invalid_grant', $error->data()['error']);
+    }
+
+    // ── Authorization endpoint ───────────────────────────────────
+
+    public function test_pkce_is_required(): void
+    {
+        $client = $this->registerClient();
+        $redirect = $this->authorize($client['client_id'], '', ['code_challenge_method' => '']);
+
+        $this->assertSame('invalid_request', $this->query($redirect->location())['error']);
+    }
+
+    public function test_plain_pkce_is_refused(): void
+    {
+        $client = $this->registerClient();
+        $redirect = $this->authorize($client['client_id'], 'a-plain-challenge', ['code_challenge_method' => 'plain']);
+
+        $this->assertSame('invalid_request', $this->query($redirect->location())['error']);
+    }
+
+    public function test_unregistered_redirect_uri_is_not_redirected_to(): void
+    {
+        $client = $this->registerClient();
+        $response = $this->authorize($client['client_id'], $this->challenge('v'), [
+            'redirect_uri' => 'https://evil.example/callback',
+        ]);
+
+        // Never bounce to an address the client did not register — that would
+        // hand the code to whoever asked.
+        $this->assertNull($response->location());
+        $this->assertSame(403, $response->status);
+    }
+
+    public function test_unknown_resource_is_refused(): void
+    {
+        $client = $this->registerClient();
+        $redirect = $this->authorize($client['client_id'], $this->challenge('v'), [
+            'resource' => 'https://example.org/wp-json/mcp/other-server',
+        ]);
+
+        $this->assertSame('invalid_target', $this->query($redirect->location())['error']);
+    }
+
+    public function test_denying_consent_reports_access_denied(): void
+    {
+        $client = $this->registerClient();
+        $redirect = $this->authorize($client['client_id'], $this->challenge('v'), ['consent' => 'deny']);
+
+        $this->assertSame('access_denied', $this->query($redirect->location())['error']);
+        $this->assertSame('opaque-state', $this->query($redirect->location())['state']);
+    }
+
+    public function test_consent_form_requires_a_valid_nonce(): void
+    {
+        $client = $this->registerClient();
+        $response = $this->authorize($client['client_id'], $this->challenge('v'), ['_wpnonce' => 'forged']);
+
+        $this->assertSame(403, $response->status);
+        $this->assertNull($response->location());
+    }
+
+    public function test_user_without_the_capability_cannot_authorize(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+
+        $client = $this->registerClient();
+        $response = $this->authorize($client['client_id'], $this->challenge('v'));
+
+        $this->assertSame(403, $response->status);
+        $this->assertStringContainsString('not allowed', $response->body);
+    }
+
+    public function test_logged_out_visitor_is_sent_to_wp_login(): void
+    {
+        $client = $this->registerClient();
+        wp_set_current_user(0);
+
+        $response = $this->authorize($client['client_id'], $this->challenge('v'));
+
+        $this->assertStringContainsString('wp-login.php', (string) $response->location());
+    }
+
+    // ── Tokens in use ────────────────────────────────────────────
+
+    public function test_token_only_works_against_the_endpoint_it_was_issued_for(): void
+    {
+        $tokens = $this->connect();
+
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$tokens['access_token'];
+        $_SERVER['REQUEST_URI'] = '/wp-json/wp/v2/users';
+
+        $this->assertFalse(
+            BearerAuth::authenticate(false),
+            'A token scoped to the MCP endpoint must not authenticate elsewhere.'
+        );
+    }
+
+    public function test_revoking_a_grant_invalidates_its_tokens(): void
+    {
+        $tokens = $this->connect();
+        $this->assertSame($this->editor, $this->authenticate($tokens['access_token']));
+
+        foreach (array_keys(Grants::all($this->editor)) as $grantId) {
+            Grants::revoke($this->editor, (string) $grantId);
+        }
+
+        $this->assertFalse($this->authenticate($tokens['access_token']));
+
+        $_POST = ['grant_type' => 'refresh_token', 'refresh_token' => $tokens['refresh_token']];
+        $this->assertSame('invalid_grant', $this->post([Token::class, 'handle'])->data()['error']);
+    }
+
+    public function test_unknown_token_authenticates_nobody(): void
+    {
+        $this->assertFalse($this->authenticate('gmat_not-a-real-token'));
+    }
+
+    // ── Challenge and discovery ──────────────────────────────────
+
+    public function test_unauthenticated_mcp_response_is_turned_into_a_challenge(): void
+    {
+        wp_set_current_user(0);
+
+        $response = BearerAuth::challenge(
+            new WP_REST_Response(null, 403),
+            null,
+            new WP_REST_Request('POST', '/mcp/test-server')
+        );
+
+        $this->assertSame(401, $response->get_status());
+        $this->assertStringContainsString(
+            'resource_metadata="'.Metadata::protectedResourceUrl($this->resource).'"',
+            $response->get_headers()['WWW-Authenticate']
+        );
+    }
+
+    public function test_other_endpoints_are_not_challenged(): void
+    {
+        wp_set_current_user(0);
+
+        $response = BearerAuth::challenge(
+            new WP_REST_Response(null, 401),
+            null,
+            new WP_REST_Request('GET', '/wp/v2/posts')
+        );
+
+        $this->assertArrayNotHasKey('WWW-Authenticate', $response->get_headers());
+    }
+
+    public function test_protected_resource_metadata_points_at_the_authorization_server(): void
+    {
+        $document = $this->capture(
+            fn () => Metadata::serveProtectedResource(Metadata::pathOf($this->resource))
+        )->data();
+
+        $this->assertSame($this->resource, $document['resource']);
+        $this->assertSame([untrailingslashit(home_url())], $document['authorization_servers']);
+    }
+
+    public function test_authorization_server_metadata_advertises_pkce_and_registration(): void
+    {
+        $document = $this->capture(fn () => Metadata::serveAuthorizationServer())->data();
+
+        $this->assertSame(['S256'], $document['code_challenge_methods_supported']);
+        $this->assertSame(['authorization_code', 'refresh_token'], $document['grant_types_supported']);
+        $this->assertNotEmpty($document['registration_endpoint']);
+        $this->assertNotEmpty($document['token_endpoint']);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────
+
+    /**
+     * Run a full connection and return the issued tokens.
+     *
+     * @param  string|null  $clientId  Receives the client that connected.
+     * @return array<string, mixed>
+     */
+    private function connect(&$clientId = null): array
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = $this->registerClient();
+        $clientId = $client['client_id'];
+        $code = $this->query($this->authorize($clientId, $this->challenge($verifier))->location())['code'];
+
+        return $this->exchange($clientId, $code, $verifier);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function registerClient(): array
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+
+        $response = $this->capture(fn () => Clients::handleRegistration((string) wp_json_encode([
+            'client_name' => 'Claude',
+            'redirect_uris' => [self::REDIRECT_URI],
+        ])));
+
+        $this->assertSame(201, $response->status);
+
+        return $response->data();
+    }
+
+    /**
+     * Submit the consent form as the current user.
+     *
+     * @param  array<string, string>  $overrides
+     */
+    private function authorize(string $clientId, string $challenge, array $overrides = []): ResponseException
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_REQUEST = array_merge([
+            'response_type' => 'code',
+            'client_id' => $clientId,
+            'redirect_uri' => self::REDIRECT_URI,
+            'state' => 'opaque-state',
+            'resource' => $this->resource,
+            'code_challenge' => $challenge,
+            'code_challenge_method' => 'S256',
+            'consent' => 'allow',
+            '_wpnonce' => wp_create_nonce('gds-mcp-oauth-consent'),
+        ], $overrides);
+
+        return $this->capture(fn () => Authorize::handle());
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function exchange(string $clientId, string $code, string $verifier): array
+    {
+        $_POST = [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'code_verifier' => $verifier,
+            'client_id' => $clientId,
+            'redirect_uri' => self::REDIRECT_URI,
+        ];
+
+        $response = $this->post([Token::class, 'handle']);
+        $this->assertSame(200, $response->status, $response->body);
+
+        return $response->data();
+    }
+
+    /**
+     * @param  callable  $handler
+     */
+    private function post($handler): ResponseException
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+
+        return $this->capture(fn () => $handler());
+    }
+
+    /**
+     * Resolve a bearer token the way a request to the MCP endpoint would.
+     *
+     * @return int|false
+     */
+    private function authenticate(string $token)
+    {
+        $_SERVER['HTTP_AUTHORIZATION'] = 'Bearer '.$token;
+        $_SERVER['REQUEST_URI'] = Metadata::pathOf($this->resource);
+
+        return BearerAuth::authenticate(false);
+    }
+
+    /**
+     * Every endpoint answers by throwing its response.
+     */
+    private function capture(callable $handler): ResponseException
+    {
+        try {
+            $handler();
+        } catch (ResponseException $response) {
+            return $response;
+        }
+
+        $this->fail('The endpoint returned without sending a response.');
+    }
+
+    private function challenge(string $verifier): string
+    {
+        return rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function query(?string $url): array
+    {
+        parse_str((string) wp_parse_url((string) $url, PHP_URL_QUERY), $query);
+
+        return $query;
+    }
+}
