@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Tests\Integration\OAuth;
 
+use GeneroWP\MCP\OAuth\Admin;
 use GeneroWP\MCP\OAuth\Authorize;
 use GeneroWP\MCP\OAuth\BearerAuth;
 use GeneroWP\MCP\OAuth\Clients;
@@ -235,6 +236,21 @@ class OAuthFlowTest extends TestCase
 
         $this->assertSame(403, $response->status);
         $this->assertStringContainsString('not allowed', $response->body);
+    }
+
+    public function test_connections_page_is_only_listed_for_users_who_can_connect(): void
+    {
+        $listed = function (string $role): bool {
+            global $submenu;
+            $submenu = [];
+            wp_set_current_user(self::factory()->user->create(['role' => $role]));
+            Admin::menu();
+
+            return in_array('gds-mcp-connections', array_column(array_merge(...array_values($submenu)), 2), true);
+        };
+
+        $this->assertTrue($listed('editor'));
+        $this->assertFalse($listed('subscriber'));
     }
 
     public function test_logged_out_visitor_is_sent_to_wp_login(): void

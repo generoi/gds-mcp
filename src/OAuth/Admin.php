@@ -16,12 +16,17 @@ final class Admin
         add_action('admin_post_'.self::ACTION, [self::class, 'revoke']);
     }
 
+    /**
+     * Shown to accounts that may connect a client at all. A token held by an
+     * account that has since lost the capability stops working (Grants checks
+     * it), and a user manager can still revoke it from their full list.
+     */
     public static function menu(): void
     {
         add_users_page(
             __('MCP connections', 'gds-mcp'),
             __('MCP connections', 'gds-mcp'),
-            'read',
+            Server::capability(),
             'gds-mcp-connections',
             [self::class, 'render']
         );
