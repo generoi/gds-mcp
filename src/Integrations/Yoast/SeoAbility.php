@@ -5,6 +5,7 @@ namespace GeneroWP\MCP\Integrations\Yoast;
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Undo\Reversible;
 use GeneroWP\MCP\Undo\Snapshot;
+use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
 use WP_Error;
 use WP_Post;
 use WP_Term;
@@ -96,7 +97,7 @@ final class SeoAbility
     public function read(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $object = self::resolveObject($input, 'read');
+        $object = self::resolveObject($input);
         if (is_wp_error($object)) {
             return $object;
         }
@@ -110,7 +111,7 @@ final class SeoAbility
     public function update(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
-        $object = self::resolveObject($input, 'edit');
+        $object = self::resolveObject($input);
         if (is_wp_error($object)) {
             return $object;
         }
@@ -132,7 +133,9 @@ final class SeoAbility
             }
 
             $metaKeys = array_map(static fn ($key) => '_yoast_wpseo_'.$key, array_keys($stored));
-            $before = Snapshot::partialPost($object->ID, $metaKeys);
+            $captured = Snapshot::partialPost($object->ID, $metaKeys);
+            // Empty status: undoing SEO must not revert a publish or untrash.
+            $before = $captured ? new PartialPostSnapshot($object->ID, '', $captured->metaPrev) : null;
 
             SeoFields::writePost($object->ID, $stored);
 
@@ -148,13 +151,13 @@ final class SeoAbility
             return $stored;
         }
 
-        $before = SeoFields::rawTermEntry($object->term_id, $object->taxonomy);
+        $prev = SeoFields::termValues($object, array_keys($stored));
         SeoFields::writeTerm($object, $stored);
 
         return $this->reversible(
             self::describe(get_term($object->term_id, $object->taxonomy)),
             'restore-term-seo',
-            ['term_id' => $object->term_id, 'taxonomy' => $object->taxonomy, 'entry' => $before],
+            ['term_id' => $object->term_id, 'taxonomy' => $object->taxonomy, 'prev' => $prev],
             "Restore the SEO fields of term {$object->term_id}",
         );
     }
@@ -162,7 +165,7 @@ final class SeoAbility
     /**
      * @param  array<string, mixed>  $input
      */
-    private static function resolveObject(array $input, string $action): WP_Post|WP_Term|WP_Error
+    private static function resolveObject(array $input): WP_Post|WP_Term|WP_Error
     {
         $id = (int) ($input['id'] ?? 0);
 
@@ -171,7 +174,7 @@ final class SeoAbility
             if (! $term instanceof WP_Term) {
                 return new WP_Error('not_found', "Term {$id} not found.", ['status' => 404]);
             }
-            if ($action === 'edit' && ! current_user_can('edit_term', $term->term_id)) {
+            if (! current_user_can('edit_term', $term->term_id)) {
                 return new WP_Error('forbidden', 'You do not have permission to edit this term.', ['status' => 403]);
             }
 
@@ -182,9 +185,9 @@ final class SeoAbility
         if (! $post instanceof WP_Post) {
             return new WP_Error('not_found', "Post {$id} not found.", ['status' => 404]);
         }
-        $cap = $action === 'edit' ? 'edit_post' : 'read_post';
-        if (! current_user_can($cap, $post->ID)) {
-            return new WP_Error('forbidden', "You do not have permission to {$action} this post.", ['status' => 403]);
+        // Yoast hides its post meta from REST for users who can't edit the post.
+        if (! current_user_can('edit_post', $post->ID)) {
+            return new WP_Error('forbidden', 'You do not have permission to edit this post.', ['status' => 403]);
         }
 
         return $post;

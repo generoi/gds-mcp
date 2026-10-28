@@ -521,7 +521,7 @@ final class RestoreSnapshot
     /**
      * Puts a term's Yoast SEO entry back as captured by gds/seo-update.
      *
-     * @param  array<string, mixed>  $data  ['term_id', 'taxonomy', 'entry' => array|null]
+     * @param  array<string, mixed>  $data  ['term_id', 'taxonomy', 'prev' => key → prior value|null]
      * @return RestoreSummary|WP_Error
      */
     private static function restoreTermSeo(array $data): array|WP_Error
@@ -531,12 +531,12 @@ final class RestoreSnapshot
         if ($termId <= 0 || $taxonomy === '') {
             return new WP_Error('restore_failed', 'Snapshot was missing term_id or taxonomy.');
         }
-        if (! term_exists($termId, $taxonomy)) {
+        $term = get_term($termId, $taxonomy);
+        if (! $term instanceof \WP_Term) {
             return new WP_Error('restore_failed', "Term {$termId} no longer exists.");
         }
 
-        $entry = $data['entry'] ?? null;
-        SeoFields::restoreRawTermEntry($termId, $taxonomy, is_array($entry) ? $entry : null);
+        SeoFields::restoreTermValues($term, (array) ($data['prev'] ?? []));
 
         return ['restored' => 'term-seo', 'term_id' => $termId];
     }

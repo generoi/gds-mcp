@@ -165,4 +165,109 @@ class YoastSeoAbilityTest extends AbilityTestCase
             'fields' => ['title' => 'Nope'],
         ]);
     }
+
+    public function test_keeps_yoast_variables_intact(): void
+    {
+        $postId = self::factory()->post->create();
+
+        $result = $this->assertAbilitySuccess('gds/seo-update', [
+            'object_type' => 'post',
+            'id' => $postId,
+            'fields' => ['title' => '%%category%% %%sep%% %%date%% %%cf_price%%'],
+        ]);
+
+        $this->assertSame('%%category%% %%sep%% %%date%% %%cf_price%%', $result['fields']['title']);
+    }
+
+    public function test_resolved_reflects_the_write(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        $this->assertAbilitySuccess('gds/seo-read', ['object_type' => 'post', 'id' => $postId]);
+
+        $result = $this->assertAbilitySuccess('gds/seo-update', [
+            'object_type' => 'post',
+            'id' => $postId,
+            'fields' => ['title' => 'Fresh resolved title'],
+        ]);
+
+        $this->assertSame('Fresh resolved title', $result['resolved']['title'] ?? null);
+    }
+
+    public function test_admin_can_set_advanced_fields_when_advanced_meta_is_disabled(): void
+    {
+        \WPSEO_Options::set('disableadvanced_meta', true);
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        $postId = self::factory()->post->create();
+
+        $result = $this->assertAbilitySuccess('gds/seo-update', [
+            'object_type' => 'post',
+            'id' => $postId,
+            'fields' => ['robots_index' => 'noindex', 'canonical' => 'https://example.com/canonical/'],
+        ]);
+
+        $this->assertSame('noindex', $result['fields']['robots_index']);
+    }
+
+    public function test_author_cannot_set_advanced_fields_when_advanced_meta_is_disabled(): void
+    {
+        \WPSEO_Options::set('disableadvanced_meta', true);
+        $authorId = self::factory()->user->create(['role' => 'author']);
+        wp_set_current_user($authorId);
+        $postId = self::factory()->post->create(['post_author' => $authorId]);
+
+        $this->assertAbilityError('gds/seo-update', [
+            'object_type' => 'post',
+            'id' => $postId,
+            'fields' => ['robots_index' => 'noindex'],
+        ], 'forbidden');
+    }
+
+    public function test_undo_does_not_revert_post_status(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'draft']);
+
+        $result = $this->assertAbilitySuccess('gds/seo-update', [
+            'object_type' => 'post',
+            'id' => $postId,
+            'fields' => ['title' => 'Draft SEO'],
+        ]);
+        wp_publish_post($postId);
+
+        $this->assertIsArray($this->undo($result));
+        $this->assertSame('publish', get_post_status($postId));
+        $this->assertSame([], get_post_meta($postId, '_yoast_wpseo_title'));
+    }
+
+    public function test_term_undo_keeps_later_changes_to_other_fields(): void
+    {
+        $termId = self::factory()->category->create();
+
+        $first = $this->assertAbilitySuccess('gds/seo-update', [
+            'object_type' => 'term',
+            'id' => $termId,
+            'fields' => ['title' => 'First title'],
+        ]);
+        $this->assertAbilitySuccess('gds/seo-update', [
+            'object_type' => 'term',
+            'id' => $termId,
+            'fields' => ['opengraph_title' => 'Later share title'],
+        ]);
+
+        $this->assertIsArray($this->undo($first));
+        $this->assertSame('', (string) \WPSEO_Taxonomy_Meta::get_term_meta($termId, 'category', 'title'));
+        $this->assertSame('Later share title', \WPSEO_Taxonomy_Meta::get_term_meta($termId, 'category', 'opengraph-title'));
+    }
+
+    public function test_rejects_non_http_canonical(): void
+    {
+        $postId = self::factory()->post->create();
+        update_post_meta($postId, '_yoast_wpseo_canonical', 'https://example.com/keep/');
+
+        $this->assertAbilityError('gds/seo-update', [
+            'object_type' => 'post',
+            'id' => $postId,
+            'fields' => ['canonical' => 'javascript://x'],
+        ], 'invalid_canonical');
+        $this->assertSame('https://example.com/keep/', get_post_meta($postId, '_yoast_wpseo_canonical', true));
+    }
 }

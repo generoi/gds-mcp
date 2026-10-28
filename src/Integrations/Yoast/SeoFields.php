@@ -5,11 +5,12 @@ namespace GeneroWP\MCP\Integrations\Yoast;
 use WP_Error;
 use WP_Post;
 use WP_Term;
+use WPSEO_Capability_Utils;
 use WPSEO_Meta;
 use WPSEO_Options;
 use WPSEO_Taxonomy_Meta;
-use Yoast\WP\SEO\Builders\Primary_Term_Builder;
-use Yoast\WP\SEO\Integrations\Watchers\Indexable_Term_Watcher;
+use WPSEO_Utils;
+use Yoast\WP\SEO\Memoizers\Meta_Tags_Context_Memoizer;
 
 /**
  * Reads and writes Yoast SEO's per-object fields under one friendly schema.
@@ -17,9 +18,9 @@ use Yoast\WP\SEO\Integrations\Watchers\Indexable_Term_Watcher;
  * Posts store them as `_yoast_wpseo_*` post meta (protected, so the generic
  * REST/meta abilities can't reach them); terms store them in the
  * `wpseo_taxonomy_meta` option. Writes go through Yoast's own APIs so its
- * sanitising and validation apply. Post indexables are rebuilt by Yoast's
- * meta watcher at shutdown; term indexables only rebuild on `edited_term`,
- * so {@see self::rebuildTermIndexable()} does that by hand.
+ * sanitising and validation apply, then save the object the way wp-admin
+ * does ({@see self::touchPost()}, {@see self::touchTerm()}) so indexables,
+ * primary terms and page caches follow.
  */
 final class SeoFields
 {
@@ -130,7 +131,7 @@ final class SeoFields
     public static function blockedAdvancedFields(array $input): array
     {
         $disabled = class_exists(WPSEO_Options::class) && WPSEO_Options::get('disableadvanced_meta');
-        if (! $disabled || current_user_can('wpseo_edit_advanced_metadata')) {
+        if (! $disabled || WPSEO_Capability_Utils::current_user_can('wpseo_edit_advanced_metadata')) {
             return [];
         }
 
@@ -160,7 +161,7 @@ final class SeoFields
             }
 
             $result = match ($type) {
-                'string' => sanitize_text_field((string) $value),
+                'string' => self::text($value),
                 'url' => self::url($value),
                 'bool' => $value ? '1' : '0',
                 'robots' => self::robots($objectType, $value),
@@ -200,23 +201,18 @@ final class SeoFields
             }
         }
 
-        // The primary term also lives in Yoast's own table, built on save_post.
-        if (array_key_exists('primary_category', $stored)) {
-            self::rebuildPrimaryTerms($postId);
-        }
+        self::touchPost($postId);
     }
 
-    public static function rebuildPrimaryTerms(int $postId): void
+    /**
+     * Saves the post unchanged, like a wp-admin save: Yoast rebuilds its
+     * indexable and primary terms right away (not at shutdown, so `resolved`
+     * is current), and page caches purge on the save hooks.
+     */
+    public static function touchPost(int $postId): void
     {
-        if (! function_exists('YoastSEO') || ! class_exists(Primary_Term_Builder::class)) {
-            return;
-        }
-
-        try {
-            YoastSEO()->classes->get(Primary_Term_Builder::class)->build($postId);
-        } catch (\Throwable) {
-            // Yoast rebuilds it on the next post save.
-        }
+        wp_update_post(['ID' => $postId]);
+        self::clearMemoizedMeta();
     }
 
     /**
@@ -226,15 +222,94 @@ final class SeoFields
     {
         $current = (array) WPSEO_Taxonomy_Meta::get_term_meta($term->term_id, $term->taxonomy);
         WPSEO_Taxonomy_Meta::set_values($term->term_id, $term->taxonomy, array_merge($current, $stored));
-        self::rebuildTermIndexable($term->term_id);
+        self::touchTerm($term);
     }
 
     /**
-     * The term's raw entry in `wpseo_taxonomy_meta`, or null when it has none.
+     * Prior raw values of the given `wpseo_*` keys; null = key was absent.
      *
+     * @param  list<string>  $keys
+     * @return array<string, mixed>
+     */
+    public static function termValues(WP_Term $term, array $keys): array
+    {
+        $entry = self::rawTermEntry($term->term_id, $term->taxonomy) ?? [];
+
+        $prev = [];
+        foreach ($keys as $key) {
+            $prev[$key] = $entry[$key] ?? null;
+        }
+
+        return $prev;
+    }
+
+    /**
+     * Puts back only the given keys of a term's `wpseo_taxonomy_meta` entry,
+     * leaving anything changed since untouched.
+     *
+     * @param  array<string, mixed>  $prev  Key → prior raw value; null removes the key.
+     */
+    public static function restoreTermValues(WP_Term $term, array $prev): void
+    {
+        $all = get_option('wpseo_taxonomy_meta', []);
+        $all = is_array($all) ? $all : [];
+        $entry = (array) ($all[$term->taxonomy][$term->term_id] ?? []);
+
+        foreach ($prev as $key => $value) {
+            if ($value === null) {
+                unset($entry[$key]);
+            } else {
+                $entry[$key] = $value;
+            }
+        }
+
+        if ($entry === []) {
+            unset($all[$term->taxonomy][$term->term_id]);
+            if (isset($all[$term->taxonomy]) && $all[$term->taxonomy] === []) {
+                unset($all[$term->taxonomy]);
+            }
+        } else {
+            $all[$term->taxonomy][$term->term_id] = $entry;
+        }
+
+        // Values were validated when Yoast first saved them. The flag is
+        // stripped again by Yoast's sanitize_option filter.
+        if (class_exists(WPSEO_Taxonomy_Meta::class)) {
+            $all['wpseo_already_validated'] = true;
+        }
+        update_option('wpseo_taxonomy_meta', $all);
+
+        self::touchTerm($term);
+    }
+
+    /**
+     * Fires `edited_term` like a wp-admin save, so Yoast rebuilds the term's
+     * indexable and page caches purge.
+     */
+    public static function touchTerm(WP_Term $term): void
+    {
+        do_action('edited_term', $term->term_id, $term->term_taxonomy_id, $term->taxonomy, []);
+        self::clearMemoizedMeta();
+    }
+
+    /** Yoast memoizes resolved meta per request; drop it so reads see the write. */
+    private static function clearMemoizedMeta(): void
+    {
+        if (! function_exists('YoastSEO') || ! class_exists(Meta_Tags_Context_Memoizer::class)) {
+            return;
+        }
+
+        try {
+            YoastSEO()->classes->get(Meta_Tags_Context_Memoizer::class)->clear();
+        } catch (\Throwable) {
+            // Only affects `resolved` within this request.
+        }
+    }
+
+    /**
      * @return array<string, mixed>|null
      */
-    public static function rawTermEntry(int $termId, string $taxonomy): ?array
+    private static function rawTermEntry(int $termId, string $taxonomy): ?array
     {
         $all = get_option('wpseo_taxonomy_meta', []);
         $entry = is_array($all) ? ($all[$taxonomy][$termId] ?? null) : null;
@@ -242,43 +317,13 @@ final class SeoFields
         return is_array($entry) ? $entry : null;
     }
 
-    /**
-     * Puts a term's raw `wpseo_taxonomy_meta` entry back as it was captured.
-     *
-     * @param  array<string, mixed>|null  $entry  Null removes the entry.
-     */
-    public static function restoreRawTermEntry(int $termId, string $taxonomy, ?array $entry): void
+    private static function text(mixed $value): string
     {
-        $all = get_option('wpseo_taxonomy_meta', []);
-        $all = is_array($all) ? $all : [];
+        $value = (string) $value;
 
-        if ($entry === null) {
-            unset($all[$taxonomy][$termId]);
-            if (isset($all[$taxonomy]) && $all[$taxonomy] === []) {
-                unset($all[$taxonomy]);
-            }
-        } else {
-            $all[$taxonomy][$termId] = $entry;
-        }
-
-        // The entry was already validated when Yoast saved it.
-        $all['wpseo_already_validated'] = true;
-        update_option('wpseo_taxonomy_meta', $all);
-
-        self::rebuildTermIndexable($termId);
-    }
-
-    public static function rebuildTermIndexable(int $termId): void
-    {
-        if (! function_exists('YoastSEO') || ! class_exists(Indexable_Term_Watcher::class)) {
-            return;
-        }
-
-        try {
-            YoastSEO()->classes->get(Indexable_Term_Watcher::class)->build_indexable($termId);
-        } catch (\Throwable) {
-            // Yoast rebuilds the indexable on the next term save.
-        }
+        // Core's sanitize_text_field() eats %xx sequences, which mangles Yoast
+        // variables (%%category%% → %tegory%%). Yoast's own version keeps them.
+        return class_exists(WPSEO_Utils::class) ? WPSEO_Utils::sanitize_text_field($value) : sanitize_text_field($value);
     }
 
     private static function fromStored(string $type, string $value, string $objectType): mixed
@@ -299,11 +344,12 @@ final class SeoFields
         if ($value === '') {
             return '';
         }
-        if (! filter_var($value, FILTER_VALIDATE_URL)) {
-            return new WP_Error('invalid_canonical', 'canonical must be an absolute URL.');
+        $url = esc_url_raw($value, ['http', 'https']);
+        if ($url === '' || ! wp_parse_url($url, PHP_URL_HOST)) {
+            return new WP_Error('invalid_canonical', 'canonical must be an absolute http(s) URL.');
         }
 
-        return esc_url_raw($value);
+        return $url;
     }
 
     private static function robots(string $objectType, mixed $value): string|WP_Error
