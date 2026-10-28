@@ -58,6 +58,10 @@ class SchemaValidationTest extends AbilityTestCase
             'gds/strings-update' => null,
             'gds/translations-create-term' => null,
 
+            // Yoast SEO
+            'gds/seo-read' => null, // needs real ID
+            'gds/seo-update' => null,
+
             // Redirects
             'gds/redirects-manage' => ['action' => 'list'],
 

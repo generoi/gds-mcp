@@ -152,6 +152,11 @@ class Plugin
             Integrations\Stream\QueryActivityLogAbility::register();
         }
 
+        // Yoast SEO -- per-post and per-term SEO and social fields
+        if (defined('WPSEO_VERSION')) {
+            Integrations\Yoast\SeoAbility::register();
+        }
+
         // Redirects -- if any supported redirect plugin is active
         if (function_exists('srm_create_redirect') || class_exists('Red_Item') || defined('WPSEO_VERSION')) {
             Integrations\Redirects\ManageRedirectsAbility::register();

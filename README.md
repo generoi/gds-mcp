@@ -112,6 +112,13 @@ Polylang also adds `lang` and `translations` fields to all REST responses automa
 |---------|-------------|
 | `gds/cache-clear` | Flush site cache or purge by tag |
 
+### Yoast SEO (when active)
+
+| Ability | Description |
+|---------|-------------|
+| `gds/seo-read` | Read a post's or term's SEO title, meta description, focus keyphrase, canonical, robots, cornerstone, breadcrumb title, primary category and social (Open Graph / X) title, description and image — stored values plus what Yoast outputs |
+| `gds/seo-update` | Update any of those fields; empty string or `0` clears a field. Undoable |
+
 ### Redirects (Safe Redirect Manager / Redirection / Yoast)
 
 | Ability | Description |
