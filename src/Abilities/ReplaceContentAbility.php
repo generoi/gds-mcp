@@ -41,7 +41,7 @@ final class ReplaceContentAbility
     {
         HelpAbility::registerAbility('gds/content-replace', [
             'label' => 'Replace Content Text',
-            'description' => 'Find-and-replace exact text across all blocks of a post in one safe pass. Use this instead of gds/blocks-patch when changing a word/phrase that appears in more than one place. Matches literal text (not regex). Always dry_run first to confirm the count, or pass expect_count to abort if the number of matches is not what you expect. Only visible text is changed (text between tags); URLs, CSS classes and other attributes are left untouched unless include_attrs is set. To find a target id, call gds/content-list first. Templates / template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer").',
+            'description' => 'Find-and-replace exact text across all blocks of a post in one safe pass. Use this instead of gds/blocks-patch when changing a word/phrase that appears in more than one place. Matches literal text (not regex). Always dry_run first to confirm the count, or pass expect_count to abort if the number of matches is not what you expect. Only visible text is changed (text between tags); URLs, CSS classes and other attributes are left untouched unless include_attrs is set. To change the settings of one block (a stat prefix, a table style, a button url), use gds/blocks-patch — never resend the whole post with content-update. A result with no matches says where the text is instead. To find a target id, call gds/content-list first. Templates / template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer").',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -106,6 +106,7 @@ final class ReplaceContentAbility
                     'replaced_count' => ['type' => 'integer'],
                     'dry_run' => ['type' => 'boolean'],
                     'samples' => ['type' => 'array', 'items' => ['type' => 'string']],
+                    'hint' => ['type' => 'string'],
                     'posts' => ['type' => 'array'],
                     'updated_posts' => ['type' => 'integer'],
                     'content' => ['type' => 'string'],
@@ -181,6 +182,10 @@ final class ReplaceContentAbility
             'dry_run' => $o['dryRun'],
             'samples' => $plan['samples'],
         ];
+
+        if ($plan['count'] === 0 && ($hint = self::noMatchHint([$post], $o))) {
+            $result['hint'] = $hint;
+        }
 
         if ($o['dryRun'] || $plan['count'] === 0) {
             return $result;
@@ -288,6 +293,10 @@ final class ReplaceContentAbility
             'samples' => $samples,
         ];
 
+        if ($total === 0 && ($hint = self::noMatchHint(array_filter(array_map('get_post', array_keys($plans))), $o))) {
+            $result['hint'] = $hint;
+        }
+
         if ($o['dryRun'] || $total === 0) {
             return $result;
         }
@@ -341,6 +350,40 @@ final class ReplaceContentAbility
         }
 
         return $result;
+    }
+
+    /**
+     * Say where the text is when it is not in visible text, so the caller
+     * edits the block instead of resending the whole post.
+     *
+     * @param  array<int, \WP_Post>  $posts
+     * @param  array{search: string, replace: string, wholeWord: bool, caseSensitive: bool, includeAttrs: bool, dryRun: bool}  $o
+     */
+    private static function noMatchHint(array $posts, array $o): ?string
+    {
+        if (! $o['includeAttrs']) {
+            $inAttrs = 0;
+            foreach ($posts as $post) {
+                $inAttrs += self::planPost($post, ['includeAttrs' => true] + $o)['count'];
+            }
+            if ($inAttrs > 0) {
+                return sprintf(
+                    'No match in visible text, but %d in block attributes (settings such as a prefix, suffix, url or className). Pass include_attrs: true to replace them all, or change one block with gds/blocks-patch (block name + occurrence + attrs).',
+                    $inAttrs,
+                );
+            }
+        }
+
+        foreach ($posts as $post) {
+            $found = $o['caseSensitive']
+                ? str_contains($post->post_content, $o['search'])
+                : stripos($post->post_content, $o['search']) !== false;
+            if ($found) {
+                return 'No match in text or block attributes, but the markup contains it — inside an HTML attribute such as a class or href. Change that block with gds/blocks-patch: attrs for settings, inner_html for the markup.';
+            }
+        }
+
+        return null;
     }
 
     /**

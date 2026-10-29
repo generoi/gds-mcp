@@ -82,7 +82,7 @@ final class PatchBlockAbility
     {
         HelpAbility::registerAbility('gds/blocks-patch', [
             'label' => 'Patch Block',
-            'description' => 'Modify, insert, or delete blocks within a post. To find a target id, call gds/content-list first — do not query REST endpoints directly. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Supports batch operations. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
+            'description' => 'Modify, insert, or delete blocks within a post without resending its content. To find a target id, call gds/content-list first — do not query REST endpoints directly. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Read the post with gds/content-read first: content.raw shows each block as <!-- wp:name {attrs} -->. Examples: fix a stat prefix with {block_name: "gds/count-up-item", occurrence: 1, attrs: {prefix: "jopa ", displayPrefix: true}}; set a block style or custom class with attrs {className: "is-style-stripes"} (the HTML class follows); clear it with remove_attrs: ["className"]. Supports batch operations. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -354,6 +354,9 @@ final class PatchBlockAbility
             // attribute source definitions (selector + attribute from block.json).
             if (isset($op['attrs']) || isset($op['set_attrs'])) {
                 self::syncAttrsToInnerHtml($block, $oldAttrs, $blockName);
+            }
+            if (isset($op['attrs']) || isset($op['set_attrs']) || isset($op['remove_attrs'])) {
+                self::syncClassNameToInnerHtml($block, $oldAttrs);
             }
 
             if (isset($op['inner_html'])) {
@@ -646,6 +649,49 @@ final class PatchBlockAbility
             if (is_string($content) && $content === $oldHtml) {
                 $content = $html;
             }
+        }
+    }
+
+    /**
+     * Mirror a changed `className` attr (custom classes and block styles such
+     * as is-style-stripes) on the block's wrapper element. A static block
+     * saves its classes in the HTML too; without this the editor flags the
+     * block as invalid and the front end keeps the old classes.
+     *
+     * @param  array<string, mixed>  $block
+     * @param  array<string, mixed>  $oldAttrs
+     */
+    private static function syncClassNameToInnerHtml(array &$block, array $oldAttrs): void
+    {
+        $old = preg_split('/\s+/', trim((string) ($oldAttrs['className'] ?? '')), -1, PREG_SPLIT_NO_EMPTY);
+        $new = preg_split('/\s+/', trim((string) ($block['attrs']['className'] ?? '')), -1, PREG_SPLIT_NO_EMPTY);
+        if ($old === $new) {
+            return;
+        }
+
+        // The wrapper is the first tag of the first HTML chunk; with inner
+        // blocks, innerContent splits the markup around them. A dynamic block
+        // that saves no HTML has no chunk, and keeps its classes in attrs only.
+        foreach ($block['innerContent'] ?? [] as $i => $chunk) {
+            if (! is_string($chunk) || trim($chunk) === '') {
+                continue;
+            }
+
+            $processor = new WP_HTML_Tag_Processor($chunk);
+            if (! $processor->next_tag()) {
+                return;
+            }
+            foreach (array_diff($old, $new) as $class) {
+                $processor->remove_class($class);
+            }
+            foreach (array_diff($new, $old) as $class) {
+                $processor->add_class($class);
+            }
+
+            $block['innerContent'][$i] = $processor->get_updated_html();
+            $block['innerHTML'] = implode('', array_filter($block['innerContent'], 'is_string'));
+
+            return;
         }
     }
 

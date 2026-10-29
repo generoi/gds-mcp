@@ -114,7 +114,7 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-update', [
             'label' => 'Update Content',
-            'description' => "Update an existing post/page/CPT. Available types: {$typeDesc}. Requires type and id. Fields are plain strings. Only include fields you want to change. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
+            'description' => "Update an existing post/page/CPT. Available types: {$typeDesc}. Requires type and id. Fields are plain strings. Only include fields you want to change. Sending content replaces the whole body: to change text use gds/content-replace, and to change one block's settings or markup use gds/blocks-patch, so you never resend the post. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
