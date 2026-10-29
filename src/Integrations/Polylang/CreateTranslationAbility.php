@@ -71,6 +71,11 @@ final class CreateTranslationAbility
                         'type' => 'object',
                         'description' => 'Yoast SEO fields for the translation, same shape as gds/seo-update `fields` (title, description, …). Ignored when Yoast is not active.',
                     ],
+                    'quiet' => [
+                        'type' => 'boolean',
+                        'description' => 'Return only id, status, modified, link, edit_url and preview_url. Default: true. Pass false to get the whole post back.',
+                        'default' => true,
+                    ],
                 ],
                 'required' => ['source_id', 'lang'],
                 'additionalProperties' => false,
@@ -203,6 +208,9 @@ final class CreateTranslationAbility
                 $result = self::restResponseData($response);
                 if ($seoError) {
                     $result['seo_error'] = $seoError;
+                }
+                if ($input['quiet'] ?? true) {
+                    $result = GenericPostTypeAbility::summary(GenericPostTypeAbility::enrichPostUrls($result));
                 }
 
                 return $this->reversible($result, 'trash', ['id' => $newId], 'Delete the created translation');
