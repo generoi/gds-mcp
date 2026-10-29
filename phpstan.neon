@@ -36,6 +36,10 @@ parameters:
         # Acorn / Sage helpers (config(), CacheTags\* classes)
         - '#Function config not found\.#'
         - '#Genero\\Sage\\CacheTags\\#'
+        # Yoast SEO — registered only when WPSEO_VERSION is defined
+        - '#WPSEO_[A-Za-z_]+#'
+        - '#Yoast\\WP\\SEO\\#'
+        - '#Function YoastSEO not found\.#'
         # WooCommerce — class_exists-guarded
         - '#Automattic\\WooCommerce\\#'
         # WP_Block_Type's $variations, $uses_context are runtime-registered

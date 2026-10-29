@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Undo;
 
+use GeneroWP\MCP\Integrations\Yoast\SeoFields;
 use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
 use GeneroWP\MCP\Undo\Snapshots\PostFieldsSnapshot;
 use GeneroWP\MCP\Undo\Snapshots\TermFieldsSnapshot;
@@ -55,6 +56,7 @@ final class RestoreSnapshot
             'delete-feed' => self::deleteFeed($data),
             'recreate-feed' => self::recreateFeed($data),
             'restore-redirect' => self::restoreRedirect($data),
+            'restore-term-seo' => self::restoreTermSeo($data),
             'restore-translation-link' => self::restoreTranslationLink($data),
             'restore-string' => self::restoreString($data),
             'bulk' => self::bulk($data),
@@ -514,6 +516,29 @@ final class RestoreSnapshot
         if (array_key_exists('feed_order', $data)) {
             \GFAPI::update_feed_property($feedId, 'feed_order', (int) $data['feed_order']);
         }
+    }
+
+    /**
+     * Puts a term's Yoast SEO entry back as captured by gds/seo-update.
+     *
+     * @param  array<string, mixed>  $data  ['term_id', 'taxonomy', 'prev' => key → prior value|null]
+     * @return RestoreSummary|WP_Error
+     */
+    private static function restoreTermSeo(array $data): array|WP_Error
+    {
+        $termId = (int) ($data['term_id'] ?? 0);
+        $taxonomy = (string) ($data['taxonomy'] ?? '');
+        if ($termId <= 0 || $taxonomy === '') {
+            return new WP_Error('restore_failed', 'Snapshot was missing term_id or taxonomy.');
+        }
+        $term = get_term($termId, $taxonomy);
+        if (! $term instanceof \WP_Term) {
+            return new WP_Error('restore_failed', "Term {$termId} no longer exists.");
+        }
+
+        SeoFields::restoreTermValues($term, (array) ($data['prev'] ?? []));
+
+        return ['restored' => 'term-seo', 'term_id' => $termId];
     }
 
     /**
