@@ -87,6 +87,11 @@ final class ReplaceContentAbility
                         'type' => 'integer',
                         'description' => 'If set, abort without writing when the actual match count differs from this number. Use it to make a replacement atomic and safe.',
                     ],
+                    'quiet' => [
+                        'type' => 'boolean',
+                        'description' => 'Leave the updated content out of the result. The match count and samples still confirm the change. Default: false.',
+                        'default' => false,
+                    ],
                 ],
                 'required' => ['search', 'replace'],
                 'additionalProperties' => false,
@@ -186,7 +191,9 @@ final class ReplaceContentAbility
             return $write;
         }
 
-        $result['content'] = $write['updated']->post_content;
+        if (empty($input['quiet'])) {
+            $result['content'] = $write['updated']->post_content;
+        }
         $result['modified'] = $write['updated']->post_modified_gmt;
 
         if ($write['before']) {

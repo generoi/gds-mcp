@@ -88,7 +88,7 @@ ACF fields are also included in REST responses for post types via the `acf` fiel
 | Ability | Description |
 |---------|-------------|
 | `gds/languages-list` | List languages (REST-delegated to /pll/v1/languages) |
-| `gds/translations-create` | Create a translated post linked via Polylang |
+| `gds/translations-create` | Create a translated post linked via Polylang, keeping author and featured image; optional `seo` fields |
 | `gds/translations-create-term` | Create a translated taxonomy term |
 | `gds/translations-audit` | Audit content for missing translations |
 | `gds/strings-list` | List Polylang string translations |

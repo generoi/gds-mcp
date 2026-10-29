@@ -144,4 +144,28 @@ class MediaUploadAbilityTest extends AbilityTestCase
 
         wp_delete_attachment($result['id'], true);
     }
+
+    public function test_url_without_extension_gets_one_from_the_file_type(): void
+    {
+        $pixel = base64_decode(self::PIXEL_PNG);
+        $filter = static function ($pre, $args) use ($pixel) {
+            if (! empty($args['filename'])) {
+                file_put_contents($args['filename'], $pixel);
+            }
+
+            return ['headers' => ['content-type' => 'image/png'], 'body' => '', 'response' => ['code' => 200, 'message' => 'OK'], 'cookies' => [], 'filename' => $args['filename'] ?? null];
+        };
+        add_filter('pre_http_request', $filter, 10, 2);
+
+        try {
+            $result = $this->assertAbilitySuccess('gds/media-upload', ['url' => 'https://tools.example.com/a/AbCdEfGhIjKlMnOpQrStUv']);
+        } finally {
+            remove_filter('pre_http_request', $filter, 10);
+        }
+
+        $this->assertSame('image/png', $result['mime_type']);
+        $this->assertStringEndsWith('.png', $result['url']);
+
+        wp_delete_attachment($result['id'], true);
+    }
 }

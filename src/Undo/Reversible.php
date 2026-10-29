@@ -13,6 +13,8 @@ namespace GeneroWP\MCP\Undo;
  *
  * Use {@see Snapshot} for the common capture shapes (post fields, terms, …).
  *
+ * Calls from a remote MCP client get no `_undo` — see {@see McpRequest}.
+ *
  * The `$data` slot accepts either a snapshot value object (any class under
  * `Snapshots\` exposing `toArray()`) or a plain array — abilities that build
  * their own ad-hoc shapes (`restore-redirect`, `restore-feed`) still pass an
@@ -30,6 +32,10 @@ trait Reversible
      */
     protected function reversible(array $result, string $kind, array|object $data, string $label): array
     {
+        if (McpRequest::isActive()) {
+            return $result;
+        }
+
         if (is_object($data)) {
             if (! method_exists($data, 'toArray')) {
                 throw new \InvalidArgumentException(

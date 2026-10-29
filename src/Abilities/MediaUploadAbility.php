@@ -30,7 +30,7 @@ final class MediaUploadAbility
                     ],
                     'filename' => [
                         'type' => 'string',
-                        'description' => 'Filename with extension (e.g. "photo.jpg"). Required for base64, optional for URL (auto-detected).',
+                        'description' => 'Filename (e.g. "photo.jpg"). Required for base64, optional for URL (taken from the URL). A missing extension is added from the file type.',
                     ],
                     'alt_text' => [
                         'type' => 'string',
@@ -145,9 +145,34 @@ final class MediaUploadAbility
 
         // Derive filename from URL if not provided.
         $filename = $input['filename'] ?? basename(wp_parse_url($url, PHP_URL_PATH)) ?: 'download';
-        $filename = sanitize_file_name($filename);
+        $filename = self::withExtension(sanitize_file_name($filename), $tmpFile);
 
         return $this->sideloadAndRespond($tmpFile, $filename, $input);
+    }
+
+    /**
+     * Add the extension the file's content calls for when the name has none,
+     * as with a short link (`/a/<token>`) that redirects to the file. WordPress
+     * rejects an upload it cannot type by its extension.
+     */
+    private static function withExtension(string $filename, string $file): string
+    {
+        if (pathinfo($filename, PATHINFO_EXTENSION) !== '') {
+            return $filename;
+        }
+
+        $mime = wp_get_image_mime($file) ?: (function_exists('mime_content_type') ? mime_content_type($file) : false);
+        if (! $mime) {
+            return $filename;
+        }
+
+        foreach (wp_get_mime_types() as $extensions => $type) {
+            if ($type === $mime) {
+                return $filename.'.'.explode('|', $extensions)[0];
+            }
+        }
+
+        return $filename;
     }
 
     /**
