@@ -89,8 +89,8 @@ final class ReplaceContentAbility
                     ],
                     'quiet' => [
                         'type' => 'boolean',
-                        'description' => 'Leave the updated content out of the result. The match count and samples still confirm the change. Default: false.',
-                        'default' => false,
+                        'description' => 'Leave the updated content out of the result. The match count and samples still confirm the change. Default: true. Pass false to get the updated content back.',
+                        'default' => true,
                     ],
                 ],
                 'required' => ['search', 'replace'],
@@ -196,7 +196,7 @@ final class ReplaceContentAbility
             return $write;
         }
 
-        if (empty($input['quiet'])) {
+        if (! ($input['quiet'] ?? true)) {
             $result['content'] = $write['updated']->post_content;
         }
         $result['modified'] = $write['updated']->post_modified_gmt;

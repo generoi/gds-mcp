@@ -103,7 +103,7 @@ final class GenericPostTypeAbility
                     'lang' => ['type' => 'string', 'description' => 'Language code'],
                     'author' => ['type' => 'integer', 'description' => 'Author user ID'],
                     'seo' => ['type' => 'object', 'description' => 'Yoast SEO fields to set on the new post, same shape as gds/seo-update `fields` (title, description, …). Ignored when Yoast is not active.'],
-                    'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link and edit_url instead of the whole post. Use for writes where you do not need the result back.'],
+                    'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link, edit_url and preview_url. Default: true. Pass false to get the whole post back; read it with gds/content-read instead when you need its content.', 'default' => true],
                 ],
                 'required' => ['type', 'title'],
             ],
@@ -131,7 +131,7 @@ final class GenericPostTypeAbility
                     'slug' => ['type' => 'string'],
                     'featured_media' => ['type' => 'integer'],
                     'lang' => ['type' => 'string', 'description' => 'Language code (re-assigns Polylang language if set).'],
-                    'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link and edit_url instead of the whole post. Use for writes where you do not need the result back.'],
+                    'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link, edit_url and preview_url. Default: true. Pass false to get the whole post back; read it with gds/content-read instead when you need its content.', 'default' => true],
                 ],
                 'required' => ['type', 'id'],
             ],
@@ -310,7 +310,7 @@ final class GenericPostTypeAbility
 
         $acfFields = $input['fields'] ?? null;
         $lang = $input['lang'] ?? null;
-        $quiet = ! empty($input['quiet']);
+        $quiet = (bool) ($input['quiet'] ?? true);
         $seo = $input['seo'] ?? null;
         unset($input['type'], $input['fields'], $input['quiet'], $input['seo']);
 
@@ -376,7 +376,7 @@ final class GenericPostTypeAbility
 
         $acfFields = $input['fields'] ?? null;
         $lang = $input['lang'] ?? null;
-        $quiet = ! empty($input['quiet']);
+        $quiet = (bool) ($input['quiet'] ?? true);
         unset($input['type'], $input['id'], $input['fields'], $input['quiet']);
 
         if ($langError = self::validateLang($lang)) {
@@ -430,7 +430,7 @@ final class GenericPostTypeAbility
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private static function enrichPostUrls(array $data): array
+    public static function enrichPostUrls(array $data): array
     {
         // Templates expose the composite "{theme}//{slug}" in `id` and the
         // numeric post id in `wp_id`. Prefer wp_id so we still get edit links.
@@ -472,14 +472,15 @@ final class GenericPostTypeAbility
     }
 
     /**
-     * The fields a caller needs to confirm a write landed.
+     * The fields a caller needs to confirm a write landed, and any part of it
+     * that failed.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     public static function summary(array $data): array
     {
-        return array_intersect_key($data, array_flip(['id', 'wp_id', 'status', 'modified', 'link', 'edit_url']));
+        return array_intersect_key($data, array_flip(['id', 'wp_id', 'status', 'modified', 'link', 'edit_url', 'preview_url', 'seo_error']));
     }
 
     /**

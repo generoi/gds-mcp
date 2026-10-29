@@ -61,8 +61,9 @@ class CreateTranslationIntegrationTest extends TestCase
 
         $this->assertIsArray($result);
         $this->assertGreaterThan(0, $result['id']);
-        $this->assertSame('Translated Post', $result['title']['rendered'] ?? $result['title']);
+        $this->assertSame('Translated Post', get_the_title($result['id']));
         $this->assertSame('draft', $result['status']);
+        $this->assertArrayNotHasKey('content', $result, 'The result is a summary unless quiet is false.');
 
         // Verify Polylang translation link.
         clean_post_cache($sourceId);

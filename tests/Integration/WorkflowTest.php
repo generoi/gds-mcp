@@ -42,7 +42,7 @@ class WorkflowTest extends AbilityTestCase
             'status' => 'publish',
         ]);
         $this->assertIsArray($updated);
-        $this->assertSame('Updated Lifecycle Post', $updated['title']['rendered']);
+        $this->assertSame('Updated Lifecycle Post', get_the_title($id));
         $this->assertSame('publish', $updated['status']);
 
         // 4. Verify in list
@@ -122,7 +122,7 @@ class WorkflowTest extends AbilityTestCase
             'title' => 'Modified Duplicate',
         ]);
         $this->assertIsArray($updated);
-        $this->assertSame('Modified Duplicate', $updated['title']['rendered']);
+        $this->assertSame('Modified Duplicate', get_the_title($duplicate['id']));
 
         // 4. Verify original is unchanged
         $originalCheck = $this->assertAbilitySuccess('gds/content-read', [

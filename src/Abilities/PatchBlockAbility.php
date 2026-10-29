@@ -99,6 +99,11 @@ final class PatchBlockAbility
                         'items' => self::OPERATION_SCHEMA,
                         'description' => 'Array of operations. All applied in one parse/serialize round-trip.',
                     ],
+                    'quiet' => [
+                        'type' => 'boolean',
+                        'description' => 'Leave the updated content out of the result. The per-operation results still confirm the change. Default: true. Pass false to get the updated content back.',
+                        'default' => true,
+                    ],
                 ],
                 'required' => ['id'],
                 'additionalProperties' => false,
@@ -215,9 +220,11 @@ final class PatchBlockAbility
             'id' => $postId,
             'results' => $results,
             'total_modified' => $totalModified,
-            'content' => $updated->post_content,
-            'modified' => $updated->post_modified_gmt,
         ];
+        if (! ($input['quiet'] ?? true)) {
+            $result['content'] = $updated->post_content;
+        }
+        $result['modified'] = $updated->post_modified_gmt;
 
         if ($before) {
             $result = $this->reversible($result, 'restore-post', $before, "Revert block changes to \"{$post->post_title}\"");

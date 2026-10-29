@@ -69,7 +69,7 @@ class ResponseSizeTest extends AbilityTestCase
         $this->assertStringContainsString('<strong>world</strong>', $result['content']['rendered']);
     }
 
-    public function test_quiet_update_returns_only_a_summary(): void
+    public function test_update_returns_only_a_summary_by_default(): void
     {
         $id = $this->createPost(['post_type' => 'page', 'post_status' => 'draft']);
 
@@ -77,27 +77,40 @@ class ResponseSizeTest extends AbilityTestCase
             'type' => 'pages',
             'id' => $id,
             'content' => self::MARKUP,
-            'quiet' => true,
         ]);
 
-        $this->assertEqualsCanonicalizing(['id', 'status', 'modified', 'link', 'edit_url'], array_keys(array_diff_key($result, ['_undo' => 1])));
+        $this->assertEqualsCanonicalizing(['id', 'status', 'modified', 'link', 'edit_url', 'preview_url'], array_keys(array_diff_key($result, ['_undo' => 1])));
         $this->assertSame(self::MARKUP, get_post_field('post_content', $id));
     }
 
-    public function test_quiet_create_returns_only_a_summary(): void
+    public function test_update_returns_the_whole_post_when_not_quiet(): void
+    {
+        $id = $this->createPost(['post_type' => 'page', 'post_status' => 'draft']);
+
+        $result = $this->assertAbilitySuccess('gds/content-update', [
+            'type' => 'pages',
+            'id' => $id,
+            'title' => 'Loud',
+            'quiet' => false,
+        ]);
+
+        $this->assertSame('Loud', $result['title']['rendered']);
+    }
+
+    public function test_create_returns_only_a_summary_by_default(): void
     {
         $result = $this->assertAbilitySuccess('gds/content-create', [
             'type' => 'pages',
             'title' => 'Quiet',
             'content' => self::MARKUP,
-            'quiet' => true,
         ]);
 
         $this->assertArrayNotHasKey('content', $result);
+        $this->assertArrayHasKey('preview_url', $result);
         $this->assertSame(self::MARKUP, get_post_field('post_content', $result['id']));
     }
 
-    public function test_quiet_replace_leaves_out_the_content(): void
+    public function test_replace_leaves_out_the_content_by_default(): void
     {
         $id = $this->createPost(['post_type' => 'page', 'post_content' => self::MARKUP]);
 
@@ -105,7 +118,6 @@ class ResponseSizeTest extends AbilityTestCase
             'id' => $id,
             'search' => 'world',
             'replace' => 'there',
-            'quiet' => true,
         ]);
 
         $this->assertSame(1, $result['replaced_count']);
@@ -113,13 +125,44 @@ class ResponseSizeTest extends AbilityTestCase
         $this->assertStringContainsString('there', get_post_field('post_content', $id));
     }
 
-    public function test_writes_carry_undo_for_gds_assistant(): void
+    public function test_blocks_patch_leaves_out_the_content_by_default(): void
     {
-        $id = $this->createPost(['post_type' => 'page']);
+        $id = $this->createPost(['post_type' => 'page', 'post_content' => self::MARKUP]);
 
-        $result = $this->assertAbilitySuccess('gds/content-update', ['type' => 'pages', 'id' => $id, 'title' => 'New']);
+        $result = $this->assertAbilitySuccess('gds/blocks-patch', [
+            'id' => $id,
+            'block_name' => 'core/paragraph',
+            'attrs' => ['className' => 'is-style-lead'],
+        ]);
 
-        $this->assertArrayHasKey('_undo', $result);
+        $this->assertSame(1, $result['total_modified']);
+        $this->assertArrayNotHasKey('content', $result);
+        $this->assertStringContainsString('is-style-lead', get_post_field('post_content', $id));
+    }
+
+    public function test_blocks_patch_returns_the_content_when_not_quiet(): void
+    {
+        $id = $this->createPost(['post_type' => 'page', 'post_content' => self::MARKUP]);
+
+        $result = $this->assertAbilitySuccess('gds/blocks-patch', [
+            'id' => $id,
+            'block_name' => 'core/paragraph',
+            'attrs' => ['className' => 'is-style-lead'],
+            'quiet' => false,
+        ]);
+
+        $this->assertStringContainsString('is-style-lead', $result['content']);
+    }
+
+    public function test_quiet_writes_carry_undo_for_gds_assistant(): void
+    {
+        $id = $this->createPost(['post_type' => 'page', 'post_content' => self::MARKUP]);
+
+        $update = $this->assertAbilitySuccess('gds/content-update', ['type' => 'pages', 'id' => $id, 'title' => 'New']);
+        $patch = $this->assertAbilitySuccess('gds/blocks-patch', ['id' => $id, 'block_name' => 'core/paragraph', 'attrs' => ['className' => 'x']]);
+
+        $this->assertArrayHasKey('_undo', $update);
+        $this->assertArrayHasKey('_undo', $patch);
     }
 
     public function test_writes_over_mcp_leave_out_undo(): void

@@ -150,7 +150,7 @@ class ContentAbilityTest extends AbilityTestCase
         }
 
         $this->assertIsArray($result);
-        $this->assertSame('Created via Ability API', $result['title']['rendered']);
+        $this->assertSame('Created via Ability API', get_the_title($result['id']));
         $this->assertSame('draft', $result['status']);
 
         wp_delete_post($result['id'], true);
@@ -170,7 +170,7 @@ class ContentAbilityTest extends AbilityTestCase
         }
 
         $this->assertIsArray($result);
-        $this->assertStringContainsString('This is the body', $result['content']['rendered']);
+        $this->assertStringContainsString('This is the body', get_post_field('post_content', $result['id']));
 
         wp_delete_post($result['id'], true);
     }
@@ -196,7 +196,7 @@ class ContentAbilityTest extends AbilityTestCase
         }
 
         $this->assertIsArray($result);
-        $this->assertSame('After Update', $result['title']['rendered']);
+        $this->assertSame('After Update', get_the_title($id));
     }
 
     // ── Delete ────────────────────────────────────────────────────
