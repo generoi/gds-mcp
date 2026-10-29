@@ -59,8 +59,8 @@ final class WebFetchAbility
                     ],
                     'format' => [
                         'type' => 'string',
-                        'enum' => ['markdown', 'text', 'html'],
-                        'description' => 'Output format. "markdown" (default): main content extracted, HTML → markdown with headings/links/lists. "text": plain text with all tags stripped. "html": raw HTML (truncated) — use when you need <head>, meta tags, nav structure, form fields, etc.',
+                        'enum' => ['markdown', 'text', 'html', 'meta'],
+                        'description' => 'Output format. "markdown" (default): main content extracted, HTML → markdown with headings/links/lists. "text": plain text with all tags stripped. "html": raw HTML (truncated) — use when you need <head>, nav structure, form fields, etc. "meta": only what search engines read from <head> — title, meta description, html lang, canonical, robots and hreflang links. Use it to check a published page.',
                     ],
                     'xpath' => [
                         'type' => 'string',
@@ -234,7 +234,7 @@ final class WebFetchAbility
     {
         $input = (array) ($input ?? []);
         $url = (string) ($input['url'] ?? '');
-        $format = in_array($input['format'] ?? '', ['markdown', 'text', 'html'], true)
+        $format = in_array($input['format'] ?? '', ['markdown', 'text', 'html', 'meta'], true)
             ? $input['format']
             : 'markdown';
         $xpathExpr = trim((string) ($input['xpath'] ?? ''));
@@ -287,7 +287,10 @@ final class WebFetchAbility
             'timeout' => self::TIMEOUT,
             'redirection' => 3,
             'headers' => [
-                'Accept' => 'text/markdown, text/plain;q=0.9, text/html;q=0.8, */*;q=0.1',
+                // Sites that serve markdown to agents would hide the <head>.
+                'Accept' => $format === 'meta'
+                    ? 'text/html'
+                    : 'text/markdown, text/plain;q=0.9, text/html;q=0.8, */*;q=0.1',
                 'User-Agent' => self::userAgent(),
             ],
             'limit_response_size' => self::MAX_BYTES,
@@ -311,6 +314,18 @@ final class WebFetchAbility
 
         $isMarkdown = str_contains($contentType, 'markdown') || str_contains($contentType, 'text/plain');
         $isHtml = str_contains($contentType, 'html');
+
+        if ($format === 'meta') {
+            if (! $isHtml) {
+                return new WP_Error('not_html', sprintf('Expected an HTML page, got %s.', $contentType ?: 'no content type'));
+            }
+
+            return [
+                'url' => $url,
+                'final_url' => self::finalUrl($response, $url),
+                'status' => $status,
+            ] + self::headMeta($body);
+        }
 
         $title = '';
         if ($isHtml) {
@@ -353,6 +368,43 @@ final class WebFetchAbility
             'title' => $title,
             'content' => $content,
             'truncated' => $truncated,
+        ];
+    }
+
+    /**
+     * @return array{title: string, description: string, lang: string, canonical: string, robots: string, hreflang: array<string, string>}
+     */
+    private static function headMeta(string $html): array
+    {
+        $doc = new \DOMDocument;
+        $previous = libxml_use_internal_errors(true);
+        $doc->loadHTML('<?xml encoding="UTF-8">'.$html, LIBXML_NOWARNING | LIBXML_NOERROR);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        $xpath = new \DOMXPath($doc);
+
+        $first = static function (string $query, string $attribute) use ($xpath): string {
+            $node = $xpath->query($query)->item(0);
+
+            return $node instanceof \DOMElement ? trim($node->getAttribute($attribute)) : '';
+        };
+
+        $hreflang = [];
+        foreach ($xpath->query('//head/link[@rel="alternate"][@hreflang]') as $link) {
+            if ($link instanceof \DOMElement) {
+                $hreflang[$link->getAttribute('hreflang')] = $link->getAttribute('href');
+            }
+        }
+
+        $title = $xpath->query('//head/title')->item(0);
+
+        return [
+            'title' => $title ? trim($title->textContent) : '',
+            'description' => $first('//head/meta[@name="description"]', 'content'),
+            'lang' => $first('//html', 'lang'),
+            'canonical' => $first('//head/link[@rel="canonical"]', 'href'),
+            'robots' => $first('//head/meta[@name="robots"]', 'content'),
+            'hreflang' => $hreflang,
         ];
     }
 

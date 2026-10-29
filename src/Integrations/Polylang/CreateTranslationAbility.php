@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\GenericPostTypeAbility;
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use GeneroWP\MCP\Concerns\PostCopying;
@@ -20,7 +21,7 @@ final class CreateTranslationAbility
     {
         HelpAbility::registerAbility('gds/translations-create', [
             'label' => 'Create Translation',
-            'description' => 'Create a translated post linked via Polylang. Copies source content, meta, and taxonomy terms. '
+            'description' => 'Create a translated post linked via Polylang. Copies source content, author, featured image, meta, and taxonomy terms. Pass `seo` to set the translation\'s SEO title and description in the same call. '
                 .'Use this when you have an existing post and want to fork it into another language — the new post is automatically linked so the language switcher works.'
                 ."\n\nIf you already created the translations separately (via gds/content-create with different `lang` values), use gds/translations-link to connect them instead."
                 ."\n\nRelated: gds/translations-machine (machine translation), gds/translations-create-term (for taxonomy terms).",
@@ -57,6 +58,18 @@ final class CreateTranslationAbility
                     'slug' => [
                         'type' => 'string',
                         'description' => 'URL slug for the new post. Auto-generated if omitted.',
+                    ],
+                    'author' => [
+                        'type' => 'integer',
+                        'description' => 'Author user ID. Defaults to the source post\'s author.',
+                    ],
+                    'featured_media' => [
+                        'type' => 'integer',
+                        'description' => 'Featured image attachment ID. Defaults to the source image, or its translation in the target language when media is translated.',
+                    ],
+                    'seo' => [
+                        'type' => 'object',
+                        'description' => 'Yoast SEO fields for the translation, same shape as gds/seo-update `fields` (title, description, …). Ignored when Yoast is not active.',
                     ],
                 ],
                 'required' => ['source_id', 'lang'],
@@ -128,6 +141,14 @@ final class CreateTranslationAbility
             'post_status' => $input['status'] ?? 'draft',
         ];
 
+        // Keep the source's author, unless that would hand the caller a post
+        // they may not edit.
+        $mayAssignAuthor = current_user_can($typeObj->cap->edit_others_posts);
+        if (isset($input['author']) && (int) $input['author'] !== get_current_user_id() && ! $mayAssignAuthor) {
+            return new WP_Error('forbidden', 'You do not have permission to create posts as another user.', ['status' => 403]);
+        }
+        $postData['post_author'] = (int) ($input['author'] ?? ($mayAssignAuthor ? $source->post_author : get_current_user_id()));
+
         if (isset($input['slug'])) {
             $postData['post_name'] = $input['slug'];
         }
@@ -160,12 +181,29 @@ final class CreateTranslationAbility
         self::copyPostMeta($sourceId, $newId);
         self::copyPostTaxonomies($sourceId, $newId, $source->post_type);
 
+        $thumbnailId = (int) ($input['featured_media'] ?? get_post_thumbnail_id($sourceId));
+        if (! isset($input['featured_media']) && $thumbnailId) {
+            $thumbnailId = (int) (pll_get_post($thumbnailId, $language) ?: $thumbnailId);
+        }
+        if ($thumbnailId) {
+            set_post_thumbnail($newId, $thumbnailId);
+        }
+
+        $seoError = null;
+        if (! empty($input['seo']) && is_array($input['seo'])) {
+            $seoResult = GenericPostTypeAbility::updateSeo($newId, $input['seo']);
+            $seoError = is_wp_error($seoResult) ? $seoResult->get_error_message() : null;
+        }
+
         // Return canonical REST response
         $route = self::getRestRoute($source->post_type);
         if ($route) {
             $response = self::restGet("{$route}/{$newId}");
             if (! self::isRestError($response)) {
                 $result = self::restResponseData($response);
+                if ($seoError) {
+                    $result['seo_error'] = $seoError;
+                }
 
                 return $this->reversible($result, 'trash', ['id' => $newId], 'Delete the created translation');
             }

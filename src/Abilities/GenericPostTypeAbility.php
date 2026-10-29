@@ -63,7 +63,7 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-read', [
             'label' => 'Read Content',
-            'description' => "Read a single post/page/CPT by ID with full content. Available types: {$typeDesc}. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list) — pass it as-is.",
+            'description' => "Read a single post/page/CPT by ID with full content. Returns the raw block markup in content.raw when you can edit the post — edit that, not rendered HTML. Pass rendered=true to also get content.rendered. Available types: {$typeDesc}. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list) — pass it as-is.",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -73,6 +73,8 @@ final class GenericPostTypeAbility
                         'type' => ['integer', 'string'],
                         'description' => 'Numeric post ID, or composite template id "{theme}//{slug}" for wp_template / wp_template_part.',
                     ],
+                    'rendered' => ['type' => 'boolean', 'description' => 'Also return content.rendered, the HTML WordPress outputs. Default: false.'],
+                    '_fields' => ['type' => 'string', 'description' => 'Comma-separated fields to include in response'],
                 ],
                 'required' => ['type', 'id'],
             ],
@@ -99,6 +101,9 @@ final class GenericPostTypeAbility
                     'slug' => ['type' => 'string'],
                     'featured_media' => ['type' => 'integer', 'description' => 'Featured image attachment ID'],
                     'lang' => ['type' => 'string', 'description' => 'Language code'],
+                    'author' => ['type' => 'integer', 'description' => 'Author user ID'],
+                    'seo' => ['type' => 'object', 'description' => 'Yoast SEO fields to set on the new post, same shape as gds/seo-update `fields` (title, description, …). Ignored when Yoast is not active.'],
+                    'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link and edit_url instead of the whole post. Use for writes where you do not need the result back.'],
                 ],
                 'required' => ['type', 'title'],
             ],
@@ -126,6 +131,7 @@ final class GenericPostTypeAbility
                     'slug' => ['type' => 'string'],
                     'featured_media' => ['type' => 'integer'],
                     'lang' => ['type' => 'string', 'description' => 'Language code (re-assigns Polylang language if set).'],
+                    'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link and edit_url instead of the whole post. Use for writes where you do not need the result back.'],
                 ],
                 'required' => ['type', 'id'],
             ],
@@ -262,12 +268,30 @@ final class GenericPostTypeAbility
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
         $id = self::normalizeId($input['id'] ?? null);
-        unset($input['type'], $input['id']);
+        $rendered = ! empty($input['rendered']);
+        unset($input['type'], $input['id'], $input['rendered']);
 
-        $response = self::restGet("{$route}/{$id}", $input);
+        // The edit context carries the raw block markup, which is what a
+        // caller needs to change a post safely. Readers who may not edit it
+        // get the view context.
+        $response = null;
+        if (! isset($input['context'])) {
+            $response = self::restGet("{$route}/{$id}", $input + ['context' => 'edit']);
+            if (self::isRestError($response) && in_array($response->get_status(), [401, 403], true)) {
+                $response = null;
+            }
+        }
+        $response ??= self::restGet("{$route}/{$id}", $input);
         $data = self::restResponseOrError($response);
+        if (is_wp_error($data)) {
+            return $data;
+        }
 
-        return is_wp_error($data) ? $data : self::enrichPostUrls($data);
+        if (! $rendered && isset($data['content']['raw'])) {
+            unset($data['content']['rendered']);
+        }
+
+        return self::enrichPostUrls($data);
     }
 
     /**
@@ -286,10 +310,15 @@ final class GenericPostTypeAbility
 
         $acfFields = $input['fields'] ?? null;
         $lang = $input['lang'] ?? null;
-        unset($input['type'], $input['fields'], $input['lang']);
+        $quiet = ! empty($input['quiet']);
+        $seo = $input['seo'] ?? null;
+        unset($input['type'], $input['fields'], $input['quiet'], $input['seo']);
 
         if ($langError = self::validateLang($lang)) {
             return $langError;
+        }
+        if (! function_exists('pll_set_post_language')) {
+            unset($input['lang']);
         }
 
         $response = self::restPost($route, $input);
@@ -304,11 +333,21 @@ final class GenericPostTypeAbility
             self::assignLanguage((int) $data['id'], $lang);
         }
 
+        if ($seo && ! empty($data['id'])) {
+            $seoResult = self::updateSeo((int) $data['id'], $seo);
+            if (is_wp_error($seoResult)) {
+                $data['seo_error'] = $seoResult->get_error_message();
+            }
+        }
+
         if ($acfFields && is_array($acfFields)) {
             self::updateAcfFields($data['id'], $acfFields);
         }
 
         $data = self::enrichPostUrls($data);
+        if ($quiet) {
+            $data = self::summary($data);
+        }
 
         // Undo a create by trashing the new post (recoverable).
         $createdId = (int) ($data['wp_id'] ?? $data['id'] ?? 0);
@@ -337,10 +376,14 @@ final class GenericPostTypeAbility
 
         $acfFields = $input['fields'] ?? null;
         $lang = $input['lang'] ?? null;
-        unset($input['type'], $input['id'], $input['fields'], $input['lang']);
+        $quiet = ! empty($input['quiet']);
+        unset($input['type'], $input['id'], $input['fields'], $input['quiet']);
 
         if ($langError = self::validateLang($lang)) {
             return $langError;
+        }
+        if (! function_exists('pll_set_post_language')) {
+            unset($input['lang']);
         }
 
         // Capture the full prior state (fields + meta + terms) BEFORE writing,
@@ -368,6 +411,9 @@ final class GenericPostTypeAbility
         }
 
         $data = self::enrichPostUrls($data);
+        if ($quiet) {
+            $data = self::summary($data);
+        }
 
         if ($undo) {
             $title = get_the_title($id) ?: "#{$id}";
@@ -408,6 +454,35 @@ final class GenericPostTypeAbility
     }
 
     /**
+     * Write Yoast SEO fields through gds/seo-update, so its validation and
+     * permission checks apply.
+     *
+     * @param  array<string, mixed>  $fields
+     */
+    public static function updateSeo(int $postId, array $fields): true|WP_Error|null
+    {
+        $ability = function_exists('wp_get_ability') ? wp_get_ability('gds/seo-update') : null;
+        if (! $ability) {
+            return null;
+        }
+
+        $result = $ability->execute(['object_type' => 'post', 'id' => $postId, 'fields' => $fields]);
+
+        return is_wp_error($result) ? $result : true;
+    }
+
+    /**
+     * The fields a caller needs to confirm a write landed.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function summary(array $data): array
+    {
+        return array_intersect_key($data, array_flip(['id', 'wp_id', 'status', 'modified', 'link', 'edit_url']));
+    }
+
+    /**
      * Validate the provided `lang` against Polylang's configured languages.
      * Returns a WP_Error if invalid, null if unset or valid. No-op when
      * Polylang is inactive (lang is silently ignored in that case).
@@ -432,9 +507,10 @@ final class GenericPostTypeAbility
     }
 
     /**
-     * Assign a Polylang language term to a post. The REST API does not pick
-     * up `lang` in POST bodies, so we have to do this ourselves after create
-     * or update.
+     * Assign a Polylang language term to a post. `lang` also goes to REST:
+     * Polylang Pro reads it there and sets the language before the terms, so
+     * they are not swapped for the default language's translations. Free
+     * Polylang ignores it, which is why it is set here as well.
      */
     private static function assignLanguage(int $postId, string $lang): void
     {

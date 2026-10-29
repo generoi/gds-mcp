@@ -172,6 +172,60 @@ class PolylangAbilityTest extends AbilityTestCase
         wp_delete_post($result['id'], true);
     }
 
+    public function test_create_translation_keeps_author_and_featured_image(): void
+    {
+        $this->requireLanguage('fi');
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+
+        $author = self::factory()->user->create(['role' => 'author']);
+        $sourceId = $this->createPost(['post_type' => 'post', 'post_status' => 'publish', 'post_author' => $author]);
+        $image = $this->assertAbilitySuccess('gds/media-upload', [
+            'base64' => 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            'filename' => 'pixel.png',
+        ]);
+        $imageId = $image['id'];
+        set_post_thumbnail($sourceId, $imageId);
+
+        $result = $this->assertAbilitySuccess('gds/translations-create', ['source_id' => $sourceId, 'lang' => 'fi']);
+
+        $this->assertSame($author, (int) get_post_field('post_author', $result['id']));
+        $this->assertSame($imageId, (int) get_post_thumbnail_id($result['id']));
+    }
+
+    public function test_create_translation_does_not_assign_others_as_author_without_permission(): void
+    {
+        $this->requireLanguage('fi');
+        $other = self::factory()->user->create(['role' => 'author']);
+        $author = self::factory()->user->create(['role' => 'author']);
+        wp_set_current_user($author);
+        $sourceId = $this->createPost(['post_type' => 'post', 'post_author' => $author]);
+
+        $this->assertAbilityError('gds/translations-create', ['source_id' => $sourceId, 'lang' => 'fi', 'author' => $other], 'forbidden');
+    }
+
+    public function test_content_create_keeps_terms_in_the_requested_language(): void
+    {
+        $this->requireLanguage('fi');
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+
+        $en = self::factory()->term->create(['taxonomy' => 'category', 'name' => 'News']);
+        $fi = self::factory()->term->create(['taxonomy' => 'category', 'name' => 'Uutiset']);
+        pll_set_term_language($en, 'en');
+        pll_set_term_language($fi, 'fi');
+        pll_save_term_translations(['en' => $en, 'fi' => $fi]);
+
+        $result = $this->assertAbilitySuccess('gds/content-create', [
+            'type' => 'posts',
+            'title' => 'Uusi',
+            'content' => 'Sisältö',
+            'lang' => 'fi',
+            'categories' => [$fi],
+        ]);
+
+        $this->assertSame('fi', pll_get_post_language($result['id']));
+        $this->assertSame([$fi], wp_get_post_categories($result['id']));
+    }
+
     public function test_create_translation_rejects_duplicate(): void
     {
         $this->requireLanguage('fi');
