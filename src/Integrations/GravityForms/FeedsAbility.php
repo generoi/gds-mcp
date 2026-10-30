@@ -79,13 +79,13 @@ final class FeedsAbility
 
         HelpAbility::registerAbility('gds/feeds-update', [
             'label' => 'Update Form Feed',
-            'description' => 'Update an existing addon feed. Supply id plus any of meta, is_active, feed_order, form_id. Meta is a full replacement of the feed meta object.',
+            'description' => 'Update an existing addon feed. Supply id plus any of meta, is_active, feed_order, form_id. Meta keys you send replace those keys; the others keep their values.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'id' => ['type' => 'integer', 'description' => 'The feed ID to update.'],
-                    'meta' => ['type' => 'object', 'description' => 'Replacement meta payload (full replacement, not merge).', 'additionalProperties' => true],
+                    'meta' => ['type' => 'object', 'description' => 'Meta keys to change, merged into the existing meta by top-level key.', 'additionalProperties' => true],
                     'is_active' => ['type' => 'boolean'],
                     'feed_order' => ['type' => 'integer'],
                     'form_id' => ['type' => 'integer', 'description' => 'Move the feed to a different form.'],
@@ -286,25 +286,35 @@ final class FeedsAbility
             // ("feed X belonging to form Y") rather than as a new form_id —
             // passing the target form id to move a feed just makes the lookup
             // fail. Always update meta without form_id, then move separately.
-            $result = \GFAPI::update_feed($id, $meta);
+            // update_feed() replaces the whole meta, so merge in what is kept.
+            $result = \GFAPI::update_feed($id, array_merge((array) $existing['meta'], $meta));
             if (is_wp_error($result)) {
                 return $result;
             }
         }
 
-        if (array_key_exists('form_id', $input)) {
-            \GFAPI::update_feed_property($id, 'form_id', (int) $input['form_id']);
-        }
-        if (array_key_exists('is_active', $input)) {
-            \GFAPI::update_feed_property($id, 'is_active', (bool) $input['is_active'] ? 1 : 0);
-        }
-        if (array_key_exists('feed_order', $input)) {
-            \GFAPI::update_feed_property($id, 'feed_order', (int) $input['feed_order']);
+        $properties = array_intersect_key([
+            'form_id' => (int) ($input['form_id'] ?? 0),
+            'is_active' => ! empty($input['is_active']) ? 1 : 0,
+            'feed_order' => (int) ($input['feed_order'] ?? 0),
+        ], $input);
+        foreach ($properties as $property => $value) {
+            $updated = \GFAPI::update_feed_property($id, $property, $value);
+            if (is_wp_error($updated)) {
+                return $updated;
+            }
         }
 
         $saved = \GFAPI::get_feed($id);
         if (is_wp_error($saved)) {
             return $saved;
+        }
+        // False from update_feed_property() is a failure before GF 3.0 and
+        // an unchanged value since, so check what was stored.
+        foreach ($properties as $property => $value) {
+            if ((int) $saved[$property] !== $value) {
+                return new WP_Error('update_failed', sprintf('Could not update %s of feed %d.', $property, $id));
+            }
         }
 
         $result = json_decode(json_encode($saved), true) ?: [];
@@ -384,13 +394,15 @@ final class FeedsAbility
             $targetFormId = (int) $targetFormId;
             $newId = \GFAPI::add_feed($targetFormId, $source['meta'], $source['addon_slug']);
             if (is_wp_error($newId)) {
-                // Return early with partial results so the caller sees what succeeded.
-                // Note: feeds already created on this partial path are not auto-undoable
-                // (no undo envelope is attached to a WP_Error result).
+                // All or nothing: an error carries no undo, so remove the
+                // copies already made.
+                foreach ($created as $c) {
+                    \GFAPI::delete_feed((int) $c['id']);
+                }
+
                 return new WP_Error(
                     $newId->get_error_code(),
-                    sprintf('Failed duplicating feed %d onto form %d: %s', $sourceId, $targetFormId, $newId->get_error_message()),
-                    ['created' => $created],
+                    sprintf('Nothing was duplicated: copying feed %d onto form %d failed: %s', $sourceId, $targetFormId, $newId->get_error_message()),
                 );
             }
 

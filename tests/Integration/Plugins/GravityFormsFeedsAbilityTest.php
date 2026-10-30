@@ -369,6 +369,54 @@ class GravityFormsFeedsAbilityTest extends AbilityTestCase
         $this->assertAbilityError('gds/feeds-delete', ['id' => 99999999]);
     }
 
+    public function test_feeds_update_merges_partial_meta(): void
+    {
+        $id = $this->trackFeed((int) $this->assertAbilitySuccess('gds/feeds-create', [
+            'form_id' => $this->createForm(),
+            'addon_slug' => 'test-addon',
+            'meta' => ['feed_name' => 'Kept', 'list_id' => 1],
+        ])['id']);
+
+        $updated = $this->assertAbilitySuccess('gds/feeds-update', ['id' => $id, 'meta' => ['list_id' => 2]]);
+
+        $this->assertSame('Kept', $updated['meta']['feed_name']);
+        $this->assertSame(2, (int) $updated['meta']['list_id']);
+    }
+
+    public function test_feeds_update_reports_a_property_that_was_not_saved(): void
+    {
+        global $wpdb;
+        $id = $this->trackFeed((int) $this->assertAbilitySuccess('gds/feeds-create', [
+            'form_id' => $this->createForm(),
+            'addon_slug' => 'test-addon',
+            'meta' => ['feed_name' => 'Stuck'],
+        ])['id']);
+        $breakUpdate = fn ($query) => str_starts_with($query, 'UPDATE') && str_contains($query, 'gf_addon_feed') && str_contains($query, 'is_active') ? 'UPDATE nowhere SET nothing = 1' : $query;
+        add_filter('query', $breakUpdate);
+        $suppress = $wpdb->suppress_errors();
+
+        $result = $this->assertAbilityError('gds/feeds-update', ['id' => $id, 'is_active' => false]);
+
+        $wpdb->suppress_errors($suppress);
+        remove_filter('query', $breakUpdate);
+        $this->assertNotEmpty($result->get_error_message());
+        $this->assertSame(1, (int) \GFAPI::get_feed($id)['is_active']);
+    }
+
+    public function test_feeds_duplicate_that_fails_partway_creates_nothing(): void
+    {
+        $sourceId = $this->trackFeed((int) $this->assertAbilitySuccess('gds/feeds-create', [
+            'form_id' => $this->createForm(),
+            'addon_slug' => 'test-addon',
+            'meta' => ['feed_name' => 'Half'],
+        ])['id']);
+        $target = $this->createForm();
+
+        $this->assertAbilityError('gds/feeds-duplicate', ['id' => $sourceId, 'target_form_ids' => [$target, 99999999]]);
+
+        $this->assertWPError(\GFAPI::get_feeds(null, $target), 'The copy on the first form was removed again.');
+    }
+
     public function test_feeds_create_rejects_unknown_form(): void
     {
         $this->assertAbilityError('gds/feeds-create', [
