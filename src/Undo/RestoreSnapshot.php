@@ -349,6 +349,9 @@ final class RestoreSnapshot
         // image, the site logo, or been put in content; deleting the file
         // would break those, so leave it.
         $usedBy = self::attachmentUsers($id);
+        if (is_wp_error($usedBy)) {
+            return $usedBy;
+        }
         if ($usedBy) {
             return new WP_Error('restore_failed', sprintf('The uploaded file is now used by %s, so it was not deleted. Remove it there first, or delete it in the Media Library.', implode(', ', $usedBy)));
         }
@@ -364,11 +367,12 @@ final class RestoreSnapshot
      * image, term thumbnail, a comma-separated list like
      * _product_image_gallery, a serialized array like an ACF gallery), the
      * site logo or icon, or post content (its wp-image-{id} class, or its
-     * URL, size variants included).
+     * URL, size variants included). An error when a lookup failed: not
+     * knowing is no reason to delete.
      *
-     * @return list<string>
+     * @return list<string>|WP_Error
      */
-    private static function attachmentUsers(int $id): array
+    private static function attachmentUsers(int $id): array|WP_Error
     {
         global $wpdb;
 
@@ -392,25 +396,29 @@ final class RestoreSnapshot
         $urlPattern = $url !== '' ? preg_quote((string) preg_replace('/\.[^.\/]+$/', '', $url), '/').'(-[0-9]+x[0-9]+)?\\.' : '';
 
         // phpcs:disable WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        // Its own rows aside, and _edit_last, which holds a user id.
-        foreach ($wpdb->get_col($wpdb->prepare("SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE post_id != %d AND meta_key != '_edit_last' AND {$metaMatch}", $id, ...$metaArgs)) as $postId) {
-            $users[] = "post {$postId}";
+        $lookups = [
+            // Its own rows aside, and _edit_last, which holds a user id.
+            ['post', $wpdb->prepare("SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE post_id != %d AND meta_key != '_edit_last' AND {$metaMatch}", $id, ...$metaArgs)],
+            ['term', $wpdb->prepare("SELECT DISTINCT term_id FROM {$wpdb->termmeta} WHERE {$metaMatch}", ...$metaArgs)],
+            ['post', $wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts}
+                 WHERE post_type NOT IN ('revision', 'attachment') AND post_status != 'trash'
+                 AND (post_content REGEXP %s OR (%s != '' AND post_content REGEXP %s))",
+                'wp-image-'.$id.'([^0-9]|$)',
+                $urlPattern,
+                $urlPattern
+            )],
+        ];
+        foreach ($lookups as [$kind, $query]) {
+            $found = $wpdb->get_col($query);
+            if ($wpdb->last_error !== '') {
+                return new WP_Error('restore_failed', 'Could not check what uses the uploaded file, so it was not deleted.');
+            }
+            foreach ($found as $objectId) {
+                $users[] = "{$kind} {$objectId}";
+            }
         }
-        foreach ($wpdb->get_col($wpdb->prepare("SELECT DISTINCT term_id FROM {$wpdb->termmeta} WHERE {$metaMatch}", ...$metaArgs)) as $termId) {
-            $users[] = "term {$termId}";
-        }
-        $inContent = $wpdb->get_col($wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts}
-             WHERE post_type NOT IN ('revision', 'attachment') AND post_status != 'trash'
-             AND (post_content REGEXP %s OR (%s != '' AND post_content REGEXP %s))",
-            'wp-image-'.$id.'([^0-9]|$)',
-            $urlPattern,
-            $urlPattern
-        ));
         // phpcs:enable WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        foreach ($inContent as $postId) {
-            $users[] = "post {$postId}";
-        }
 
         return array_values(array_unique($users));
     }

@@ -862,6 +862,22 @@ class OAuthFlowTest extends TestCase
         $this->assertArrayNotHasKey('gmc_old0', $index, 'The oldest one goes instead.');
     }
 
+    public function test_a_store_twice_over_the_cap_refuses_new_registrations(): void
+    {
+        // 4000 registrations from the last few minutes: none may be evicted.
+        $index = [];
+        for ($i = 0; $i < 4000; $i++) {
+            $index['gmc_fresh'.$i] = time() - 60;
+        }
+        update_option('gds_mcp_oauth_clients', $index, false);
+
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $refused = $this->capture(fn () => Clients::handleRegistration((string) wp_json_encode(['redirect_uris' => [self::REDIRECT_URI]])));
+
+        $this->assertSame(503, $refused->status);
+        $this->assertCount(4000, get_option('gds_mcp_oauth_clients'), 'The store does not grow past twice the cap.');
+    }
+
     public function test_a_full_client_store_never_evicts_the_client_just_registered(): void
     {
         $connected = null;

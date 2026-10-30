@@ -194,19 +194,32 @@ HTML;
         $this->listenerDir = sys_get_temp_dir().'/gds-mcp-listener-'.uniqid();
         mkdir($this->listenerDir);
         file_put_contents($this->listenerDir.'/router.php', '<?php touch(__DIR__."/hit"); echo "listener";');
-        $port = random_int(20000, 40000);
-        $this->listener = proc_open([PHP_BINARY, '-S', "127.0.0.1:{$port}", $this->listenerDir.'/router.php'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+        // A random port may be taken; try a few before giving up.
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $port = random_int(20000, 40000);
+            $this->listener = proc_open([PHP_BINARY, '-S', "127.0.0.1:{$port}", $this->listenerDir.'/router.php'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
 
-        for ($i = 0; $i < 50; $i++) {
-            $socket = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.1);
-            if ($socket) {
-                fclose($socket);
+            for ($i = 0; $i < 20; $i++) {
+                // Exited: the port was taken (whatever answers there is not ours).
+                if (! is_resource($this->listener) || ! proc_get_status($this->listener)['running']) {
+                    break;
+                }
+                $socket = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.1);
+                if ($socket) {
+                    fclose($socket);
 
-                return $port;
+                    return $port;
+                }
+                usleep(100000);
             }
-            usleep(100000);
+
+            if (is_resource($this->listener)) {
+                proc_terminate($this->listener);
+                proc_close($this->listener);
+            }
+            $this->listener = null;
         }
-        $this->markTestSkipped('The local listener did not start.');
+        $this->markTestSkipped('No local port could be bound for the listener.');
     }
 
     public function test_the_curl_pin_connects_to_the_given_address(): void

@@ -108,7 +108,9 @@ final class Clients
             'client_id_issued_at' => time(),
         ];
 
-        self::save($client);
+        if (! self::save($client)) {
+            throw Server::error('temporarily_unavailable', 'Too many client registrations are in use or in progress. Try again later.', 503);
+        }
 
         throw ResponseException::json($client, 201);
     }
@@ -215,9 +217,12 @@ final class Clients
     }
 
     /**
+     * Store a registration, evicting old ones. False when the store is too
+     * full to take it.
+     *
      * @param  array<string, mixed>  $client
      */
-    private static function save(array $client): void
+    private static function save(array $client): bool
     {
         add_option(self::OPTION_PREFIX.$client['client_id'], $client, '', false);
 
@@ -231,7 +236,7 @@ final class Clients
         // is connected through is never evicted: it could not re-authorize.
         // Nor is one registered in the last few minutes, which may be partway
         // through consent. When nothing else is left the store goes over the
-        // cap rather than break a connection.
+        // cap rather than break a connection — up to a limit, below.
         if (count($index) - count($stale) > self::MAX_CLIENTS) {
             $live = self::clientsWithLiveGrants();
             $recent = array_filter($index, static fn ($used): bool => $used >= time() - self::FRESH_FOR);
@@ -246,7 +251,17 @@ final class Clients
             unset($index[$clientId]);
         }
 
+        // Live and fresh clients may take the store past the cap, but not
+        // without bound: past twice the cap, refuse the new one instead.
+        $accepted = count($index) <= 2 * self::MAX_CLIENTS;
+        if (! $accepted) {
+            delete_option(self::OPTION_PREFIX.$client['client_id']);
+            unset($index[$client['client_id']]);
+        }
+
         update_option(self::INDEX_OPTION, $index, false);
+
+        return $accepted;
     }
 
     /**

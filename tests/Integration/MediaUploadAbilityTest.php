@@ -77,6 +77,25 @@ class MediaUploadAbilityTest extends AbilityTestCase
         }
     }
 
+    public function test_undoing_an_upload_keeps_the_file_when_a_reference_lookup_fails(): void
+    {
+        global $wpdb;
+        $upload = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'lookup-fails.png']);
+        // Break only the term meta lookup.
+        add_filter('query', fn (string $query) => str_contains($query, "DISTINCT term_id FROM {$wpdb->termmeta}") ? 'SELECT broken FROM' : $query);
+        $suppressed = $wpdb->suppress_errors(true);
+
+        try {
+            $result = apply_filters('gds-mcp/restore_snapshot', null, $upload['_undo']);
+        } finally {
+            $wpdb->suppress_errors($suppressed);
+        }
+
+        $this->assertWPError($result);
+        $this->assertNotNull(get_post($upload['id']), 'Not knowing is no reason to delete.');
+        wp_delete_attachment($upload['id'], true);
+    }
+
     public function test_undoing_an_upload_is_not_blocked_by_a_similarly_named_file(): void
     {
         $upload = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'photo.png']);
