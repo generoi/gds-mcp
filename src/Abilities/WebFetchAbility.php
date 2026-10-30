@@ -209,12 +209,16 @@ final class WebFetchAbility
      */
     public static function addUserApprovedHosts(array $hosts, string $candidateHost = ''): array
     {
-        return array_merge($hosts, (array) get_option(self::TRUSTED_HOSTS_OPTION, []));
+        $own = get_current_user_id() ? (array) get_user_meta(get_current_user_id(), self::TRUSTED_HOSTS_OPTION, true) : [];
+
+        return array_merge($hosts, (array) get_option(self::TRUSTED_HOSTS_OPTION, []), array_filter($own));
     }
 
     /**
      * Persist a host to the trusted list when the user clicks
-     * "Approve & trust" in the approval UI.
+     * "Approve & trust" in the approval UI: for the whole site when an
+     * administrator trusts it, else for that user only, so one editor's
+     * approval does not skip everyone else's.
      */
     public static function trustHost(string $host): void
     {
@@ -222,10 +226,18 @@ final class WebFetchAbility
         if ($host === '') {
             return;
         }
-        $trusted = (array) get_option(self::TRUSTED_HOSTS_OPTION, []);
-        if (! in_array($host, $trusted, true)) {
-            $trusted[] = $host;
-            update_option(self::TRUSTED_HOSTS_OPTION, array_values(array_unique($trusted)));
+        $siteWide = current_user_can('manage_options');
+        $trusted = $siteWide
+            ? (array) get_option(self::TRUSTED_HOSTS_OPTION, [])
+            : array_filter((array) get_user_meta(get_current_user_id(), self::TRUSTED_HOSTS_OPTION, true));
+        if (in_array($host, $trusted, true)) {
+            return;
+        }
+        $trusted = array_values(array_unique([...$trusted, $host]));
+        if ($siteWide) {
+            update_option(self::TRUSTED_HOSTS_OPTION, $trusted);
+        } else {
+            update_user_meta(get_current_user_id(), self::TRUSTED_HOSTS_OPTION, $trusted);
         }
     }
 

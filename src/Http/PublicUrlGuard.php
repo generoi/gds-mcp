@@ -105,13 +105,23 @@ final class PublicUrlGuard
             }
         };
 
+        // Without cURL (Requests falls back to fsockopen) the hop cannot be
+        // pinned, and a second DNS answer could send it anywhere.
+        $refuseUnpinned = static function () use (&$pin): void {
+            if (is_array($pin)) {
+                throw new RequestsException(self::REFUSED, 'gds_mcp_url_not_public');
+            }
+        };
+
         add_action('requests-requests.before_request', $check);
         add_action('requests-curl.before_send', $connectToChecked);
+        add_action('requests-fsockopen.before_request', $refuseUnpinned);
         try {
             return $request();
         } finally {
             remove_action('requests-requests.before_request', $check);
             remove_action('requests-curl.before_send', $connectToChecked);
+            remove_action('requests-fsockopen.before_request', $refuseUnpinned);
         }
     }
 
