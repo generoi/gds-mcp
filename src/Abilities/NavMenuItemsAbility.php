@@ -154,7 +154,7 @@ final class NavMenuItemsAbility
     {
         HelpAbility::registerAbility('gds/nav-menu-items-delete', [
             'label' => 'Delete Menu Item',
-            'description' => 'Delete a menu item (recoverable — moved to trash). Sibling items below it shift up to close the gap.',
+            'description' => 'Delete a menu item. Its sub-items move up to its parent, and sibling items below it shift up to close the gap.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -419,10 +419,36 @@ final class NavMenuItemsAbility
 
         $menuId = self::getMenuIdForItem($id);
         $itemOrder = (int) $post->menu_order;
+        $parentId = (int) get_post_meta($id, '_menu_item_menu_item_parent', true);
 
-        // Soft delete (trash) so it's recoverable and child->parent menu links
-        // stay valid for an undo.
-        $deleted = wp_delete_post($id, false);
+        // Menu items have no trash (wp_delete_post() only trashes posts and
+        // pages), so the delete is permanent. Capture what an undo needs to
+        // recreate the item: its fields, meta and menu term, the sub-items
+        // that pointed at it, and the order of every item the gap closing
+        // renumbers.
+        $before = Snapshot::postFields($id);
+        $children = array_map('intval', get_posts([
+            'post_type' => 'nav_menu_item',
+            'post_status' => 'any',
+            'numberposts' => -1,
+            'fields' => 'ids',
+            'meta_key' => '_menu_item_menu_item_parent',
+            'meta_value' => (string) $id,
+        ]));
+        $orders = [];
+        foreach (wp_get_nav_menu_items($menuId) ?: [] as $item) {
+            if ((int) $item->ID !== $id) {
+                $orders[(int) $item->ID] = (int) $item->menu_order;
+            }
+        }
+
+        // Sub-items move up to the deleted item's parent instead of pointing
+        // at an id that no longer exists.
+        foreach ($children as $childId) {
+            update_post_meta($childId, '_menu_item_menu_item_parent', (string) $parentId);
+        }
+
+        $deleted = wp_delete_post($id, true);
         if (! $deleted) {
             return new WP_Error('delete_failed', "Could not delete menu item {$id}.");
         }
@@ -433,9 +459,15 @@ final class NavMenuItemsAbility
         }
 
         $result = ['deleted' => $id];
+        if (! $before) {
+            return $result;
+        }
 
-        // Undo by untrashing the item.
-        return $this->reversible($result, 'untrash', ['id' => $id], 'Restore the deleted menu item');
+        return $this->reversible($result, 'recreate-menu-item', [
+            'item' => $before->toArray(),
+            'children' => $children,
+            'orders' => $orders,
+        ], 'Restore the deleted menu item');
     }
 
     /**

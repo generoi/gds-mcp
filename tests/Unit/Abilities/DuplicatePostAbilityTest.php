@@ -56,6 +56,15 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
         $this->assertSame('publish', $result['status']);
     }
 
+    public function test_published_duplicate_of_a_protected_post_stays_protected(): void
+    {
+        $sourceId = self::factory()->post->create(['post_status' => 'publish', 'post_password' => 'hunter2']);
+
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId, 'status' => 'publish']);
+
+        $this->assertSame('hunter2', get_post($result['id'])->post_password);
+    }
+
     public function test_copies_meta(): void
     {
         $sourceId = self::factory()->post->create(['title' => 'With Meta']);
@@ -77,6 +86,21 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
         $this->assertSame('field_abc123', get_post_meta($result['id'], '_custom_acf_ref', true));
         // …per-post bookkeeping is not.
         foreach (['_edit_lock', '_wp_old_slug', '_pll_internal', '_wp_trash_meta_status'] as $key) {
+            $this->assertSame('', get_post_meta($result['id'], $key, true), $key);
+        }
+    }
+
+    public function test_does_not_copy_redirect_canonical_or_unique_product_ids(): void
+    {
+        $sourceId = self::factory()->post->create(['title' => 'Source']);
+        $keys = ['_yoast_wpseo_redirect' => 'https://example.com/elsewhere', '_yoast_wpseo_canonical' => get_permalink($sourceId), '_sku' => 'SKU-1', '_global_unique_id' => '0123456789012'];
+        foreach ($keys as $key => $value) {
+            update_post_meta($sourceId, $key, $value);
+        }
+
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
+
+        foreach (array_keys($keys) as $key) {
             $this->assertSame('', get_post_meta($result['id'], $key, true), $key);
         }
     }

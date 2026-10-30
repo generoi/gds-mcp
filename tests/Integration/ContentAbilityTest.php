@@ -245,6 +245,28 @@ class ContentAbilityTest extends AbilityTestCase
         $this->assertSame('trash', get_post_status($id), 'Pages support trash, so the smuggled force flag must be ignored.');
     }
 
+    public function test_delete_refuses_when_trash_is_disabled_for_the_item(): void
+    {
+        $id = $this->createPost(['post_type' => 'page', 'post_status' => 'publish']);
+        // What core does for attachments without MEDIA_TRASH, and for every
+        // type when EMPTY_TRASH_DAYS is 0.
+        add_filter('rest_page_trashable', '__return_false');
+
+        $this->assertAbilityError('gds/content-delete', ['type' => 'pages', 'id' => $id], 'trash_not_supported');
+        $this->assertSame('publish', get_post_status($id), 'A disabled trash must not turn into a permanent delete.');
+    }
+
+    public function test_delete_refuses_attachments_without_media_trash(): void
+    {
+        if (MEDIA_TRASH) {
+            $this->markTestSkipped('MEDIA_TRASH is on.');
+        }
+        $id = self::factory()->attachment->create(['post_mime_type' => 'image/jpeg']);
+
+        $this->assertAbilityError('gds/content-delete', ['type' => 'media', 'id' => $id], 'trash_not_supported');
+        $this->assertNotNull(get_post($id));
+    }
+
     // ── Permissions ───────────────────────────────────────────────
 
     public function test_list_published_works_unauthenticated(): void

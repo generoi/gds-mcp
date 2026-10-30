@@ -45,9 +45,8 @@ jobs:
         run: composer install --no-interaction
 
       # In CI, use a minimal .wp-env.override.json that mounts our plugin and,
-      # ahead of it, the MCP adapter it declares in Requires Plugins (wp-env
-      # activates mounted plugins in order). Other free plugins are installed
-      # via WP-CLI after wp-env starts.
+      # ahead of it, the MCP adapter (wp-env activates mounted plugins in
+      # order). Other free plugins are installed via WP-CLI after wp-env starts.
       # Commercial plugins (polylang-pro, gravityforms) are not available in CI;
       # their tests skip gracefully.
       - name: Configure wp-env for CI

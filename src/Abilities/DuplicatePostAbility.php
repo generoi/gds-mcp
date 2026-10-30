@@ -96,6 +96,7 @@ final class DuplicatePostAbility
             'post_content' => $source->post_content,
             'post_excerpt' => $source->post_excerpt,
             'post_status' => $status,
+            'post_password' => $source->post_password,
             'post_parent' => $source->post_parent,
             'menu_order' => $source->menu_order,
             'comment_status' => $source->comment_status,

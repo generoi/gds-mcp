@@ -505,21 +505,57 @@ class NavMenuItemsAbilityTest extends TestCase
         $this->assertSame('invalid_linked_kind', $result->get_error_code());
     }
 
-    public function test_delete_parent_leaves_children_orphaned(): void
+    public function test_delete_parent_moves_children_up_to_its_parent(): void
     {
-        // Document the current WP behaviour: deleting a parent does NOT cascade
-        // to children. The child's _menu_item_menu_item_parent stays pointing
-        // at the now-nonexistent post ID. Consumers should re-parent or delete
-        // children explicitly first if that's undesirable.
-        $parent = $this->insertItem('Parent');
+        $top = $this->insertItem('Top');
+        $parent = $this->insertItem('Parent', ['menu-item-parent-id' => $top]);
         $child = $this->insertItem('Child', ['menu-item-parent-id' => $parent]);
 
         $this->ability->executeDelete(['id' => $parent]);
 
         $this->assertNull(get_post($parent));
-        $childPost = get_post($child);
-        $this->assertNotNull($childPost);
+        $this->assertSame((string) $top, get_post_meta($child, '_menu_item_menu_item_parent', true));
+    }
+
+    public function test_delete_undo_recreates_the_item_and_its_children_links(): void
+    {
+        $a = $this->insertItem('A');
+        $parent = $this->insertItem('Parent', ['menu-item-target' => '_blank']);
+        $child = $this->insertItem('Child', ['menu-item-parent-id' => $parent]);
+        $this->insertItem('C');
+        $ordersBefore = $this->menuOrders();
+
+        $result = $this->ability->executeDelete(['id' => $parent]);
+        $this->assertSame('recreate-menu-item', $result['_undo']['kind']);
+        $this->assertNull(get_post($parent));
+
+        $restored = apply_filters('gds-mcp/restore_snapshot', null, $result['_undo']);
+
+        $this->assertNotWPError($restored);
+        $this->assertSame($parent, $restored['id'], 'The free original id is reused.');
+        $this->assertSame([$this->menuId], array_map('intval', wp_get_object_terms($parent, 'nav_menu', ['fields' => 'ids'])));
+        $this->assertSame('_blank', get_post_meta($parent, '_menu_item_target', true));
         $this->assertSame((string) $parent, get_post_meta($child, '_menu_item_menu_item_parent', true));
+        $this->assertSame($ordersBefore, $this->menuOrders());
+        $this->assertSame(['A', 'Parent', 'C'], $this->orderedTitles());
+        $this->assertSame(['Child'], $this->orderedTitles($parent));
+    }
+
+    public function test_delete_undo_repoints_children_when_the_id_was_reused(): void
+    {
+        $parent = $this->insertItem('Parent');
+        $child = $this->insertItem('Child', ['menu-item-parent-id' => $parent]);
+        $undo = $this->ability->executeDelete(['id' => $parent])['_undo'];
+
+        // Something else took the id since the delete.
+        $undo['data']['item']['id'] = $child;
+
+        $restored = apply_filters('gds-mcp/restore_snapshot', null, $undo);
+
+        $this->assertNotWPError($restored);
+        $this->assertNotSame($child, $restored['id']);
+        $this->assertArrayHasKey('note', $restored);
+        $this->assertSame((string) $restored['id'], get_post_meta($child, '_menu_item_menu_item_parent', true));
     }
 
     // ── Gap-filling: list & read edges ──────────────────────────────────────
@@ -686,6 +722,18 @@ class NavMenuItemsAbilityTest extends TestCase
             'menu-item-url' => 'https://example.com/'.sanitize_title($title),
             'menu-item-status' => 'publish',
         ], $overrides));
+    }
+
+    /** @return array<int, int> item id → menu_order */
+    private function menuOrders(): array
+    {
+        $orders = [];
+        foreach (wp_get_nav_menu_items($this->menuId) as $item) {
+            $orders[(int) $item->ID] = (int) $item->menu_order;
+        }
+        ksort($orders);
+
+        return $orders;
     }
 
     /** @return string[] */
