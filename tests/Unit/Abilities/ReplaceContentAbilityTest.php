@@ -282,6 +282,45 @@ class ReplaceContentAbilityTest extends WP_UnitTestCase
         $this->assertCount(2, $result['_undo']['data']['items']);
     }
 
+    public function test_multi_post_counts_only_what_was_written(): void
+    {
+        $a = self::factory()->post->create(['post_content' => '<!-- wp:paragraph --><p>old@x.fi</p><!-- /wp:paragraph -->']);
+        $b = self::factory()->post->create(['post_content' => '<!-- wp:paragraph --><p>old@x.fi old@x.fi</p><!-- /wp:paragraph -->']);
+        // Saving post $b fails.
+        $failing = [$b];
+        add_filter('wp_insert_post_empty_content', function ($empty, $postarr) use (&$failing) {
+            return in_array((int) ($postarr['ID'] ?? 0), $failing, true) ?: $empty;
+        }, 10, 2);
+
+        $result = (new ReplaceContentAbility)->execute(['ids' => [$a, $b], 'search' => 'old@x.fi', 'replace' => 'new@x.fi']);
+
+        $this->assertSame(1, $result['replaced_count']);
+        $this->assertSame(1, $result['updated_posts']);
+
+        $c = self::factory()->post->create(['post_content' => '<!-- wp:paragraph --><p>old@x.fi</p><!-- /wp:paragraph -->']);
+        $failing = [$b, $c];
+        $result = (new ReplaceContentAbility)->execute(['ids' => [$b, $c], 'search' => 'old@x.fi', 'replace' => 'new@x.fi']);
+
+        $this->assertWPError($result);
+        $this->assertSame('replace_failed', $result->get_error_code());
+    }
+
+    public function test_content_that_is_not_valid_utf8_is_an_error(): void
+    {
+        $id = self::factory()->post->create(['post_content' => '<!-- wp:paragraph --><p>old@x.fi</p><!-- /wp:paragraph -->']);
+        // The database would not store it; put it where get_post() reads.
+        $raw = wp_cache_get($id, 'posts');
+        $raw->post_content = "<!-- wp:paragraph --><p>old@x.fi \xff</p><!-- /wp:paragraph -->";
+        wp_cache_set($id, $raw, 'posts');
+
+        $single = (new ReplaceContentAbility)->execute(['id' => $id, 'search' => 'old@x.fi', 'replace' => 'new@x.fi']);
+        $multi = (new ReplaceContentAbility)->execute(['ids' => [$id], 'search' => 'old@x.fi', 'replace' => 'new@x.fi']);
+
+        $this->assertWPError($single);
+        $this->assertSame('replace_failed', $single->get_error_code());
+        $this->assertStringContainsString('Could not search', $multi['posts'][0]['error'] ?? '');
+    }
+
     public function test_multi_post_dry_run_aggregates_without_writing(): void
     {
         $a = self::factory()->post->create([

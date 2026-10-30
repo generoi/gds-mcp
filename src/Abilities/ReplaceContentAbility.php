@@ -168,6 +168,9 @@ final class ReplaceContentAbility
         }
 
         $plan = self::planPost($post, $o);
+        if (is_wp_error($plan)) {
+            return $plan;
+        }
 
         if ($error = self::expectCountError($input, $plan['count'], ['samples' => $plan['samples']])) {
             return $error;
@@ -272,6 +275,11 @@ final class ReplaceContentAbility
             }
 
             $plan = self::planPost($post, $o);
+            if (is_wp_error($plan)) {
+                $perPost[] = ['id' => $postId, 'title' => $post->post_title, 'error' => $plan->get_error_message()];
+
+                continue;
+            }
             $total += $plan['count'];
             self::mergeSamples($samples, $plan['samples'], "#{$postId}");
             $plans[$postId] = $plan;
@@ -304,6 +312,7 @@ final class ReplaceContentAbility
         // ── Apply pass: snapshot + write each post that had matches.
         $undoItems = [];
         $written = 0;
+        $replaced = 0;
 
         foreach ($plans as $postId => $plan) {
             if ($plan['count'] === 0) {
@@ -327,9 +336,15 @@ final class ReplaceContentAbility
                 $undoItems[] = ['kind' => 'restore-post', 'data' => $write['before']];
             }
             $written++;
+            $replaced += $plan['count'];
+        }
+
+        if ($written === 0) {
+            return new WP_Error('replace_failed', 'No post was updated: '.implode(' ', array_map(fn ($row) => "#{$row['id']}: {$row['error']}", array_filter($perPost, fn ($row) => isset($row['error'])))), ['posts' => $perPost]);
         }
 
         $result['posts'] = $perPost;
+        $result['replaced_count'] = $replaced;
         $result['updated_posts'] = $written;
 
         if ($undoItems) {
@@ -364,7 +379,8 @@ final class ReplaceContentAbility
         if (! $o['includeAttrs']) {
             $inAttrs = 0;
             foreach ($posts as $post) {
-                $inAttrs += self::planPost($post, ['includeAttrs' => true] + $o)['count'];
+                $plan = self::planPost($post, ['includeAttrs' => true] + $o);
+                $inAttrs += is_wp_error($plan) ? 0 : $plan['count'];
             }
             if ($inAttrs > 0) {
                 return sprintf(
@@ -409,13 +425,17 @@ final class ReplaceContentAbility
      * and render the new content. Writes nothing.
      *
      * @param  array{search: string, replace: string, wholeWord: bool, caseSensitive: bool, includeAttrs: bool, dryRun: bool}  $o
-     * @return array{count: int, samples: list<string>, content: string}
+     * @return array{count: int, samples: list<string>, content: string}|WP_Error
      */
-    private static function planPost(\WP_Post $post, array $o): array
+    private static function planPost(\WP_Post $post, array $o): array|WP_Error
     {
         $ctx = self::buildContext($o['search'], $o['replace'], $o['wholeWord'], $o['caseSensitive'], $o['includeAttrs']);
         $blocks = parse_blocks($post->post_content);
         self::walk($blocks, $ctx);
+
+        if ($ctx['error'] !== null) {
+            return new WP_Error('replace_failed', sprintf('Could not search post %d: %s', $post->ID, $ctx['error']));
+        }
 
         return [
             'count' => $ctx['count'],
@@ -494,7 +514,7 @@ final class ReplaceContentAbility
     /**
      * Build the matching context: compiled patterns + mutable counters.
      *
-     * @return array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>}
+     * @return array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>, error: ?string}
      */
     private static function buildContext(
         string $search,
@@ -517,6 +537,7 @@ final class ReplaceContentAbility
             'includeAttrs' => $includeAttrs,
             'count' => 0,
             'samples' => [],
+            'error' => null,
         ];
     }
 
@@ -525,7 +546,7 @@ final class ReplaceContentAbility
      * (the source of truth for serialize_blocks) and, when enabled, attrs.
      *
      * @param  array<int, array<string, mixed>>  $blocks
-     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>}  $ctx
+     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>, error: ?string}  $ctx
      */
     private static function walk(array &$blocks, array &$ctx): void
     {
@@ -560,12 +581,14 @@ final class ReplaceContentAbility
      * Replace inside an HTML string, but only in text nodes — never inside tags
      * (so href/src/class values are never touched).
      *
-     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>}  $ctx
+     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>, error: ?string}  $ctx
      */
     private static function replaceInTextNodes(string $html, array &$ctx): string
     {
         $parts = preg_split('/(<[^>]*>)/', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
         if ($parts === false) {
+            $ctx['error'] = preg_last_error_msg();
+
             return $html;
         }
 
@@ -583,7 +606,7 @@ final class ReplaceContentAbility
     /**
      * Replace inside an attribute value of any shape (string / nested array).
      *
-     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>}  $ctx
+     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>, error: ?string}  $ctx
      */
     private static function replaceInValue(mixed $value, array &$ctx): mixed
     {
@@ -603,7 +626,7 @@ final class ReplaceContentAbility
      * Literal replace on a raw string: bumps the counter, collects context
      * samples up to the cap, returns the new string.
      *
-     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>}  $ctx
+     * @param  array{pattern: string, ctxPattern: string, replace: string, includeAttrs: bool, count: int, samples: list<string>, error: ?string}  $ctx
      */
     private static function countingReplace(string $text, array &$ctx): string
     {
@@ -619,11 +642,19 @@ final class ReplaceContentAbility
 
         $replace = $ctx['replace'];
 
-        return preg_replace_callback($ctx['pattern'], function () use (&$ctx, $replace) {
+        $replaced = preg_replace_callback($ctx['pattern'], function () use (&$ctx, $replace) {
             $ctx['count']++;
 
             return $replace;
         }, $text);
+        // Null on a PCRE failure, such as text that is not valid UTF-8.
+        if ($replaced === null) {
+            $ctx['error'] = preg_last_error_msg();
+
+            return $text;
+        }
+
+        return $replaced;
     }
 
     private static function formatSnippet(string $before, string $match, string $after): string
