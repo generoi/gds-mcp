@@ -275,6 +275,14 @@ HTML;
         WebFetchAbility::trustHost('admin-trusted.example');
         wp_set_current_user($otherEditor);
         $this->assertTrue(WebFetchAbility::isHostTrusted('admin-trusted.example'));
+
+        // Kept per site.
+        global $wpdb;
+        $this->assertNotSame('', get_user_meta($editor, $wpdb->get_blog_prefix().'gds_mcp_trusted_hosts', true));
+
+        // 0.8's list may hold any user's hosts: no longer trusted.
+        update_option('gds_mcp_trusted_web_hosts', ['legacy-trusted.example']);
+        $this->assertFalse(WebFetchAbility::isHostTrusted('legacy-trusted.example'));
     }
 
     public function test_a_hop_that_cannot_be_pinned_is_refused(): void

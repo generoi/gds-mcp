@@ -23,6 +23,14 @@ $wpdb->query(
     )
 );
 
+// Hosts users trusted for web-fetch (Abilities\WebFetchAbility), per site.
+$wpdb->query(
+    $wpdb->prepare(
+        "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
+        '%'.$wpdb->esc_like('gds_mcp_trusted_hosts')
+    )
+);
+
 $removeSiteOptions = static function (): void {
     global $wpdb;
 
@@ -44,6 +52,10 @@ $removeSiteOptions = static function (): void {
 
     // Polylang strings remembered from wp-admin (Integrations\Polylang\RegisteredStrings).
     delete_option('gds_mcp_pll_registered_strings');
+
+    // Hosts trusted for web-fetch, now and as 0.8 kept them.
+    delete_option('gds_mcp_trusted_hosts');
+    delete_option('gds_mcp_trusted_web_hosts');
 };
 
 // Each site of a network keeps its own refresh tokens and clients.
