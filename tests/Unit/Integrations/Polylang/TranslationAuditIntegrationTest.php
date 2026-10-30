@@ -50,6 +50,38 @@ class TranslationAuditIntegrationTest extends TestCase
         $this->assertContains('Untranslated Post', $allMissing);
     }
 
+    public function test_audit_with_lang_classifies_by_the_whole_translation_group(): void
+    {
+        // WP_UnitTestCase rollback removes language terms; re-add them.
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        foreach ([
+            ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0],
+            ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1],
+        ] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->clean_languages_cache();
+
+        $alone = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
+        pll_set_post_language($alone, 'en');
+
+        $en = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
+        $fi = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi, 'fi');
+        pll_save_post_translations(['en' => $en, 'fi' => $fi]);
+
+        $result = (new TranslationAuditAbility)->execute(['post_type' => 'post', 'lang' => 'fi', 'per_page' => 500]);
+
+        // The post with no translation at all is untranslated, not partial.
+        $this->assertSame(1, $result['summary']['untranslated']);
+        $this->assertSame(0, $result['summary']['partially_translated']);
+        $this->assertSame(1, $result['summary']['fully_translated']);
+    }
+
     public function test_audit_is_paged(): void
     {
         $ids = [];

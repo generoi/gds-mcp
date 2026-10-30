@@ -245,7 +245,7 @@ final class MachineTranslateAbility
     private function translateStrings(string $group, object $targetLang, object $service, string $language): array|WP_Error
     {
         $polylang = \PLL();
-        $sources = \PLL_Admin_Strings::get_strings();
+        $sources = RegisteredStrings::all();
 
         if ($group !== '') {
             $sources = array_filter($sources, fn ($s) => ($s['context'] ?? '') === $group);

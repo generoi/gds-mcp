@@ -496,7 +496,11 @@ final class NavMenuItemsAbility
         $currentOrder = (int) $post->menu_order;
 
         $newMenuId = (int) ($input['menu_id'] ?? $currentMenuId);
-        $newParentId = array_key_exists('parent_item_id', $input) ? (int) $input['parent_item_id'] : $currentParentId;
+        // The current parent belongs to the old menu, so a move to another
+        // menu without a parent lands at its top level.
+        $newParentId = array_key_exists('parent_item_id', $input)
+            ? (int) $input['parent_item_id']
+            : ($newMenuId === $currentMenuId ? $currentParentId : 0);
 
         // Capture, BEFORE any mutation, the moved item plus every item in the
         // source and destination menus — shiftOrder re-numbers all of them and

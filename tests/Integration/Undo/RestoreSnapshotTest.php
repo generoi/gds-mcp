@@ -50,6 +50,18 @@ class RestoreSnapshotTest extends TestCase
         $this->assertNotContains($catNew, $terms);
     }
 
+    public function test_restore_post_clears_terms_added_to_an_empty_taxonomy(): void
+    {
+        $id = self::factory()->post->create();
+        $tag = self::factory()->tag->create();
+        $before = Snapshot::postFields($id);
+
+        wp_set_object_terms($id, [$tag], 'post_tag');
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+        $this->assertSame([], wp_get_object_terms($id, 'post_tag', ['fields' => 'ids']));
+    }
+
     public function test_restore_post_only_rewrites_meta_that_changed(): void
     {
         global $wpdb;
@@ -277,6 +289,18 @@ class RestoreSnapshotTest extends TestCase
         $this->assertSame(2, $result['count']);
         $this->assertSame('publish', get_post_status($a));
         $this->assertSame('publish', get_post_status($b));
+    }
+
+    public function test_bulk_is_an_error_when_nothing_was_restored(): void
+    {
+        $result = $this->restore('bulk', ['items' => [
+            ['kind' => 'restore-post', 'data' => ['id' => 999999]],
+            ['kind' => 'untrash', 'data' => ['id' => 999998]],
+        ]]);
+
+        $this->assertWPError($result);
+        $this->assertSame('restore_failed', $result->get_error_code());
+        $this->assertStringContainsString('999999', $result->get_error_message());
     }
 
     public function test_unknown_kind_errors(): void

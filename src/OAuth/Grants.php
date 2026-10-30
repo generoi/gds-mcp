@@ -60,9 +60,14 @@ final class Grants
     {
         $key = self::CODE_PREFIX.self::hash($code);
         $payload = get_transient($key);
-        delete_transient($key);
 
-        return is_array($payload) ? $payload : null;
+        // Only the request whose delete removed the code may use it: two
+        // exchanges racing on one code both read it, but one delete wins.
+        if (! is_array($payload) || ! delete_transient($key)) {
+            return null;
+        }
+
+        return $payload;
     }
 
     // ── Grants ───────────────────────────────────────────────────
@@ -98,7 +103,9 @@ final class Grants
         foreach (self::all($userId) as $existingId => $existing) {
             if ($existing['client_id'] === $grant['client_id']
                 && $existing['resource'] === $grant['resource']) {
-                self::touch($userId, $existingId);
+                // What was consented to this time: the name shown on the
+                // connections screen and the scopes.
+                self::update($userId, $existingId, array_merge($existing, array_intersect_key($grant, array_flip(['client_name', 'scopes'])), ['last_used' => time()]));
 
                 return $existingId;
             }

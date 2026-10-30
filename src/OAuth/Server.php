@@ -40,6 +40,20 @@ final class Server
 
     public static function register(): void
     {
+        // The MCP endpoint's own floor is the adapter's default of `read`.
+        // Raise it to the capability needed to connect — on every site, not
+        // only with OAuth on: otherwise an account too junior to connect could
+        // still reach the endpoint with an application password. One number,
+        // not four.
+        foreach ([
+            'mcp_adapter_default_transport_permission_user_capability',
+            'mcp_adapter_execute_ability_capability',
+            'mcp_adapter_discover_abilities_capability',
+            'mcp_adapter_get_ability_info_capability',
+        ] as $filter) {
+            add_filter($filter, [self::class, 'capability']);
+        }
+
         if (! self::enabled()) {
             // Nothing handles the event once the module is off, and a
             // scheduled event with no handler fires for ever.
@@ -53,20 +67,6 @@ final class Server
         }
 
         add_action('parse_request', [self::class, 'route'], 5);
-
-        // The consent screen refuses anyone without this capability, but the
-        // MCP endpoint's own floor is the adapter's default of `read` — so
-        // without this the gate would apply to OAuth clients and to nobody
-        // else, and an account too junior to connect could still reach the
-        // endpoint with an application password. One number, not four.
-        foreach ([
-            'mcp_adapter_default_transport_permission_user_capability',
-            'mcp_adapter_execute_ability_capability',
-            'mcp_adapter_discover_abilities_capability',
-            'mcp_adapter_get_ability_info_capability',
-        ] as $filter) {
-            add_filter($filter, [self::class, 'capability']);
-        }
 
         BearerAuth::register();
         Admin::register();

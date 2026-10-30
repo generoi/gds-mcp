@@ -82,7 +82,7 @@ final class PatchBlockAbility
     {
         HelpAbility::registerAbility('gds/blocks-patch', [
             'label' => 'Patch Block',
-            'description' => 'Modify, insert, or delete blocks within a post without resending its content. To find a target id, call gds/content-list first — do not query REST endpoints directly. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Read the post with gds/content-read first: content.raw shows each block as <!-- wp:name {attrs} -->. Examples: fix a stat prefix with {block_name: "gds/count-up-item", occurrence: 1, attrs: {prefix: "jopa ", displayPrefix: true}}; set a block style or custom class with attrs {className: "is-style-stripes"} (the HTML class follows); clear it with remove_attrs: ["className"]. Supports batch operations. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
+            'description' => 'Modify, insert, or delete blocks within a post without resending its content. To find a target id, call gds/content-list first — do not query REST endpoints directly. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Read the post with gds/content-read first: content.raw shows each block as <!-- wp:name {attrs} -->. Examples: fix a stat prefix with {block_name: "gds/count-up-item", occurrence: 1, attrs: {prefix: "jopa ", displayPrefix: true}}; set a block style or custom class with attrs {className: "is-style-stripes"} (the HTML class follows); clear it with remove_attrs: ["className"]. Supports batch operations; a batch is all or nothing — if any operation fails, none is saved. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -190,11 +190,18 @@ final class PatchBlockAbility
             $totalModified += $modifiedCount;
         }
 
-        if ($totalModified === 0) {
-            $allErrors = array_filter($results, fn ($r) => $r['error'] !== null);
-            if (count($allErrors) === count($results)) {
-                return new WP_Error('all_operations_failed', 'No blocks were modified.', ['results' => $results]);
-            }
+        // A batch is all or nothing: later operations may rely on earlier
+        // ones, so one failure saves none of them.
+        $failed = array_filter($results, fn ($r) => $r['error'] !== null);
+        if (count($failed) === count($results)) {
+            return new WP_Error('all_operations_failed', 'No blocks were modified.', ['results' => $results]);
+        }
+        if ($failed) {
+            return new WP_Error(
+                'operation_failed',
+                sprintf('Nothing was saved: %d of %d operations failed (%s). Fix them and resend the batch.', count($failed), count($results), implode('; ', array_column($failed, 'error'))),
+                ['results' => $results],
+            );
         }
 
         $newContent = serialize_blocks($blocks);

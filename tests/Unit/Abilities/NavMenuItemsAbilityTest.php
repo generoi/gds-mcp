@@ -466,6 +466,18 @@ class NavMenuItemsAbilityTest extends TestCase
         $this->assertSame([$otherMenuId], array_map('intval', $terms));
     }
 
+    public function test_move_child_to_another_menu_without_parent_lands_at_top_level(): void
+    {
+        $otherMenuId = wp_create_nav_menu('Other Menu');
+        $parent = $this->insertItem('Parent');
+        $child = $this->insertItem('Child', ['menu-item-parent-id' => $parent]);
+
+        $result = $this->ability->executeMove(['id' => $child, 'menu_id' => $otherMenuId, 'position' => 1]);
+
+        $this->assertSame(0, $result['parent_item_id']);
+        $this->assertSame('0', get_post_meta($child, '_menu_item_menu_item_parent', true));
+    }
+
     public function test_move_child_to_top_level(): void
     {
         $parent = $this->insertItem('Parent');

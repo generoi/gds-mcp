@@ -272,7 +272,7 @@ trait RestDelegation
 
         // Allow LLMs to send plain strings for title/content/excerpt.
         // The REST schema defines these as type:object ({raw, rendered}),
-        // but normalizeInput() in PostTypeAbility wraps strings before dispatch.
+        // but GenericPostTypeAbility::normalizeInput() wraps strings before dispatch.
         foreach (['title', 'content', 'excerpt'] as $field) {
             if (isset($properties[$field]) && ($properties[$field]['type'] ?? '') === 'object') {
                 $properties[$field]['type'] = ['string', 'object'];

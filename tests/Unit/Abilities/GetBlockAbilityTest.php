@@ -132,6 +132,23 @@ class GetBlockAbilityTest extends WP_UnitTestCase
         $this->assertArrayHasKey('markup', $example);
     }
 
+    public function test_search_posts_is_off_by_default_and_skips_protected_and_private_types(): void
+    {
+        register_post_type('internal_note', ['public' => false]);
+        $markup = '<!-- wp:paragraph {"className":"is-style-secret"} --><p class="is-style-secret">Secret</p><!-- /wp:paragraph -->';
+        $protected = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish', 'post_password' => 'pw', 'post_content' => $markup]);
+        $internal = self::factory()->post->create(['post_type' => 'internal_note', 'post_status' => 'publish', 'post_content' => $markup]);
+
+        $this->assertArrayNotHasKey('post_examples', (new GetBlockAbility)->execute(['name' => 'core/paragraph'])['block']);
+
+        $result = (new GetBlockAbility)->execute(['name' => 'core/paragraph', 'search_posts' => true, 'style' => 'secret']);
+        $found = array_column($result['block']['post_examples'] ?? [], 'post_id');
+        $this->assertNotContains($protected, $found);
+        $this->assertNotContains($internal, $found);
+
+        unregister_post_type('internal_note');
+    }
+
     public function test_search_posts_filters_by_post_type(): void
     {
         self::factory()->post->create([

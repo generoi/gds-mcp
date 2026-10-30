@@ -231,6 +231,25 @@ final class GenericPostTypeAbility
     // ── Execute methods ─────────────────────────────────────────────
 
     /**
+     * Normalize input so LLMs can send plain strings for title/content/excerpt.
+     * The REST API schema defines these as type:object ({raw:"...", rendered:"..."}),
+     * but LLMs naturally send plain strings. We wrap them for compatibility.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private static function normalizeInput(array $input): array
+    {
+        foreach (['title', 'content', 'excerpt'] as $field) {
+            if (isset($input[$field]) && is_string($input[$field])) {
+                $input[$field] = ['raw' => $input[$field]];
+            }
+        }
+
+        return $input;
+    }
+
+    /**
      * @return array<string, mixed>|WP_Error
      */
     public function executeList(mixed $input = []): array|WP_Error
@@ -305,7 +324,7 @@ final class GenericPostTypeAbility
      */
     public function executeCreate(mixed $input = []): array|WP_Error
     {
-        $input = PostTypeAbility::normalizeInput((array) ($input ?? []));
+        $input = self::normalizeInput((array) ($input ?? []));
         $route = self::resolveRoute($input['type'] ?? '');
         if ($redirect = self::menuItemsRedirect((string) ($input['type'] ?? ''))) {
             return $redirect;
@@ -346,8 +365,10 @@ final class GenericPostTypeAbility
             }
         }
 
-        if ($acfFields && is_array($acfFields)) {
-            self::updateAcfFields($data['id'], $acfFields);
+        // Templates expose composite ids in `id`, the numeric post id in `wp_id`.
+        $numericId = (int) ($data['wp_id'] ?? $data['id'] ?? 0);
+        if ($acfFields && is_array($acfFields) && $numericId && ($fieldsErrors = self::updateAcfFields($numericId, $acfFields))) {
+            $data['fields_errors'] = $fieldsErrors;
         }
 
         $data = self::enrichPostUrls($data);
@@ -370,7 +391,7 @@ final class GenericPostTypeAbility
      */
     public function executeUpdate(mixed $input = []): array|WP_Error
     {
-        $input = PostTypeAbility::normalizeInput((array) ($input ?? []));
+        $input = self::normalizeInput((array) ($input ?? []));
         $route = self::resolveRoute($input['type'] ?? '');
         if ($redirect = self::menuItemsRedirect((string) ($input['type'] ?? ''))) {
             return $redirect;
@@ -412,8 +433,8 @@ final class GenericPostTypeAbility
             self::assignLanguage($numericId, $lang);
         }
 
-        if ($acfFields && is_array($acfFields) && $numericId) {
-            self::updateAcfFields($numericId, $acfFields);
+        if ($acfFields && is_array($acfFields) && $numericId && ($fieldsErrors = self::updateAcfFields($numericId, $acfFields))) {
+            $data['fields_errors'] = $fieldsErrors;
         }
 
         $data = self::enrichPostUrls($data);
@@ -486,7 +507,7 @@ final class GenericPostTypeAbility
      */
     public static function summary(array $data): array
     {
-        return array_intersect_key($data, array_flip(['id', 'wp_id', 'status', 'modified', 'link', 'edit_url', 'preview_url', 'seo_error']));
+        return array_intersect_key($data, array_flip(['id', 'wp_id', 'status', 'modified', 'link', 'edit_url', 'preview_url', 'seo_error', 'fields_errors']));
     }
 
     /**

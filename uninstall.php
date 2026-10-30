@@ -38,3 +38,6 @@ foreach (['gds_mcp_oauth_rt_', 'gds_mcp_oauth_client_'] as $prefix) {
 
 delete_option('gds_mcp_oauth_clients');
 wp_clear_scheduled_hook('gds_mcp_oauth_cleanup');
+
+// Polylang strings remembered from wp-admin (Integrations\Polylang\RegisteredStrings).
+delete_option('gds_mcp_pll_registered_strings');

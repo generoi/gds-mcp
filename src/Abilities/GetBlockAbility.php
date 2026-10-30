@@ -31,12 +31,12 @@ final class GetBlockAbility
                     ],
                     'search_posts' => [
                         'type' => 'boolean',
-                        'description' => 'Search published posts/pages for real-world usage examples of the block.',
-                        'default' => true,
+                        'description' => 'Search published posts/pages for real-world usage examples of the block. Default: false.',
+                        'default' => false,
                     ],
                     'search_post_type' => [
                         'type' => 'string',
-                        'description' => 'Limit search_posts to a specific post type (e.g. "page", "product", "wp_template_part"). Omit to search all published post types.',
+                        'description' => 'Limit search_posts to a specific post type (e.g. "page", "product", "wp_template_part"). Omit to search all public post types, synced patterns and templates. Password-protected posts are never searched.',
                     ],
                     'style' => [
                         'type' => 'string',
@@ -89,7 +89,7 @@ final class GetBlockAbility
         $input = (array) ($input ?? []);
         $name = $input['name'] ?? null;
         $includeExamples = $input['include_examples'] ?? true;
-        $searchPosts = $input['search_posts'] ?? true;
+        $searchPosts = $input['search_posts'] ?? false;
         $searchPostType = $input['search_post_type'] ?? null;
         $style = $input['style'] ?? null;
         $maxExamples = min((int) ($input['max_examples'] ?? 10), 100);

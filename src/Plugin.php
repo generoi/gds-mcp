@@ -40,6 +40,10 @@ class Plugin
 
         add_action('plugins_loaded', [$this, 'bootstrapMcpAdapter'], 20);
 
+        // Polylang drops pll_register_string() outside wp-admin, where the
+        // MCP endpoint runs; remember what wp-admin registers.
+        Integrations\Polylang\RegisteredStrings::register();
+
         // Clear cached schemas when plugins change (abilities may differ)
         add_action('activated_plugin', [self::class, 'clearSchemaCache']);
         add_action('deactivated_plugin', [self::class, 'clearSchemaCache']);
@@ -84,10 +88,12 @@ class Plugin
     public static function clearSchemaCache(): void
     {
         global $wpdb;
+        // The timeout rows too, or each one is left behind for good.
         $wpdb->query(
             $wpdb->prepare(
-                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s",
-                $wpdb->esc_like('_transient_gds_mcp_input_schema').'%'
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+                $wpdb->esc_like('_transient_gds_mcp_input_schema').'%',
+                $wpdb->esc_like('_transient_timeout_gds_mcp_input_schema').'%'
             )
         );
     }

@@ -166,13 +166,11 @@ final class CreateTranslationAbility
         }
 
         // Resolve parent hierarchy.
-        $parentResolved = true;
         if ($source->post_parent) {
             $parentTranslations = pll_get_post_translations($source->post_parent);
             if (! empty($parentTranslations[$language])) {
                 $postData['post_parent'] = $parentTranslations[$language];
             } else {
-                $parentResolved = false;
                 $postData['post_parent'] = 0;
             }
         }

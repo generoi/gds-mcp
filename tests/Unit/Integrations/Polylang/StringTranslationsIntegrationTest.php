@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Tests\Unit\Integrations\Polylang;
 
 use GeneroWP\MCP\Integrations\Polylang\ListStringTranslationsAbility;
+use GeneroWP\MCP\Integrations\Polylang\RegisteredStrings;
 use GeneroWP\MCP\Integrations\Polylang\UpdateStringTranslationAbility;
 use WP_UnitTestCase;
 
@@ -42,6 +43,28 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
         $this->assertIsArray($result);
         $names = array_column($result['strings'], 'name');
         $this->assertContains('test_group_filter', $names);
+    }
+
+    public function test_strings_registered_in_wp_admin_are_listed_outside_it(): void
+    {
+        if (! PLL() instanceof \PLL_Admin_Base) {
+            $this->markTestSkipped('Polylang does not run its admin context here.');
+        }
+        pll_register_string('test_remembered', 'Remembered in admin', 'GDS MCP Tests');
+        RegisteredStrings::remember();
+        $this->assertContains('Remembered in admin', array_column(get_option('gds_mcp_pll_registered_strings'), 'string'));
+
+        // A REST or WP-CLI request: pll_register_string() kept nothing there.
+        update_option('gds_mcp_pll_registered_strings', [md5('Only in admin') => ['name' => 'only_admin', 'string' => 'Only in admin', 'context' => 'GDS MCP Tests', 'multiline' => false]], false);
+        $polylang = $GLOBALS['polylang'];
+        $GLOBALS['polylang'] = new \stdClass;
+        try {
+            $strings = RegisteredStrings::all();
+        } finally {
+            $GLOBALS['polylang'] = $polylang;
+        }
+
+        $this->assertContains('Only in admin', array_column($strings, 'string'));
     }
 
     public function test_update_and_read_string_translation(): void

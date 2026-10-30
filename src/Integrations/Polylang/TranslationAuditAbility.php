@@ -198,10 +198,13 @@ final class TranslationAuditAbility
                     }
                 }
 
-                // `empty()` covered the zero case; `count > 0` is redundant.
+                // Partial means it has a translation, just not every one asked
+                // for; a post alone in its group is untranslated. Counting the
+                // missing languages instead calls every post partial once
+                // `lang` narrows them to one.
                 if (empty($missingLangs)) {
                     $fullyTranslated++;
-                } elseif (count($missingLangs) < count($languageSlugs)) {
+                } elseif (count($translations) > 1) {
                     $partiallyTranslated++;
                 }
 

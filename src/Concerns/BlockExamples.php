@@ -78,23 +78,29 @@ trait BlockExamples
         $demoPageId = self::getDemoPageId() ?? 0;
         $frontPageId = (int) get_option('page_on_front', 0);
 
+        // Only content anyone can see on the site: public types plus the
+        // patterns and templates it is built from, never password-protected.
+        $types = array_values(array_merge(get_post_types(['public' => true]), ['wp_block', 'wp_template', 'wp_template_part']));
+        if ($postType) {
+            $types = array_values(array_intersect($types, [$postType]));
+        }
+        if (! $types) {
+            return [];
+        }
+
         // Find published posts containing this block (exclude demo page).
         // Prioritize: synced patterns (wp_block), front page, then recency.
-        $typeClause = '';
-        $params = ['%<!-- '.$wpdb->esc_like($commentTag).'%', $demoPageId, $frontPageId];
-        if ($postType) {
-            $typeClause = 'AND post_type = %s';
-            $params[] = $postType;
-        }
-        $params[] = $limit;
+        $typePlaceholders = implode(', ', array_fill(0, count($types), '%s'));
+        $params = ['%<!-- '.$wpdb->esc_like($commentTag).'%', $demoPageId, ...$types, $frontPageId, $limit];
 
         // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $postIds = $wpdb->get_col($wpdb->prepare(
             "SELECT ID FROM {$wpdb->posts}
              WHERE post_status = 'publish'
+             AND post_password = ''
              AND post_content LIKE %s
              AND ID != %d
-             {$typeClause}
+             AND post_type IN ({$typePlaceholders})
              ORDER BY
                CASE
                  WHEN post_type = 'wp_block' THEN 0
