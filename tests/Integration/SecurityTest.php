@@ -148,17 +148,22 @@ class SecurityTest extends AbilityTestCase
 
     // ── Content CRUD (REST-delegated) ─────────────────────────────
 
-    public function test_content_create_blocked_for_subscriber(): void
-    {
-        wp_set_current_user($this->subscriberId);
+    // A contributor passes the abilities' gate (edit_posts), so these reach
+    // the REST controller's per-object checks.
 
-        $this->assertAbilityError('gds/content-create', [
+    public function test_content_publish_blocked_for_contributor(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
+
+        $error = $this->assertAbilityError('gds/content-create', [
             'type' => 'posts',
             'title' => 'Should Fail',
+            'status' => 'publish',
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
     }
 
-    public function test_content_delete_blocked_for_subscriber(): void
+    public function test_content_delete_of_anothers_post_blocked_for_contributor(): void
     {
         wp_set_current_user($this->editorId);
         $postId = $this->createPost([
@@ -166,12 +171,14 @@ class SecurityTest extends AbilityTestCase
             'post_status' => 'publish',
         ]);
 
-        wp_set_current_user($this->subscriberId);
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
 
-        $this->assertAbilityError('gds/content-delete', [
+        $error = $this->assertAbilityError('gds/content-delete', [
             'type' => 'posts',
             'id' => $postId,
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
+        $this->assertSame('publish', get_post_status($postId));
     }
 
     // ── Translation abilities ─────────────────────────────────────

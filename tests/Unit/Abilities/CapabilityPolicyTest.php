@@ -55,6 +55,11 @@ class CapabilityPolicyTest extends WP_UnitTestCase
         $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/content-list'));
         $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/blocks-get'));
         $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/help'));
+
+        // The MCP floor, when a site raises it.
+        add_filter('gds-mcp/oauth_capability', fn () => 'publish_pages');
+        $this->assertSame('publish_pages', CapabilityPolicy::capabilityFor('gds/content-list'));
+        remove_all_filters('gds-mcp/oauth_capability');
     }
 
     public function test_anonymous_visitors_cannot_run_abilities_over_rest(): void

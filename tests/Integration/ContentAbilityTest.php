@@ -278,24 +278,29 @@ class ContentAbilityTest extends AbilityTestCase
         $this->assertAbilityError('gds/content-list', ['type' => 'pages', 'per_page' => 1], 'ability_invalid_permissions');
     }
 
-    public function test_list_draft_blocked_for_subscriber(): void
-    {
-        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+    // A contributor passes the ability's gate (edit_posts) but may not edit
+    // pages, so these are refused by the REST controller's own checks.
 
-        $this->assertAbilityError('gds/content-list', [
+    public function test_list_draft_pages_blocked_for_contributor(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
+
+        $error = $this->assertAbilityError('gds/content-list', [
             'type' => 'pages',
             'status' => 'draft',
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
     }
 
-    public function test_create_blocked_for_subscriber(): void
+    public function test_create_page_blocked_for_contributor(): void
     {
-        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
 
-        $this->assertAbilityError('gds/content-create', [
+        $error = $this->assertAbilityError('gds/content-create', [
             'type' => 'pages',
             'title' => 'Should Fail',
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
     }
 
     // ── Composite template ids ────────────────────────────────────
