@@ -28,13 +28,25 @@ final class WebFetchAbility
     private const TIMEOUT = 15;
 
     /**
-     * Option key holding the list of hosts the user has trusted for
-     * auto-approval of web-fetch calls (set via "Approve & trust" UI button).
+     * Option key holding the list of hosts an administrator has trusted for
+     * auto-approval of web-fetch calls (set via "Approve & trust" UI button),
+     * and the user option (per site) for hosts other users trusted for
+     * themselves.
      */
-    private const TRUSTED_HOSTS_OPTION = 'gds_mcp_trusted_web_hosts';
+    private const TRUSTED_HOSTS_OPTION = 'gds_mcp_trusted_hosts';
+
+    /**
+     * Where 0.8 kept every user's trusted hosts for the whole site. Who added
+     * an entry is not recorded, so they are dropped, not carried over.
+     */
+    private const LEGACY_TRUSTED_HOSTS_OPTION = 'gds_mcp_trusted_web_hosts';
 
     public static function register(): void
     {
+        if (get_option(self::LEGACY_TRUSTED_HOSTS_OPTION) !== false) {
+            delete_option(self::LEGACY_TRUSTED_HOSTS_OPTION);
+        }
+
         // Register hooks for approval-integration with gds-assistant.
         // These are no-ops if gds-assistant isn't installed.
         add_filter('gds-assistant/tool_requires_approval', [self::class, 'maybeSkipApproval'], 10, 3);
@@ -165,7 +177,7 @@ final class WebFetchAbility
      * trust list from anywhere (themes, site-specific mu-plugins, etc.).
      *
      * Default trusted hosts include:
-     *   - gds_mcp_trusted_web_hosts option (user clicked "Approve & trust")
+     *   - gds_mcp_trusted_hosts option and user option ("Approve & trust")
      *   - WordPress's allowed_redirect_hosts (current site + plugin-added)
      *
      * @param  string  $host  Lowercased hostname to check.
@@ -202,19 +214,24 @@ final class WebFetchAbility
 
     /**
      * Filter callback: add hosts the user has approved via "Approve & trust"
-     * (stored in the gds_mcp_trusted_web_hosts option) to the trust list.
+     * (the gds_mcp_trusted_hosts option, and the current user's own) to the
+     * trust list.
      *
      * @param  array<string, mixed>  $hosts
      * @return array<string, mixed>
      */
     public static function addUserApprovedHosts(array $hosts, string $candidateHost = ''): array
     {
-        return array_merge($hosts, (array) get_option(self::TRUSTED_HOSTS_OPTION, []));
+        $own = get_current_user_id() ? (array) get_user_option(self::TRUSTED_HOSTS_OPTION) : [];
+
+        return array_merge($hosts, (array) get_option(self::TRUSTED_HOSTS_OPTION, []), array_filter($own));
     }
 
     /**
      * Persist a host to the trusted list when the user clicks
-     * "Approve & trust" in the approval UI.
+     * "Approve & trust" in the approval UI: for the whole site when an
+     * administrator trusts it, else for that user only, so one editor's
+     * approval does not skip everyone else's.
      */
     public static function trustHost(string $host): void
     {
@@ -222,10 +239,19 @@ final class WebFetchAbility
         if ($host === '') {
             return;
         }
-        $trusted = (array) get_option(self::TRUSTED_HOSTS_OPTION, []);
-        if (! in_array($host, $trusted, true)) {
-            $trusted[] = $host;
-            update_option(self::TRUSTED_HOSTS_OPTION, array_values(array_unique($trusted)));
+        $siteWide = current_user_can('manage_options');
+        $trusted = $siteWide
+            ? (array) get_option(self::TRUSTED_HOSTS_OPTION, [])
+            : array_filter((array) get_user_option(self::TRUSTED_HOSTS_OPTION));
+        if (in_array($host, $trusted, true)) {
+            return;
+        }
+        $trusted = array_values(array_unique([...$trusted, $host]));
+        if ($siteWide) {
+            update_option(self::TRUSTED_HOSTS_OPTION, $trusted);
+        } else {
+            // Per site: keyed with the site's table prefix.
+            update_user_option(get_current_user_id(), self::TRUSTED_HOSTS_OPTION, $trusted);
         }
     }
 

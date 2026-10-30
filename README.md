@@ -244,6 +244,11 @@ claude mcp add-json -s local my-site \
 }
 ```
 
+## Upgrade notes
+
+- **0.8.2:** `gds/posts-bulk-update` `set_meta` values are now run through kses for users without `unfiltered_html`, as post content already was. Besides stripping disallowed HTML, kses encodes a bare `&` as `&amp;`, so meta that relied on a raw `&` (URLs with query strings, for example) is stored encoded for those users.
+- **After 0.8.2:** web-fetch hosts trusted with "Approve & trust" are kept per user (or site-wide when an administrator trusts them). The old shared list (`gds_mcp_trusted_web_hosts`) recorded no owner, so it is deleted on upgrade rather than carried over: each user re-trusts their hosts once.
+
 ## Development
 
 ```bash

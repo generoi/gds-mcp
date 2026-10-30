@@ -115,4 +115,46 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
         }
         $this->assertTrue($found, 'Updated string translation should appear in list.');
     }
+
+    public function test_translations_are_filtered_for_users_without_unfiltered_html(): void
+    {
+        // WP_UnitTestCase rollback removes language terms; Polylang's cache
+        // may still list them.
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1]);
+            $model->clean_languages_cache();
+        }
+        add_filter('map_meta_cap', fn ($caps, $cap) => $cap === 'unfiltered_html' ? ['do_not_allow'] : $caps, 10, 2);
+        $lang = $model->get_language('fi');
+        $testString = 'Kses String '.uniqid();
+        pll_register_string('test_kses_string', $testString, 'GDS MCP Tests');
+        $stored = function () use ($lang, $testString): string {
+            $mo = new \PLL_MO;
+            $mo->import_from_db($lang);
+
+            return $mo->translate($testString);
+        };
+
+        $result = (new UpdateStringTranslationAbility)->execute(['string' => $testString, 'lang' => $lang->slug, 'translation' => 'Hei<script>alert(1)</script>']);
+
+        $this->assertSame('Heialert(1)', $result['translation']);
+        $this->assertSame('Heialert(1)', $stored());
+
+        // An undo payload is filtered the same way.
+        $restored = apply_filters('gds-mcp/restore_snapshot', null, ['kind' => 'restore-string', 'data' => ['string' => $testString, 'lang' => $lang->slug, 'translation' => 'Moi<script>alert(2)</script>']]);
+
+        $this->assertNotWPError($restored);
+        $this->assertSame('Moialert(2)', $stored());
+
+        // With no translation yet, one that repeats the original is still
+        // filtered: Polylang compares with the previous translation, not
+        // the original.
+        $withMarkup = 'Original <script>x</script> '.uniqid();
+        pll_register_string('test_kses_original', $withMarkup, 'GDS MCP Tests');
+        $result = (new UpdateStringTranslationAbility)->execute(['string' => $withMarkup, 'lang' => $lang->slug, 'translation' => $withMarkup]);
+
+        $this->assertStringNotContainsString('<script>', $result['translation']);
+    }
 }

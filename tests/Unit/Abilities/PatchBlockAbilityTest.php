@@ -228,6 +228,37 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
         }
     }
 
+    public function test_insert_into_an_empty_leaf_block_is_refused(): void
+    {
+        $leaves = [
+            'core/paragraph' => '<!-- wp:paragraph --><p></p><!-- /wp:paragraph -->',
+            'core/heading' => '<!-- wp:heading --><h2 class="wp-block-heading"></h2><!-- /wp:heading -->',
+            'core/separator' => '<!-- wp:separator --><hr class="wp-block-separator has-alpha-channel-opacity"/><!-- /wp:separator -->',
+            'core/spacer' => '<!-- wp:spacer --><div style="height:100px" aria-hidden="true" class="wp-block-spacer"></div><!-- /wp:spacer -->',
+        ];
+        foreach ($leaves as $name => $markup) {
+            $postId = self::factory()->post->create(['post_content' => $markup]);
+
+            $result = (new PatchBlockAbility)->execute(['id' => $postId, 'action' => 'insert', 'block_name' => $name, 'position' => 'append', 'markup' => '<!-- wp:paragraph --><p>Inside</p><!-- /wp:paragraph -->']);
+
+            $this->assertWPError($result, $name);
+            $this->assertStringContainsString('holds no inner blocks', $result->get_error_data()['results'][0]['error'], $name);
+            $this->assertSame($markup, get_post($postId)->post_content, $name);
+        }
+    }
+
+    public function test_insert_into_a_container_holding_only_text_says_where_to_insert(): void
+    {
+        $group = '<!-- wp:group --><div class="wp-block-group">Loose text</div><!-- /wp:group -->';
+        $postId = self::factory()->post->create(['post_content' => $group]);
+
+        $result = (new PatchBlockAbility)->execute(['id' => $postId, 'action' => 'insert', 'block_name' => 'core/group', 'position' => 'append', 'markup' => '<!-- wp:paragraph --><p>Hi</p><!-- /wp:paragraph -->']);
+
+        $this->assertWPError($result);
+        $this->assertStringContainsString('complete block markup', $result->get_error_data()['results'][0]['error']);
+        $this->assertSame($group, get_post($postId)->post_content);
+    }
+
     public function test_insert_with_occurrence_zero_is_refused(): void
     {
         $result = (new PatchBlockAbility)->execute(['id' => $this->postId, 'action' => 'insert', 'block_name' => 'core/group', 'occurrence' => 0, 'position' => 'append', 'markup' => '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->']);

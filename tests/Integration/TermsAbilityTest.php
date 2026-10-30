@@ -153,10 +153,10 @@ class TermsAbilityTest extends AbilityTestCase
     {
         $termId = self::factory()->category->create(['name' => 'To Delete']);
 
+        // No force: terms have no trash, so the ability always deletes.
         $result = $this->assertAbilitySuccess('gds/terms-delete', [
             'taxonomy' => 'categories',
             'id' => $termId,
-            'force' => true,
         ]);
 
         $this->assertIsArray($result);
@@ -165,13 +165,16 @@ class TermsAbilityTest extends AbilityTestCase
 
     // ── Permissions ───────────────────────────────────────────────
 
-    public function test_create_blocked_for_subscriber(): void
+    public function test_create_blocked_for_contributor(): void
     {
-        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        // Past the ability's gate (edit_posts); the terms controller needs
+        // manage_categories.
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
 
-        $this->assertAbilityError('gds/terms-create', [
+        $error = $this->assertAbilityError('gds/terms-create', [
             'taxonomy' => 'categories',
             'name' => 'Should Fail',
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
     }
 }

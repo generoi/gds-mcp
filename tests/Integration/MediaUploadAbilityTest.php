@@ -77,6 +77,22 @@ class MediaUploadAbilityTest extends AbilityTestCase
         }
     }
 
+    public function test_an_id_list_blocks_the_undo_only_when_it_holds_the_id(): void
+    {
+        $first = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'first.png']);
+        update_post_meta($this->createPost(['post_type' => 'post']), '_product_image_gallery', $first['id'].',9');
+        $last = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'last.png']);
+        update_post_meta($this->createPost(['post_type' => 'post']), '_product_image_gallery', '9,'.$last['id']);
+        $unused = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'unused.png']);
+        update_post_meta($this->createPost(['post_type' => 'post']), '_product_image_gallery', '1'.$unused['id'].','.$unused['id'].'1');
+
+        foreach ([$first, $last] as $upload) {
+            $this->assertWPError(apply_filters('gds-mcp/restore_snapshot', null, $upload['_undo']), $upload['url']);
+            wp_delete_attachment($upload['id'], true);
+        }
+        $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $unused['_undo']));
+    }
+
     public function test_undoing_an_upload_keeps_the_file_when_a_reference_lookup_fails(): void
     {
         global $wpdb;

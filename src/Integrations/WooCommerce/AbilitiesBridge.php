@@ -47,12 +47,13 @@ final class AbilitiesBridge
 
         // WC (checked up to 11.2) has no public accessor for these: its own
         // register_abilities() bails unless the URL is /woocommerce/mcp.
+        // Reflection reaches private methods without setAccessible() since
+        // PHP 8.1, and calling it is deprecated in 8.5.
         try {
             $reflection = new ReflectionMethod(
                 '\\Automattic\\WooCommerce\\Internal\\Abilities\\AbilitiesRestBridge',
                 'get_configurations'
             );
-            $reflection->setAccessible(true);
             $factory = '\\Automattic\\WooCommerce\\Internal\\Abilities\\REST\\RestAbilityFactory';
             foreach ($reflection->invoke(null) as $config) {
                 $factory::register_controller_abilities($config);

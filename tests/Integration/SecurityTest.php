@@ -148,17 +148,22 @@ class SecurityTest extends AbilityTestCase
 
     // ── Content CRUD (REST-delegated) ─────────────────────────────
 
-    public function test_content_create_blocked_for_subscriber(): void
-    {
-        wp_set_current_user($this->subscriberId);
+    // A contributor passes the abilities' gate (edit_posts), so these reach
+    // the REST controller's per-object checks.
 
-        $this->assertAbilityError('gds/content-create', [
+    public function test_content_publish_blocked_for_contributor(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
+
+        $error = $this->assertAbilityError('gds/content-create', [
             'type' => 'posts',
             'title' => 'Should Fail',
+            'status' => 'publish',
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
     }
 
-    public function test_content_delete_blocked_for_subscriber(): void
+    public function test_content_delete_of_anothers_post_blocked_for_contributor(): void
     {
         wp_set_current_user($this->editorId);
         $postId = $this->createPost([
@@ -166,12 +171,14 @@ class SecurityTest extends AbilityTestCase
             'post_status' => 'publish',
         ]);
 
-        wp_set_current_user($this->subscriberId);
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
 
-        $this->assertAbilityError('gds/content-delete', [
+        $error = $this->assertAbilityError('gds/content-delete', [
             'type' => 'posts',
             'id' => $postId,
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
+        $this->assertSame('publish', get_post_status($postId));
     }
 
     // ── Translation abilities ─────────────────────────────────────
@@ -283,39 +290,26 @@ class SecurityTest extends AbilityTestCase
         ], 'ability_invalid_permissions');
     }
 
-    // ── Read operations should still work ─────────────────────────
+    // ── Reads need edit_posts too ─────────────────────────────────
+    // Every ability is also on core's /wp-abilities/v1 run route, which
+    // checks only the ability's own permission.
 
-    public function test_subscriber_can_list_published_content(): void
+    public function test_subscriber_cannot_list_content_or_use_help(): void
     {
         wp_set_current_user($this->editorId);
         $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
 
         wp_set_current_user($this->subscriberId);
 
-        $result = $this->assertAbilitySuccess('gds/content-list', [
-            'type' => 'posts',
-            'per_page' => 1,
-        ]);
-        $this->assertGreaterThanOrEqual(1, $result['total']);
+        $this->assertAbilityError('gds/content-list', ['type' => 'posts', 'per_page' => 1], 'ability_invalid_permissions');
+        $this->assertAbilityError('gds/help', [], 'ability_invalid_permissions');
     }
 
-    public function test_subscriber_can_use_help(): void
-    {
-        wp_set_current_user($this->subscriberId);
-
-        $result = $this->assertAbilitySuccess('gds/help');
-        $this->assertGreaterThan(0, $result['total']);
-    }
-
-    public function test_unauthenticated_can_list_published_content(): void
+    public function test_unauthenticated_cannot_list_published_content(): void
     {
         $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
         wp_set_current_user(0);
 
-        $result = $this->assertAbilitySuccess('gds/content-list', [
-            'type' => 'posts',
-            'per_page' => 1,
-        ]);
-        $this->assertGreaterThanOrEqual(1, $result['total']);
+        $this->assertAbilityError('gds/content-list', ['type' => 'posts', 'per_page' => 1], 'ability_invalid_permissions');
     }
 }

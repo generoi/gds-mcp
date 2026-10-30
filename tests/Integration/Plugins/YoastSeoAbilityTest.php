@@ -157,13 +157,16 @@ class YoastSeoAbilityTest extends AbilityTestCase
     public function test_requires_edit_permission(): void
     {
         $postId = self::factory()->post->create();
-        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        // Past the ability's gate (edit_posts), but not allowed to edit
+        // someone else's post.
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
 
-        $this->assertAbilityError('gds/seo-update', [
+        $error = $this->assertAbilityError('gds/seo-update', [
             'object_type' => 'post',
             'id' => $postId,
             'fields' => ['title' => 'Nope'],
         ]);
+        $this->assertNotSame('ability_invalid_permissions', $error->get_error_code());
     }
 
     public function test_keeps_yoast_variables_intact(): void

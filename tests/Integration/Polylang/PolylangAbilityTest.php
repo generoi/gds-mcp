@@ -66,12 +66,11 @@ class PolylangAbilityTest extends AbilityTestCase
         $this->assertContains('en', $slugs);
     }
 
-    public function test_list_languages_unauthenticated(): void
+    public function test_list_languages_is_refused_unauthenticated(): void
     {
         wp_set_current_user(0);
 
-        $result = $this->assertAbilitySuccess('gds/languages-list');
-        $this->assertNotEmpty($result);
+        $this->assertAbilityError('gds/languages-list', [], 'ability_invalid_permissions');
     }
 
     // ── Translation Audit ─────────────────────────────────────────

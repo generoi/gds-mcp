@@ -2,9 +2,11 @@
 
 namespace GeneroWP\MCP\Tests\Integration;
 
+use GeneroWP\MCP\Abilities\WebFetchAbility;
 use GeneroWP\MCP\Http\PublicUrlGuard;
 use GeneroWP\MCP\Tests\AbilityTestCase;
 use GeneroWP\MCP\Tests\Fixtures\RedirectingTransport;
+use WpOrg\Requests\Exception;
 
 class WebFetchAbilityTest extends AbilityTestCase
 {
@@ -255,6 +257,50 @@ HTML;
 
         $this->assertFalse($reached, 'cURL went to the checked address, not where DNS points now.');
         $this->assertFileDoesNotExist($this->listenerDir.'/hit');
+    }
+
+    public function test_only_administrators_trust_a_host_for_the_whole_site(): void
+    {
+        $editor = self::factory()->user->create(['role' => 'editor']);
+        $otherEditor = self::factory()->user->create(['role' => 'editor']);
+
+        wp_set_current_user($editor);
+        WebFetchAbility::trustHost('editor-trusted.example');
+        $this->assertTrue(WebFetchAbility::isHostTrusted('editor-trusted.example'), 'Trusted for the editor who approved it.');
+
+        wp_set_current_user($otherEditor);
+        $this->assertFalse(WebFetchAbility::isHostTrusted('editor-trusted.example'), 'Not for anyone else.');
+
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        WebFetchAbility::trustHost('admin-trusted.example');
+        wp_set_current_user($otherEditor);
+        $this->assertTrue(WebFetchAbility::isHostTrusted('admin-trusted.example'));
+
+        // Kept per site.
+        global $wpdb;
+        $this->assertNotSame('', get_user_meta($editor, $wpdb->get_blog_prefix().'gds_mcp_trusted_hosts', true));
+
+        // 0.8's list may hold any user's hosts: no longer trusted.
+        update_option('gds_mcp_trusted_web_hosts', ['legacy-trusted.example']);
+        $this->assertFalse(WebFetchAbility::isHostTrusted('legacy-trusted.example'));
+    }
+
+    public function test_a_hop_that_cannot_be_pinned_is_refused(): void
+    {
+        self::resolveLocalhostTo(['v4' => ['93.184.216.34'], 'v6' => [], 'v6_failed' => false]);
+
+        try {
+            PublicUrlGuard::guard(function () {
+                // The hooks Requests fires for one hop over fsockopen.
+                do_action('requests-requests.before_request', 'https://localhost/');
+                do_action('requests-fsockopen.before_request');
+            });
+            $this->fail('An fsockopen hop must not be sent.');
+        } catch (Exception $e) {
+            $this->assertSame(PublicUrlGuard::REFUSED, $e->getMessage());
+        } finally {
+            self::setResolver(null);
+        }
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Tests\Integration\Plugins;
 
+use GeneroWP\MCP\Integrations\GravityForms\GravityFormsAbility;
 use GeneroWP\MCP\Tests\AbilityTestCase;
 
 /**
@@ -176,6 +177,81 @@ class GravityFormsAbilityTest extends AbilityTestCase
         $labels = array_column($updated['fields'], 'label');
         $this->assertSame(['Sähköposti', 'Yritys'], $labels);
         $this->assertCount(2, $updated['fields']);
+    }
+
+    public function test_forms_html_is_filtered_for_admins_without_unfiltered_html(): void
+    {
+        add_filter('map_meta_cap', fn ($caps, $cap) => $cap === 'unfiltered_html' ? ['do_not_allow'] : $caps, 10, 2);
+        $script = '<script>alert(1)</script>';
+
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Kses Test '.uniqid(),
+            'description' => 'Intro'.$script,
+            'fields' => [['type' => 'html', 'label' => 'Block', 'content' => 'Hi'.$script]],
+            'confirmations' => [['name' => 'Main', 'message' => 'Thanks'.$script, 'isDefault' => true, 'type' => 'message']],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+        $updated = $this->assertAbilitySuccess('gds/forms-update', [
+            'id' => $id,
+            'notifications' => [['name' => 'Admin', 'to' => 'a@example.com', 'subject' => 'New entry', 'message' => 'New'.$script]],
+        ]);
+
+        $form = \GFAPI::get_form($id);
+        $this->assertStringNotContainsString('<script>', $form['description']);
+        $this->assertStringNotContainsString('<script>', $form['fields'][0]->content);
+        $this->assertStringNotContainsString('<script>', reset($form['confirmations'])['message']);
+        $this->assertStringNotContainsString('<script>', reset($form['notifications'])['message']);
+        $this->assertSame('Block', $updated['fields'][0]['label']);
+    }
+
+    public function test_forms_settings_and_redirects_are_sanitized(): void
+    {
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Sanitize <b>Test</b> '.uniqid(),
+            'button' => ['type' => 'text', 'text' => 'Send <img src=x onerror=alert(1)>'],
+            'fields' => [['type' => 'email', 'label' => 'Email']],
+            'confirmations' => [
+                ['name' => 'Script', 'type' => 'redirect', 'url' => 'javascript://x%0aalert(document.cookie)', 'isDefault' => true],
+                ['name' => 'Hidden', 'type' => 'redirect', 'url' => "\x01javascript:alert(1)"],
+                ['name' => 'Fine', 'type' => 'redirect', 'url' => 'https://example.com/thanks'],
+                ['name' => 'Tag', 'type' => 'redirect', 'url' => '{embed_url}?sent=1'],
+                // GF would redirect to http:///thanks.
+                ['name' => 'Path', 'type' => 'redirect', 'url' => '/thanks'],
+            ],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+
+        $form = \GFAPI::get_form($id);
+        $this->assertStringNotContainsString('<b>', $form['title']);
+        $this->assertStringNotContainsString('<img', $form['button']['text']);
+        $urls = array_column($form['confirmations'], 'url', 'name');
+        $this->assertSame('', $urls['Script']);
+        $this->assertSame('', $urls['Hidden']);
+        $this->assertSame('https://example.com/thanks', $urls['Fine']);
+        $this->assertSame('{embed_url}?sent=1', $urls['Tag']);
+        $this->assertSame('', $urls['Path']);
+    }
+
+    public function test_notification_fallback_sanitizes_conditional_logic_and_routing(): void
+    {
+        $method = new \ReflectionMethod(GravityFormsAbility::class, 'sanitizeNotification');
+        $rule = ['fieldId' => '1<b>x</b>', 'operator' => 'bogus', 'value' => 'a<script>alert(1)</script>'];
+
+        $clean = $method->invoke(null, [
+            'name' => 'Admin <b>x</b>',
+            'conditionalLogic' => ['actionType' => 'run', 'logicType' => 'some', 'rules' => [$rule]],
+            'routing' => [$rule + ['email' => 'a@example.com']],
+        ]);
+
+        $this->assertSame('Admin x', $clean['name']);
+        $this->assertSame('show', $clean['conditionalLogic']['actionType']);
+        $this->assertSame('all', $clean['conditionalLogic']['logicType']);
+        foreach ([$clean['conditionalLogic']['rules'][0], $clean['routing'][0]] as $cleanRule) {
+            $this->assertSame('1x', $cleanRule['fieldId']);
+            $this->assertSame('is', $cleanRule['operator']);
+            $this->assertStringNotContainsString('<script>', $cleanRule['value']);
+        }
+        $this->assertSame('a@example.com', $clean['routing'][0]['email']);
     }
 
     public function test_forms_update_confirmation_message(): void

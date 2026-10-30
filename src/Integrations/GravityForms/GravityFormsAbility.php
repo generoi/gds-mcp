@@ -5,6 +5,8 @@ namespace GeneroWP\MCP\Integrations\GravityForms;
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\RestDelegation;
 use GeneroWP\MCP\Undo\Reversible;
+use Gravity_Forms\Gravity_Forms\Abilities\GF_Abilities_Handler_Confirmations;
+use Gravity_Forms\Gravity_Forms\Abilities\GF_Abilities_Handler_Notifications;
 use WP_Error;
 
 /**
@@ -287,7 +289,7 @@ final class GravityFormsAbility
 
         // Deep-convert to arrays (GFAPI expects arrays, not stdClass)
         $input = json_decode(json_encode($input ?? []), true) ?: [];
-        $input = self::normalizeFormPayload($input);
+        $input = self::normalizeFormPayload(self::sanitizeSuppliedForm($input));
 
         // Bypass the GF REST API (which expects the body as a JSON-encoded string
         // and returns cryptic "no route"/"must be sent as a JSON string" errors
@@ -306,6 +308,129 @@ final class GravityFormsAbility
 
         // Undo a create by deleting the new form.
         return $this->reversible($saved, 'delete-form', ['id' => $formId], "Delete the created form \"{$saved['title']}\"");
+    }
+
+    /**
+     * GFAPI saves forms as given; the form editor sanitizes them. Do what GF
+     * 3.1's own abilities handler does (sanitize_supplied_content()) to the
+     * keys the caller supplied: form settings, each field through its own
+     * sanitize_settings(), and notifications and confirmations through GF's
+     * sanitizers where loaded, else the same rules here.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private static function sanitizeSuppliedForm(array $input): array
+    {
+        $text = static fn (mixed $value): mixed => is_string($value) ? sanitize_text_field($value) : $value;
+        $html = static fn (mixed $value): mixed => is_string($value) ? \GFCommon::maybe_wp_kses($value) : $value;
+
+        foreach (['description', 'limitEntriesMessage', 'schedulePendingMessage', 'scheduleMessage', 'requireLoginMessage'] as $key) {
+            if (isset($input[$key])) {
+                $input[$key] = $html($input[$key]);
+            }
+        }
+        foreach (['title', 'cssClass'] as $key) {
+            if (isset($input[$key])) {
+                $input[$key] = $text($input[$key]);
+            }
+        }
+        foreach (['scheduleStart', 'scheduleEnd'] as $key) {
+            if (isset($input[$key]) && is_string($input[$key])) {
+                $input[$key] = wp_strip_all_tags($input[$key]);
+            }
+        }
+        if (isset($input['button']) && is_array($input['button'])) {
+            foreach (['text', 'imageUrl'] as $key) {
+                if (isset($input['button'][$key])) {
+                    $input['button'][$key] = $text($input['button'][$key]);
+                }
+            }
+            if (isset($input['button']['conditionalLogic'])) {
+                $input['button']['conditionalLogic'] = \GFFormsModel::sanitize_conditional_logic($input['button']['conditionalLogic']);
+            }
+        }
+        if (isset($input['save']['button']['text'])) {
+            $input['save']['button']['text'] = $text($input['save']['button']['text']);
+        }
+
+        foreach (is_array($input['fields'] ?? null) ? $input['fields'] : [] as $i => $field) {
+            if (is_array($field)) {
+                $object = \GF_Fields::create($field);
+                $object->sanitize_settings();
+                $input['fields'][$i] = array_intersect_key((array) $object, $field);
+            }
+        }
+
+        foreach (is_array($input['notifications'] ?? null) ? $input['notifications'] : [] as $key => $notification) {
+            if (! is_array($notification)) {
+                continue;
+            }
+            if (class_exists(GF_Abilities_Handler_Notifications::class)) {
+                $notification = GF_Abilities_Handler_Notifications::sanitize($notification);
+            } else {
+                $notification = self::sanitizeNotification($notification);
+            }
+            $input['notifications'][$key] = $notification;
+        }
+
+        foreach (is_array($input['confirmations'] ?? null) ? $input['confirmations'] : [] as $key => $confirmation) {
+            if (! is_array($confirmation)) {
+                continue;
+            }
+            if (class_exists(GF_Abilities_Handler_Confirmations::class)) {
+                $confirmation = GF_Abilities_Handler_Confirmations::sanitize($confirmation);
+            } else {
+                if (isset($confirmation['name'])) {
+                    $confirmation['name'] = $text($confirmation['name']);
+                }
+                if (isset($confirmation['message'])) {
+                    $confirmation['message'] = $html($confirmation['message']);
+                }
+            }
+            // GF's own check lets a javascript://… URL through, and its
+            // redirect confirmation runs it. Keep http(s) or a merge tag: GF
+            // rebuilds the URL as scheme://host/path, so a bare path would
+            // redirect to http:///path. Browsers skip leading control
+            // characters too.
+            if (isset($confirmation['url']) && is_string($confirmation['url'])) {
+                $url = ltrim($confirmation['url'], "\x00..\x20");
+                $scheme = strtolower((string) wp_parse_url($url, PHP_URL_SCHEME));
+                if ($url !== '' && ! in_array($scheme, ['http', 'https'], true) && $url[0] !== '{') {
+                    $confirmation['url'] = '';
+                }
+            }
+            $input['confirmations'][$key] = $confirmation;
+        }
+
+        return $input;
+    }
+
+    /**
+     * The rules of GF 3.1's notification sanitizer, for GF versions without it.
+     *
+     * @param  array<string, mixed>  $notification
+     * @return array<string, mixed>
+     */
+    private static function sanitizeNotification(array $notification): array
+    {
+        foreach (['name', 'subject', 'from', 'fromName', 'replyTo', 'to', 'bcc', 'cc'] as $field) {
+            if (isset($notification[$field]) && is_string($notification[$field])) {
+                $notification[$field] = sanitize_text_field($notification[$field]);
+            }
+        }
+        if (isset($notification['message']) && is_string($notification['message'])) {
+            $notification['message'] = \GFCommon::maybe_wp_kses($notification['message']);
+        }
+        if (isset($notification['conditionalLogic']) && is_array($notification['conditionalLogic'])) {
+            $notification['conditionalLogic'] = \GFFormsModel::sanitize_conditional_logic($notification['conditionalLogic']);
+        }
+        if (isset($notification['routing']) && is_array($notification['routing'])) {
+            $routing = \GFFormsModel::sanitize_conditional_logic(['rules' => $notification['routing']]);
+            $notification['routing'] = $routing['rules'] ?? [];
+        }
+
+        return $notification;
     }
 
     /**
@@ -424,7 +549,7 @@ final class GravityFormsAbility
         // array_replace_recursive would recurse into the numerically-indexed
         // fields array and only replace entries at the same index, leaving
         // extras behind — that was the "leftover fields can't be deleted" bug.
-        $merged = array_merge($current, $input);
+        $merged = array_merge($current, self::sanitizeSuppliedForm($input));
         $merged = self::normalizeFormPayload($merged);
 
         // Use GFAPI directly — REST PUT requires GF_Field objects to already be

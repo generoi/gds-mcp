@@ -70,11 +70,18 @@ final class ClearCacheAbility
         $type = $input['type'] ?? 'flush';
 
         if (! function_exists('app') || ! app()->bound(CacheTags::class)) {
+            $why = 'sage-cachetags is not active, so the page cache cannot be reached from here. Clear it in the hosting dashboard.';
+            // Flushing the object cache purges no tags. On multisite the
+            // object cache is shared by the network, and flushing it would
+            // hit every site.
+            if ($type === 'tags' || is_multisite()) {
+                return new WP_Error('page_cache_not_purged', 'Nothing was cleared: '.$why);
+            }
             wp_cache_flush();
 
             return [
                 'success' => true,
-                'message' => 'Object cache flushed. sage-cachetags not available for page cache purge.',
+                'message' => 'The object cache was flushed, but no page cache was purged: '.$why,
                 'site_action' => false,
             ];
         }

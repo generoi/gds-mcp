@@ -58,6 +58,20 @@ final class RegisteredStrings
     }
 
     /**
+     * Run a translation through the filter Polylang's strings table applies
+     * before saving it (kses for users without unfiltered_html, and whatever
+     * the plugin that registered the string adds).
+     */
+    public static function sanitizeTranslation(string $string, string $translation, string $previous): string
+    {
+        // Polylang hooks its default sanitizer only on its settings pages.
+        \PLL_Admin_Strings::init();
+        $registered = self::all()[md5($string)] ?? [];
+
+        return (string) apply_filters('pll_sanitize_string_translation', $translation, (string) ($registered['name'] ?? ''), (string) ($registered['context'] ?? ''), $string, $previous);
+    }
+
+    /**
      * Which strings, in which groups: Polylang keys them by the md5 of the
      * string, and the name is a label that may be translated.
      *

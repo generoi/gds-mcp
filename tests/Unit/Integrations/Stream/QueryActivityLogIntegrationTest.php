@@ -54,4 +54,18 @@ class QueryActivityLogIntegrationTest extends WP_UnitTestCase
         $this->assertIsArray($result);
         $this->assertLessThanOrEqual(1, count($result['entries']));
     }
+
+    public function test_a_negative_per_page_stays_within_the_cap(): void
+    {
+        $perPage = null;
+        add_filter('wp_stream_query_args', function ($args) use (&$perPage) {
+            $perPage = $args['records_per_page'];
+
+            return $args;
+        });
+
+        (new QueryActivityLogAbility)->execute(['per_page' => -1000000]);
+
+        $this->assertSame(1, $perPage);
+    }
 }

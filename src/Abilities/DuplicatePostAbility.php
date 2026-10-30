@@ -76,6 +76,11 @@ final class DuplicatePostAbility
             return new WP_Error('forbidden', 'You do not have permission to read this post.', ['status' => 403]);
         }
 
+        // A copy would have none of the variations, which are posts of their own.
+        if ($source->post_type === 'product' && has_term('variable', 'product_type', $sourceId)) {
+            return new WP_Error('variable_product', 'Variable products cannot be duplicated here: the copy would have none of the variations. Use Duplicate in the WooCommerce products list instead.');
+        }
+
         $typeObj = get_post_type_object($source->post_type);
         if (! $typeObj || ! current_user_can($typeObj->cap->create_posts)) {
             return new WP_Error('forbidden', 'You do not have permission to create posts of this type.', ['status' => 403]);
@@ -107,19 +112,21 @@ final class DuplicatePostAbility
             return $newId;
         }
 
+        // The language goes first, as in translations-create: Polylang
+        // assigns terms in the post's language.
+        if (self::polylangAvailable()) {
+            $lang = $input['lang'] ?? self::getPostLanguage($sourceId);
+            if ($lang) {
+                pll_set_post_language($newId, $lang);
+            }
+        }
+
         self::copyPostMeta($sourceId, $newId, duplicate: true);
         self::copyPostTaxonomies($sourceId, $newId, $source->post_type);
 
         $thumbnail = get_post_thumbnail_id($sourceId);
         if ($thumbnail) {
             set_post_thumbnail($newId, $thumbnail);
-        }
-
-        if (self::polylangAvailable()) {
-            $lang = $input['lang'] ?? self::getPostLanguage($sourceId);
-            if ($lang) {
-                pll_set_post_language($newId, $lang);
-            }
         }
 
         // Return canonical REST response

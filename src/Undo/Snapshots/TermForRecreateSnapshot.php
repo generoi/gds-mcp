@@ -23,6 +23,8 @@ final class TermForRecreateSnapshot extends TermFieldsSnapshot
      * @param  TermCoreFields  $fields
      * @param  array<string, list<string>>  $meta
      * @param  list<int>  $objectIds
+     * @param  string  $language  Polylang language slug; Polylang drops it with the term.
+     * @param  array<string, int>  $translations  Polylang translation group, language → term id.
      *
      * @phpstan-param  array{
      *     name: string,
@@ -39,6 +41,8 @@ final class TermForRecreateSnapshot extends TermFieldsSnapshot
         public readonly int $termTaxonomyId,
         public readonly int $termGroup,
         public readonly array $objectIds,
+        public readonly string $language = '',
+        public readonly array $translations = [],
     ) {
         parent::__construct($termId, $taxonomy, $fields, $meta);
     }
@@ -65,6 +69,8 @@ final class TermForRecreateSnapshot extends TermFieldsSnapshot
             termTaxonomyId: (int) $term->term_taxonomy_id,
             termGroup: (int) $term->term_group,
             objectIds: array_values(array_map('intval', (array) $objects)),
+            language: function_exists('pll_get_term_language') ? (string) pll_get_term_language($termId) : '',
+            translations: function_exists('pll_get_term_translations') ? array_map('intval', pll_get_term_translations($termId)) : [],
         );
     }
 
@@ -87,16 +93,20 @@ final class TermForRecreateSnapshot extends TermFieldsSnapshot
             termTaxonomyId: (int) ($raw['term_taxonomy_id'] ?? 0),
             termGroup: (int) ($raw['term_group'] ?? 0),
             objectIds: $objectIds,
+            language: (string) ($raw['language'] ?? ''),
+            translations: is_array($raw['translations'] ?? null) ? array_map('intval', $raw['translations']) : [],
         );
     }
 
-    /** @return array{term_id: int, taxonomy: string, fields: array<string, mixed>, meta: array<string, list<string>>, term_taxonomy_id: int, term_group: int, object_ids: list<int>} */
+    /** @return array{term_id: int, taxonomy: string, fields: array<string, mixed>, meta: array<string, list<string>>, term_taxonomy_id: int, term_group: int, object_ids: list<int>, language: string, translations: array<string, int>} */
     public function toArray(): array
     {
         return parent::toArray() + [
             'term_taxonomy_id' => $this->termTaxonomyId,
             'term_group' => $this->termGroup,
             'object_ids' => $this->objectIds,
+            'language' => $this->language,
+            'translations' => $this->translations,
         ];
     }
 }
