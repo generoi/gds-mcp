@@ -395,12 +395,14 @@ class GravityFormsFeedsAbilityTest extends AbilityTestCase
         add_filter('query', $breakUpdate);
         $suppress = $wpdb->suppress_errors();
 
-        $result = $this->assertAbilityError('gds/feeds-update', ['id' => $id, 'is_active' => false]);
+        $result = $this->assertAbilityError('gds/feeds-update', ['id' => $id, 'meta' => ['feed_name' => 'Changed'], 'is_active' => false]);
 
         $wpdb->suppress_errors($suppress);
         remove_filter('query', $breakUpdate);
         $this->assertNotEmpty($result->get_error_message());
-        $this->assertSame(1, (int) \GFAPI::get_feed($id)['is_active']);
+        $feed = \GFAPI::get_feed($id);
+        $this->assertSame(1, (int) $feed['is_active']);
+        $this->assertSame('Stuck', $feed['meta']['feed_name'], 'The meta written before the failure is put back.');
     }
 
     public function test_feeds_duplicate_that_fails_partway_creates_nothing(): void

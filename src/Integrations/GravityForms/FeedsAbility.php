@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Integrations\GravityForms;
 
 use GeneroWP\MCP\Abilities\HelpAbility;
+use GeneroWP\MCP\Undo\RestoreSnapshot;
 use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
@@ -298,10 +299,18 @@ final class FeedsAbility
             'is_active' => ! empty($input['is_active']) ? 1 : 0,
             'feed_order' => (int) ($input['feed_order'] ?? 0),
         ], $input);
+        // A failed write puts back what was already changed, so the feed is
+        // left as it was.
+        $failed = static function (WP_Error $error) use ($undo): WP_Error {
+            RestoreSnapshot::handle(null, ['kind' => 'restore-feed', 'data' => $undo]);
+
+            return $error;
+        };
+
         foreach ($properties as $property => $value) {
             $updated = \GFAPI::update_feed_property($id, $property, $value);
             if (is_wp_error($updated)) {
-                return $updated;
+                return $failed($updated);
             }
         }
 
@@ -313,7 +322,7 @@ final class FeedsAbility
         // an unchanged value since, so check what was stored.
         foreach ($properties as $property => $value) {
             if ((int) $saved[$property] !== $value) {
-                return new WP_Error('update_failed', sprintf('Could not update %s of feed %d.', $property, $id));
+                return $failed(new WP_Error('update_failed', sprintf('Could not update %s of feed %d; nothing was changed.', $property, $id)));
             }
         }
 
