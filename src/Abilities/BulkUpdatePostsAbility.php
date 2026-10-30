@@ -4,6 +4,7 @@ namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Undo\Reversible;
 use GeneroWP\MCP\Undo\Snapshot;
+use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
 use WP_Error;
 use WP_Query;
 
@@ -87,6 +88,17 @@ final class BulkUpdatePostsAbility
                             ],
                         ],
                     ],
+                    'errors' => [
+                        'type' => 'array',
+                        'description' => 'Posts, or parts of a post, that were not written.',
+                        'items' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'id' => ['type' => 'integer'],
+                                'error' => ['type' => 'string'],
+                            ],
+                        ],
+                    ],
                 ],
             ],
             'permission_callback' => '__return_true',
@@ -142,42 +154,69 @@ final class BulkUpdatePostsAbility
         $updated = 0;
         $undoItems = [];
 
+        $errors = [];
+
         foreach ($posts as $post) {
             if (! current_user_can('edit_post', $post->ID)) {
+                $errors[] = ['id' => $post->ID, 'error' => 'You do not have permission to edit this post.'];
+
+                continue;
+            }
+            if ($setStatus === 'trash' && ! current_user_can('delete_post', $post->ID)) {
+                $errors[] = ['id' => $post->ID, 'error' => 'You do not have permission to trash this post.'];
+
                 continue;
             }
 
             if (! $dryRun) {
                 // Capture this post's prior status + touched meta before mutating.
-                $undoItems[] = [
-                    'kind' => 'restore-post-partial',
-                    'data' => Snapshot::partialPost($post->ID, $touchedMetaKeys),
-                ];
+                $before = Snapshot::partialPost($post->ID, $touchedMetaKeys);
+                $written = false;
 
-                if ($setStatus) {
-                    wp_update_post([
-                        'ID' => $post->ID,
-                        'post_status' => $setStatus,
-                    ]);
+                if ($setStatus && $setStatus !== $post->post_status) {
+                    // Trashing goes through wp_trash_post() so it is a real,
+                    // restorable trash (slug freed, prior status kept).
+                    $result = $setStatus === 'trash'
+                        ? (wp_trash_post($post->ID) ?: new WP_Error('trash_failed', 'Could not move the post to trash.'))
+                        : wp_update_post(['ID' => $post->ID, 'post_status' => $setStatus], true);
+                    if (is_wp_error($result)) {
+                        $errors[] = ['id' => $post->ID, 'error' => $result->get_error_message()];
+                    } else {
+                        $written = true;
+                    }
                 }
 
                 // The meta caps also deny protected keys unless a plugin
                 // registered an auth callback for them.
                 foreach ($setMeta as $key => $value) {
                     if (! current_user_can('edit_post_meta', $post->ID, $key)) {
+                        $errors[] = ['id' => $post->ID, 'error' => sprintf('You do not have permission to edit the meta key "%s".', $key)];
+
                         continue;
                     }
-                    update_post_meta($post->ID, $key, wp_slash($value));
+                    // False also when the value was already that, which writes nothing.
+                    $written = update_post_meta($post->ID, $key, wp_slash($value)) !== false || $written;
                 }
 
                 foreach ($deleteMeta as $key) {
                     if (! current_user_can('delete_post_meta', $post->ID, $key)) {
+                        $errors[] = ['id' => $post->ID, 'error' => sprintf('You do not have permission to delete the meta key "%s".', $key)];
+
                         continue;
                     }
-                    delete_post_meta($post->ID, $key);
+                    $written = delete_post_meta($post->ID, $key) || $written;
                 }
 
-                $updated++;
+                if ($written && $before) {
+                    $updated++;
+                    if (get_post_status($post->ID) === 'trash' && $post->post_status !== 'trash') {
+                        // Untrash rather than set the status back, so the slug
+                        // wp_trash_post() suffixed is restored too.
+                        $undoItems[] = ['kind' => 'untrash', 'data' => ['id' => $post->ID, 'status' => $before->status]];
+                        $before = new PartialPostSnapshot($before->id, '', $before->metaPrev);
+                    }
+                    $undoItems[] = ['kind' => 'restore-post-partial', 'data' => $before];
+                }
             }
 
             // Re-read status after update.
@@ -190,23 +229,30 @@ final class BulkUpdatePostsAbility
             ];
         }
 
+        if (! $dryRun && $updated === 0 && $errors) {
+            return new WP_Error('bulk_update_failed', 'No post was updated: '.implode(' ', array_map(fn ($e) => "#{$e['id']}: {$e['error']}", $errors)), ['errors' => $errors]);
+        }
+
         $result = [
             'updated' => $dryRun ? 0 : $updated,
             'matched' => count($results),
             'dry_run' => $dryRun,
             'posts' => $results,
         ];
+        if ($errors) {
+            $result['errors'] = $errors;
+        }
 
         // Attach undo only for a real run within the snapshot size bound.
         if (! $dryRun && $undoItems) {
-            if (count($undoItems) > self::UNDO_MAX_POSTS) {
+            if ($updated > self::UNDO_MAX_POSTS) {
                 $result['undo_skipped'] = sprintf(
                     'Undo not recorded: %d posts updated exceeds the %d-post limit for storing a reversible snapshot.',
-                    count($undoItems),
+                    $updated,
                     self::UNDO_MAX_POSTS,
                 );
             } else {
-                $result = $this->reversible($result, 'bulk', ['items' => $undoItems], sprintf('Revert the bulk update to %d post(s)', count($undoItems)));
+                $result = $this->reversible($result, 'bulk', ['items' => $undoItems], sprintf('Revert the bulk update to %d post(s)', $updated));
             }
         }
 

@@ -111,13 +111,12 @@ class SecurityTest extends AbilityTestCase
         // An author may use the ability but not edit an editor's posts.
         wp_set_current_user(self::factory()->user->create(['role' => 'author']));
 
-        $result = $this->assertAbilitySuccess('gds/posts-bulk-update', [
+        // The author can't edit these posts, so nothing is updated and the
+        // call says so instead of reporting success.
+        $this->assertAbilityError('gds/posts-bulk-update', [
             'post_ids' => $ids,
             'set_status' => 'pending',
-        ]);
-
-        // The author can't edit these posts, so 0 should be updated
-        $this->assertSame(0, $result['updated']);
+        ], 'bulk_update_failed');
 
         // Posts should still be drafts
         foreach ($ids as $id) {

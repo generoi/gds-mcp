@@ -91,13 +91,29 @@ final class Metadata
             return null;
         }
 
+        // A client that names no resource means the site's MCP endpoint, which
+        // is the adapter's default server — not whichever server registered
+        // first (Gravity Forms 3.1 adds its own).
         if ($resource === null || $resource === '') {
-            return $resources[0];
+            $default = self::defaultResource();
+
+            return in_array($default, $resources, true) ? $default : $resources[0];
         }
 
         $resource = untrailingslashit($resource);
 
         return in_array($resource, $resources, true) ? $resource : null;
+    }
+
+    private static function defaultResource(): ?string
+    {
+        $server = class_exists(McpAdapter::class)
+            ? McpAdapter::instance()->get_server('mcp-adapter-default-server')
+            : null;
+
+        return $server
+            ? untrailingslashit(rest_url($server->get_server_route_namespace().'/'.$server->get_server_route()))
+            : null;
     }
 
     /**

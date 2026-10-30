@@ -2,7 +2,9 @@
 
 namespace GeneroWP\MCP\Tests\Integration;
 
+use GeneroWP\MCP\Http\PublicUrlGuard;
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use GeneroWP\MCP\Tests\Fixtures\RedirectingTransport;
 
 class MediaUploadAbilityTest extends AbilityTestCase
 {
@@ -65,6 +67,20 @@ class MediaUploadAbilityTest extends AbilityTestCase
         wp_delete_attachment($result['id'], true);
     }
 
+    public function test_post_parent_requires_edit_post_on_it(): void
+    {
+        $author = self::factory()->user->create(['role' => 'author']);
+        wp_set_current_user($author);
+        $othersPost = $this->createPost(['post_type' => 'post', 'post_status' => 'publish', 'post_author' => self::factory()->user->create(['role' => 'editor'])]);
+
+        $this->assertAbilityError('gds/media-upload', [
+            'base64' => self::PIXEL_PNG,
+            'filename' => 'attached.png',
+            'post_parent' => $othersPost,
+        ], 'forbidden');
+        $this->assertSame([], get_children(['post_parent' => $othersPost, 'post_type' => 'attachment']));
+    }
+
     public function test_upload_strips_data_uri_prefix(): void
     {
         $result = $this->assertAbilitySuccess('gds/media-upload', [
@@ -116,6 +132,28 @@ class MediaUploadAbilityTest extends AbilityTestCase
             'url' => 'file:///etc/passwd',
             'filename' => 'exploit.txt',
         ], 'invalid_url');
+    }
+
+    public function test_rejects_plain_http_url(): void
+    {
+        $this->assertAbilityError('gds/media-upload', ['url' => 'http://example.com/a.png'], 'invalid_url');
+    }
+
+    public function test_refuses_a_download_that_redirects_to_a_non_public_address(): void
+    {
+        $host = WebFetchAbilityTest::hostCoreLetsThrough();
+        RedirectingTransport::install("https://{$host}/secret.png");
+        PublicUrlGuard::$resolver = static fn (string $host): array => ['fe80::1'];
+
+        try {
+            $error = $this->assertAbilityError('gds/media-upload', ['url' => 'https://93.184.216.34/a.png']);
+        } finally {
+            RedirectingTransport::uninstall();
+            PublicUrlGuard::$resolver = null;
+        }
+
+        $this->assertStringContainsString('private or reserved address (fe80::1)', $error->get_error_message());
+        $this->assertCount(1, RedirectingTransport::$requested, 'The redirect target is never requested.');
     }
 
     // ── Permissions ───────────────────────────────────────────────
