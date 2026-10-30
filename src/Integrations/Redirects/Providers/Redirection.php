@@ -15,11 +15,12 @@ final class Redirection
     /**
      * @return array<string, mixed>
      */
-    public static function list(): array
+    public static function list(int $perPage, int $page): array
     {
+        // Redirection pages from 0 and clamps per_page to 5..200.
         $result = Red_Item::get_filtered([
-            'per_page' => 200,
-            'page' => 0,
+            'per_page' => $perPage,
+            'page' => $page - 1,
         ]);
 
         // get_filtered() returns items as plain arrays via to_json().
@@ -33,7 +34,7 @@ final class Redirection
             'enabled' => ! empty($item['enabled']),
         ], $result['items'] ?? []);
 
-        return ['provider' => 'redirection', 'redirects' => $redirects];
+        return ['provider' => 'redirection', 'redirects' => $redirects, 'total' => (int) ($result['total'] ?? 0)];
     }
 
     /**

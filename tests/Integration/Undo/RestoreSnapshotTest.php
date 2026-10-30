@@ -50,6 +50,75 @@ class RestoreSnapshotTest extends TestCase
         $this->assertNotContains($catNew, $terms);
     }
 
+    public function test_restore_post_only_rewrites_meta_that_changed(): void
+    {
+        global $wpdb;
+        $id = self::factory()->post->create();
+        update_post_meta($id, 'untouched', 'same');
+        update_post_meta($id, 'edited', 'before');
+        $metaId = (int) $wpdb->get_var($wpdb->prepare("SELECT meta_id FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = 'untouched'", $id));
+
+        $before = Snapshot::postFields($id);
+        update_post_meta($id, 'edited', 'after');
+        update_post_meta($id, 'added_later', 'new');
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+
+        $this->assertSame('before', get_post_meta($id, 'edited', true));
+        $this->assertSame('', get_post_meta($id, 'added_later', true), 'The snapshot records every key, so a key added since is removed.');
+        $this->assertSame($metaId, (int) $wpdb->get_var($wpdb->prepare("SELECT meta_id FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = 'untouched'", $id)), 'Unchanged meta is not rewritten.');
+    }
+
+    public function test_restore_post_from_an_old_snapshot_keeps_unknown_meta_and_fields(): void
+    {
+        $author = self::factory()->user->create();
+        $id = self::factory()->post->create(['post_author' => $author, 'post_title' => 'Old']);
+        $before = Snapshot::postFields($id)->toArray();
+        // Shape written before meta_complete and the extra fields existed.
+        unset($before['meta_complete'], $before['post']['post_author'], $before['post']['post_date'], $before['post']['post_date_gmt'], $before['post']['post_password'], $before['post']['comment_status']);
+
+        $other = self::factory()->user->create();
+        wp_update_post(['ID' => $id, 'post_title' => 'New', 'post_author' => $other]);
+        update_post_meta($id, 'added_later', 'kept');
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+
+        clean_post_cache($id);
+        $this->assertSame('Old', get_post($id)->post_title);
+        $this->assertSame($other, (int) get_post($id)->post_author, 'An old snapshot has no author to restore.');
+        $this->assertSame('kept', get_post_meta($id, 'added_later', true));
+    }
+
+    public function test_restore_post_reverts_author_date_password_and_comments(): void
+    {
+        $author = self::factory()->user->create();
+        $id = self::factory()->post->create([
+            'post_author' => $author,
+            'post_date' => '2020-01-02 03:04:05',
+            'post_password' => '',
+            'comment_status' => 'open',
+        ]);
+        $before = Snapshot::postFields($id);
+
+        wp_update_post([
+            'ID' => $id,
+            'post_author' => self::factory()->user->create(),
+            'post_date' => '2024-06-07 08:09:10',
+            'post_date_gmt' => '2024-06-07 08:09:10',
+            'post_password' => 'secret',
+            'comment_status' => 'closed',
+        ]);
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+
+        clean_post_cache($id);
+        $post = get_post($id);
+        $this->assertSame($author, (int) $post->post_author);
+        $this->assertSame('2020-01-02 03:04:05', $post->post_date);
+        $this->assertSame('', $post->post_password);
+        $this->assertSame('open', $post->comment_status);
+    }
+
     public function test_restore_post_preserves_backslashes(): void
     {
         $content = '<!-- wp:paragraph {"placeholder":"say \"hi\" \u003cb\u003e"} --><p>C:\temp</p><!-- /wp:paragraph -->';

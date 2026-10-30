@@ -14,11 +14,11 @@ final class YoastRedirects
     /**
      * @return array<string, mixed>
      */
-    public static function list(): array
+    public static function list(int $perPage, int $page): array
     {
         global $wpdb;
 
-        // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title, pm.meta_value as redirect_to
              FROM {$wpdb->postmeta} pm
@@ -26,9 +26,18 @@ final class YoastRedirects
              WHERE pm.meta_key = %s
              AND pm.meta_value != ''
              ORDER BY p.post_date DESC
-             LIMIT 200",
+             LIMIT %d OFFSET %d",
+            '_yoast_wpseo_redirect',
+            $perPage,
+            ($page - 1) * $perPage
+        ));
+        $total = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->postmeta} pm
+             JOIN {$wpdb->posts} p ON p.ID = pm.post_id
+             WHERE pm.meta_key = %s AND pm.meta_value != ''",
             '_yoast_wpseo_redirect'
         ));
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery
 
         $redirects = array_map(fn ($row) => [
             'id' => (int) $row->ID,
@@ -38,7 +47,7 @@ final class YoastRedirects
             'notes' => $row->post_title,
         ], $results ?: []);
 
-        return ['provider' => 'yoast', 'redirects' => $redirects];
+        return ['provider' => 'yoast', 'redirects' => $redirects, 'total' => $total];
     }
 
     /**

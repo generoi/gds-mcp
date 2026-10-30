@@ -447,7 +447,40 @@ class GravityFormsAbilityTest extends AbilityTestCase
         $id = $this->trackForm((int) $created['id']);
 
         $result = $this->assertAbilitySuccess('gds/forms-list');
-        $this->assertArrayHasKey($id, $result, 'forms-list result should contain the created form id as a key.');
+        $this->assertTrue(array_is_list($result), 'forms-list must encode as a JSON array, matching its schema.');
+
+        $listed = array_values(array_filter($result, fn ($form) => $form['id'] === $id));
+        $this->assertCount(1, $listed);
+        $this->assertSame(1, $listed[0]['field_count']);
+        $this->assertArrayNotHasKey('fields', $listed[0], 'Summaries by default.');
+
+        $full = $this->assertAbilitySuccess('gds/forms-list', ['full' => true]);
+        $fullForm = array_values(array_filter($full, fn ($form) => (int) $form['id'] === $id))[0];
+        $this->assertArrayHasKey('fields', $fullForm);
+    }
+
+    public function test_forms_entries_are_paged(): void
+    {
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Entries Test '.uniqid(),
+            'fields' => [['id' => 1, 'type' => 'text', 'label' => 'Name']],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+        foreach (['a', 'b', 'c'] as $name) {
+            \GFAPI::add_entry(['form_id' => $id, '1' => $name]);
+        }
+
+        $result = $this->assertAbilitySuccess('gds/forms-entries', ['form_id' => $id, 'per_page' => 2, 'page' => 2]);
+
+        $this->assertSame(3, $result['total']);
+        $this->assertSame(2, $result['total_pages']);
+        $this->assertCount(1, $result['entries']);
+    }
+
+    public function test_forms_entries_require_a_form(): void
+    {
+        $this->assertAbilityError('gds/forms-entries', ['form_id' => 0]);
+        $this->assertAbilityError('gds/forms-entries', ['form_id' => 999999], 'form_not_found');
     }
 
     public function test_forms_update_blocks_field_removal_when_entries_exist(): void

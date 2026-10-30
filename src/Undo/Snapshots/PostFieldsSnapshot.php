@@ -25,9 +25,16 @@ use WP_Post;
 final class PostFieldsSnapshot
 {
     /**
+     * Fields added after the first release. Absent from older audit rows, so
+     * they are only restored when the snapshot actually holds them.
+     */
+    private const OPTIONAL_FIELDS = ['post_author', 'post_date', 'post_date_gmt', 'post_password', 'comment_status'];
+
+    /**
      * @param  PostCoreFields  $post
      * @param  array<string, list<string>>  $meta  Raw `get_post_meta($id)` shape: key → list of stored values.
      * @param  array<string, list<int>>  $terms  Taxonomy slug → list of term ids.
+     * @param  bool  $metaComplete  Whether $meta lists every key the post had, so a key missing from it did not exist. Older snapshots don't say.
      *
      * @phpstan-param  array{
      *     post_title: string,
@@ -37,6 +44,11 @@ final class PostFieldsSnapshot
      *     post_name: string,
      *     post_parent: int,
      *     menu_order: int,
+     *     post_author?: int,
+     *     post_date?: string,
+     *     post_date_gmt?: string,
+     *     post_password?: string,
+     *     comment_status?: string,
      * }  $post
      */
     public function __construct(
@@ -44,6 +56,7 @@ final class PostFieldsSnapshot
         public readonly array $post,
         public readonly array $meta,
         public readonly array $terms,
+        public readonly bool $metaComplete = false,
     ) {}
 
     /**
@@ -81,9 +94,15 @@ final class PostFieldsSnapshot
                 'post_name' => (string) $post->post_name,
                 'post_parent' => (int) $post->post_parent,
                 'menu_order' => (int) $post->menu_order,
+                'post_author' => (int) $post->post_author,
+                'post_date' => (string) $post->post_date,
+                'post_date_gmt' => (string) $post->post_date_gmt,
+                'post_password' => (string) $post->post_password,
+                'comment_status' => (string) $post->comment_status,
             ],
             meta: $meta,
             terms: $terms,
+            metaComplete: true,
         );
     }
 
@@ -104,23 +123,31 @@ final class PostFieldsSnapshot
         /** @var array<string, mixed> $rawPost */
         $rawPost = is_array($raw['post'] ?? null) ? $raw['post'] : [];
 
+        $post = [
+            'post_title' => (string) ($rawPost['post_title'] ?? ''),
+            'post_content' => (string) ($rawPost['post_content'] ?? ''),
+            'post_excerpt' => (string) ($rawPost['post_excerpt'] ?? ''),
+            'post_status' => (string) ($rawPost['post_status'] ?? ''),
+            'post_name' => (string) ($rawPost['post_name'] ?? ''),
+            'post_parent' => (int) ($rawPost['post_parent'] ?? 0),
+            'menu_order' => (int) ($rawPost['menu_order'] ?? 0),
+        ];
+        foreach (self::OPTIONAL_FIELDS as $field) {
+            if (array_key_exists($field, $rawPost)) {
+                $post[$field] = $field === 'post_author' ? (int) $rawPost[$field] : (string) $rawPost[$field];
+            }
+        }
+
         return new self(
             id: $id,
-            post: [
-                'post_title' => (string) ($rawPost['post_title'] ?? ''),
-                'post_content' => (string) ($rawPost['post_content'] ?? ''),
-                'post_excerpt' => (string) ($rawPost['post_excerpt'] ?? ''),
-                'post_status' => (string) ($rawPost['post_status'] ?? ''),
-                'post_name' => (string) ($rawPost['post_name'] ?? ''),
-                'post_parent' => (int) ($rawPost['post_parent'] ?? 0),
-                'menu_order' => (int) ($rawPost['menu_order'] ?? 0),
-            ],
+            post: $post,
             meta: self::normaliseMeta($raw['meta'] ?? null),
             terms: self::normaliseTerms($raw['terms'] ?? null),
+            metaComplete: ! empty($raw['meta_complete']),
         );
     }
 
-    /** @return array{id: int, post: array<string, mixed>, meta: array<string, list<string>>, terms: array<string, list<int>>} */
+    /** @return array{id: int, post: array<string, mixed>, meta: array<string, list<string>>, terms: array<string, list<int>>, meta_complete: bool} */
     public function toArray(): array
     {
         return [
@@ -128,6 +155,7 @@ final class PostFieldsSnapshot
             'post' => $this->post,
             'meta' => $this->meta,
             'terms' => $this->terms,
+            'meta_complete' => $this->metaComplete,
         ];
     }
 

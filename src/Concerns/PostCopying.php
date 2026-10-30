@@ -5,14 +5,15 @@ namespace GeneroWP\MCP\Concerns;
 trait PostCopying
 {
     /**
-     * Copy public (non-underscore-prefixed) meta from one post to another.
+     * Copy meta from one post to another, including underscore-prefixed meta
+     * such as `_wp_page_template`, SEO fields and ACF field references.
      */
     protected static function copyPostMeta(int $sourceId, int $targetId): void
     {
         $allMeta = get_post_meta($sourceId);
 
         foreach ($allMeta as $key => $values) {
-            if (str_starts_with($key, '_')) {
+            if (self::isPerPostMeta($key)) {
                 continue;
             }
 
@@ -22,6 +23,19 @@ trait PostCopying
                 add_post_meta($targetId, $key, wp_slash(maybe_unserialize($value)));
             }
         }
+    }
+
+    /**
+     * Meta that belongs to one post's lifecycle and must not follow a copy:
+     * edit locks, slug/trash bookkeeping, Polylang internals, the featured
+     * image (set separately, translated where media is), and attachment file
+     * pointers (two posts sharing one file would delete it with either).
+     */
+    private static function isPerPostMeta(string $key): bool
+    {
+        $keys = ['_edit_lock', '_edit_last', '_wp_old_slug', '_wp_old_date', '_wp_desired_post_slug', '_thumbnail_id', '_encloseme', '_pingme', '_wp_attached_file', '_wp_attachment_metadata'];
+
+        return in_array($key, $keys, true) || str_starts_with($key, '_pll_') || str_starts_with($key, '_wp_trash_');
     }
 
     /**

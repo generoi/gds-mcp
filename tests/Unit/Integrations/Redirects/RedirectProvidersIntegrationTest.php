@@ -35,9 +35,27 @@ class RedirectProvidersIntegrationTest extends WP_UnitTestCase
         $this->assertSame(301, $result['redirect']['status_code']);
 
         // Verify it shows up in list.
-        $list = SafeRedirectManager::list();
+        $list = SafeRedirectManager::list(50, 1);
         $froms = array_column($list['redirects'], 'from');
         $this->assertContains($from, $froms);
+    }
+
+    public function test_srm_list_is_paged(): void
+    {
+        if (! SafeRedirectManager::isAvailable()) {
+            $this->markTestSkipped('Safe Redirect Manager not active.');
+        }
+
+        for ($i = 0; $i < 7; $i++) {
+            SafeRedirectManager::create('/srm-paged-'.$i.'-'.uniqid(), '/dest', []);
+        }
+
+        $first = SafeRedirectManager::list(5, 1);
+        $second = SafeRedirectManager::list(5, 2);
+
+        $this->assertCount(5, $first['redirects']);
+        $this->assertGreaterThanOrEqual(7, $first['total']);
+        $this->assertSame([], array_intersect(array_column($first['redirects'], 'id'), array_column($second['redirects'], 'id')));
     }
 
     // ── Redirection ──────────────────────────────────────────────
@@ -57,7 +75,8 @@ class RedirectProvidersIntegrationTest extends WP_UnitTestCase
         $this->assertSame(302, $result['redirect']['status_code']);
 
         // Verify it shows up in list.
-        $list = Redirection::list();
+        $list = Redirection::list(50, 1);
+        $this->assertGreaterThanOrEqual(1, $list['total']);
         $froms = array_column($list['redirects'], 'from');
         $this->assertContains($from, $froms);
     }
@@ -88,7 +107,8 @@ class RedirectProvidersIntegrationTest extends WP_UnitTestCase
         $this->assertSame('https://example.com/destination', $stored);
 
         // Verify it shows up in list.
-        $list = YoastRedirects::list();
+        $list = YoastRedirects::list(50, 1);
+        $this->assertGreaterThanOrEqual(1, $list['total']);
         $ids = array_column($list['redirects'], 'id');
         $this->assertContains($postId, $ids);
     }

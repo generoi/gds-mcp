@@ -15,12 +15,13 @@ final class SafeRedirectManager
     /**
      * @return array<string, mixed>
      */
-    public static function list(): array
+    public static function list(int $perPage, int $page): array
     {
         $query = new WP_Query([
             'post_type' => 'redirect_rule',
             'post_status' => 'publish',
-            'posts_per_page' => 200,
+            'posts_per_page' => $perPage,
+            'paged' => $page,
             'orderby' => 'date',
             'order' => 'DESC',
         ]);
@@ -33,7 +34,7 @@ final class SafeRedirectManager
             'notes' => $post->post_excerpt,
         ], $query->posts);
 
-        return ['provider' => 'safe-redirect-manager', 'redirects' => $redirects];
+        return ['provider' => 'safe-redirect-manager', 'redirects' => $redirects, 'total' => (int) $query->found_posts];
     }
 
     /**

@@ -85,12 +85,23 @@ final class RestoreSnapshot
             return $result;
         }
 
-        foreach (array_keys(get_post_meta($snapshot->id)) as $key) {
-            delete_post_meta($snapshot->id, $key);
-        }
+        // Only touch keys whose values differ, so meta written by others
+        // since the snapshot (and meta ids other code relies on) survive.
+        $current = get_post_meta($snapshot->id);
         foreach ($snapshot->meta as $key => $values) {
+            if (array_values($current[$key] ?? []) === $values) {
+                continue;
+            }
+            delete_post_meta($snapshot->id, $key);
             foreach ($values as $value) {
                 add_post_meta($snapshot->id, $key, wp_slash(maybe_unserialize($value)));
+            }
+        }
+        // A key added since the snapshot is removed only when the snapshot
+        // says it holds every key; older snapshots don't, so leave those.
+        if ($snapshot->metaComplete) {
+            foreach (array_diff_key($current, $snapshot->meta) as $key => $values) {
+                delete_post_meta($snapshot->id, (string) $key);
             }
         }
 
