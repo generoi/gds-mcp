@@ -212,7 +212,7 @@ class WorkflowTest extends AbilityTestCase
 
         // Verify content is restored
         $post = get_post($id);
-        $this->assertSame($oldest['content']['rendered'], wpautop($post->post_content));
+        $this->assertSame(get_post($oldest['id'])->post_content, $post->post_content);
     }
 
     // ── Translation workflow ──────────────────────────────────────

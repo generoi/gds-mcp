@@ -49,6 +49,16 @@ final class ManageRedirectsAbility
                         'type' => 'string',
                         'description' => 'Notes/title for the redirect.',
                     ],
+                    'per_page' => [
+                        'type' => 'integer',
+                        'description' => 'Redirects per page for list (default 50, 5–200).',
+                        'default' => 50,
+                    ],
+                    'page' => [
+                        'type' => 'integer',
+                        'description' => 'Page number for list (1-based).',
+                        'default' => 1,
+                    ],
                 ],
                 'required' => ['action'],
                 'additionalProperties' => false,
@@ -58,6 +68,9 @@ final class ManageRedirectsAbility
                 'properties' => [
                     'provider' => ['type' => 'string'],
                     'redirects' => ['type' => 'array'],
+                    'total' => ['type' => 'integer'],
+                    'page' => ['type' => 'integer'],
+                    'per_page' => ['type' => 'integer'],
                     'redirect' => ['type' => 'object'],
                 ],
             ],
@@ -91,7 +104,7 @@ final class ManageRedirectsAbility
         }
 
         return match ($action) {
-            'list' => $provider::list(),
+            'list' => self::handleList($provider, $input),
             'create' => $this->handleCreate($provider, $input),
             default => new WP_Error('invalid_action', 'Action must be list or create.'),
         };
@@ -115,6 +128,19 @@ final class ManageRedirectsAbility
         }
 
         return null;
+    }
+
+    /**
+     * @param  class-string<SafeRedirectManager|Redirection|YoastRedirects>  $provider
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private static function handleList(string $provider, array $input): array
+    {
+        $perPage = max(5, min(200, (int) ($input['per_page'] ?? 50)));
+        $page = max(1, (int) ($input['page'] ?? 1));
+
+        return $provider::list($perPage, $page) + ['page' => $page, 'per_page' => $perPage];
     }
 
     /**

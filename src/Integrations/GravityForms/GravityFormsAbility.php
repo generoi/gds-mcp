@@ -23,13 +23,14 @@ final class GravityFormsAbility
 
         HelpAbility::registerAbility('gds/forms-list', [
             'label' => 'List Forms',
-            'description' => 'List Gravity Forms. Defaults to active, non-trashed forms — pass `include_inactive` and/or `include_trashed` to widen the listing when the user is hunting for a form they "remember was here" (e.g. a disabled or trashed contact form).',
+            'description' => 'List Gravity Forms as summaries (id, title, status, field count); use gds/forms-read for a full definition. Defaults to active, non-trashed forms — pass `include_inactive` and/or `include_trashed` to widen the listing when the user is hunting for a form they "remember was here" (e.g. a disabled or trashed contact form).',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'include_inactive' => ['type' => 'boolean', 'description' => 'Include inactive forms (status off). Default false.'],
                     'include_trashed' => ['type' => 'boolean', 'description' => 'Include trashed forms. Default false.'],
+                    'full' => ['type' => 'boolean', 'description' => 'Return full form definitions (fields, notifications, …) instead of summaries. Default false.'],
                 ],
                 'additionalProperties' => true,
             ],
@@ -183,17 +184,30 @@ final class GravityFormsAbility
 
         HelpAbility::registerAbility('gds/forms-entries', [
             'label' => 'List Form Entries',
-            'description' => 'List entries (submissions) for a Gravity Form.',
+            'description' => 'List entries (submissions) for one Gravity Form, newest first, paged. Returns {entries, total, page, per_page, total_pages}.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'form_id' => ['type' => 'integer', 'description' => 'The form ID.'],
+                    'form_id' => ['type' => 'integer', 'description' => 'The form ID.', 'minimum' => 1],
+                    'per_page' => ['type' => 'integer', 'description' => 'Entries per page (default 20, max 100).', 'default' => 20],
+                    'page' => ['type' => 'integer', 'description' => 'Page number (1-based).', 'default' => 1],
+                    'search_criteria' => ['type' => 'object', 'description' => 'GFAPI search criteria (status, field_filters, start_date, end_date).'],
+                    'sorting' => ['type' => 'object', 'description' => 'GFAPI sorting, e.g. {"key": "date_created", "direction": "DESC"}.'],
                 ],
                 'required' => ['form_id'],
                 'additionalProperties' => true,
             ],
-            'output_schema' => ['type' => 'object', 'additionalProperties' => true],
+            'output_schema' => [
+                'type' => 'object',
+                'properties' => [
+                    'entries' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => true]],
+                    'total' => ['type' => 'integer'],
+                    'page' => ['type' => 'integer'],
+                    'per_page' => ['type' => 'integer'],
+                    'total_pages' => ['type' => 'integer'],
+                ],
+            ],
             'permission_callback' => '__return_true',
             'execute_callback' => [$instance, 'listEntries'],
             'meta' => ['annotations' => ['readonly' => true, 'destructive' => false, 'idempotent' => true]],
@@ -224,9 +238,19 @@ final class GravityFormsAbility
 
         $forms = \GFAPI::get_forms($active, $trash);
 
+        // A list, not keyed by id: an id-keyed PHP array encodes as a JSON
+        // object, which does not match the declared array output schema.
         $result = [];
         foreach ($forms as $form) {
-            $result[(int) $form['id']] = json_decode(json_encode($form), true);
+            $form = json_decode(json_encode($form), true);
+            $result[] = ! empty($input['full']) ? $form : [
+                'id' => (int) $form['id'],
+                'title' => (string) ($form['title'] ?? ''),
+                'is_active' => (bool) ($form['is_active'] ?? false),
+                'is_trash' => (bool) ($form['is_trash'] ?? false),
+                'date_created' => (string) ($form['date_created'] ?? ''),
+                'field_count' => count((array) ($form['fields'] ?? [])),
+            ];
         }
 
         return $result;
@@ -543,7 +567,7 @@ final class GravityFormsAbility
     }
 
     /**
-     * @return array<int, array<string, mixed>>|WP_Error
+     * @return array<string, mixed>|WP_Error
      */
     public function listEntries(mixed $input = []): array|WP_Error
     {
@@ -554,17 +578,33 @@ final class GravityFormsAbility
         $input = (array) ($input ?? []);
         $formId = (int) ($input['form_id'] ?? 0);
 
+        // GFAPI treats form id 0 as "every form" — never dump all submissions.
+        if ($formId <= 0 || ! \GFAPI::form_id_exists($formId)) {
+            return new WP_Error('form_not_found', "Form {$formId} not found.");
+        }
+
+        $perPage = max(1, min(100, (int) ($input['per_page'] ?? 20)));
+        $page = max(1, (int) ($input['page'] ?? 1));
+        $total = 0;
+
         $entries = \GFAPI::get_entries(
             $formId,
-            $input['search_criteria'] ?? [],
-            $input['sorting'] ?? null,
-            $input['paging'] ?? null,
+            (array) ($input['search_criteria'] ?? []),
+            isset($input['sorting']) ? (array) $input['sorting'] : null,
+            ['offset' => ($page - 1) * $perPage, 'page_size' => $perPage],
+            $total,
         );
 
         if (is_wp_error($entries)) {
             return $entries;
         }
 
-        return json_decode(json_encode($entries), true) ?: [];
+        return [
+            'entries' => json_decode(json_encode($entries), true) ?: [],
+            'total' => (int) $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => (int) ceil($total / $perPage),
+        ];
     }
 }

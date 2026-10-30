@@ -31,12 +31,15 @@ final class ManageRevisionsAbility
 
         HelpAbility::registerAbility('gds/revisions-list', [
             'label' => 'List Revisions',
-            'description' => 'List revisions for a post. Delegates to the WordPress REST API.',
+            'description' => 'List revisions for a post, newest first, without their content (use gds/revisions-read for one revision in full). Delegates to the WordPress REST API.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'post_id' => ['type' => 'integer', 'description' => 'The post ID to list revisions for.'],
+                    'per_page' => ['type' => 'integer', 'description' => 'Revisions per page (default 10, max 100).', 'default' => 10],
+                    'page' => ['type' => 'integer', 'description' => 'Page number (1-based).', 'default' => 1],
+                    'include_content' => ['type' => 'boolean', 'description' => 'Include each revision\'s full content. Default false.', 'default' => false],
                 ],
                 'required' => ['post_id'],
                 'additionalProperties' => true,
@@ -92,16 +95,27 @@ final class ManageRevisionsAbility
     {
         $input = (array) ($input ?? []);
         $postId = (int) ($input['post_id'] ?? 0);
-        unset($input['post_id']);
+        $includeContent = ! empty($input['include_content']);
+        unset($input['post_id'], $input['include_content']);
+        // Without per_page the REST endpoint returns every revision.
+        $input['per_page'] = max(1, min(100, (int) ($input['per_page'] ?? 10)));
+        $input['page'] = max(1, (int) ($input['page'] ?? 1));
 
         $route = $this->getRevisionRoute($postId);
         if (is_wp_error($route)) {
             return $route;
         }
 
-        $response = self::restGet($route, $input);
+        $result = self::restResponseOrError(self::restGet($route, $input));
+        if (is_wp_error($result) || $includeContent) {
+            return $result;
+        }
 
-        return self::restResponseOrError($response);
+        return array_map(static function (array $revision): array {
+            unset($revision['content']);
+
+            return $revision;
+        }, $result);
     }
 
     /**

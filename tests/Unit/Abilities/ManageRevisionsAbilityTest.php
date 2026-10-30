@@ -28,6 +28,23 @@ class ManageRevisionsAbilityTest extends TestCase
         $this->assertArrayHasKey('id', $result[0]);
     }
 
+    public function test_list_revisions_is_paged_and_leaves_out_content(): void
+    {
+        $postId = $this->createPost(['post_status' => 'publish', 'post_content' => 'V1']);
+        foreach (['V2', 'V3', 'V4'] as $content) {
+            wp_update_post(['ID' => $postId, 'post_content' => $content]);
+        }
+
+        $result = $this->ability->listRevisions(['post_id' => $postId, 'per_page' => 2]);
+
+        $this->assertCount(2, $result);
+        $this->assertArrayNotHasKey('content', $result[0]);
+
+        $withContent = $this->ability->listRevisions(['post_id' => $postId, 'per_page' => 2, 'page' => 2, 'include_content' => true]);
+        $this->assertArrayHasKey('content', $withContent[0]);
+        $this->assertNotContains($withContent[0]['id'], array_column($result, 'id'));
+    }
+
     public function test_read_revision(): void
     {
         $postId = $this->createPost(['post_status' => 'publish', 'post_content' => 'Original']);

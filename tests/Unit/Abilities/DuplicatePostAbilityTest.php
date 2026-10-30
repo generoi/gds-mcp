@@ -60,13 +60,25 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
     {
         $sourceId = self::factory()->post->create(['title' => 'With Meta']);
         update_post_meta($sourceId, 'custom_field', 'custom_value');
-        update_post_meta($sourceId, '_private_field', 'hidden');
+        update_post_meta($sourceId, '_wp_page_template', 'template-wide.php');
+        update_post_meta($sourceId, '_yoast_wpseo_title', 'SEO title');
+        update_post_meta($sourceId, '_custom_acf_ref', 'field_abc123');
+        update_post_meta($sourceId, '_edit_lock', '123:1');
+        update_post_meta($sourceId, '_wp_old_slug', 'old-slug');
+        update_post_meta($sourceId, '_pll_internal', 'x');
+        update_post_meta($sourceId, '_wp_trash_meta_status', 'publish');
 
         $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
 
         $this->assertSame('custom_value', get_post_meta($result['id'], 'custom_field', true));
-        // Private meta should not be copied.
-        $this->assertEmpty(get_post_meta($result['id'], '_private_field', true));
+        // Underscore meta that describes the content is copied…
+        $this->assertSame('template-wide.php', get_post_meta($result['id'], '_wp_page_template', true));
+        $this->assertSame('SEO title', get_post_meta($result['id'], '_yoast_wpseo_title', true));
+        $this->assertSame('field_abc123', get_post_meta($result['id'], '_custom_acf_ref', true));
+        // …per-post bookkeeping is not.
+        foreach (['_edit_lock', '_wp_old_slug', '_pll_internal', '_wp_trash_meta_status'] as $key) {
+            $this->assertSame('', get_post_meta($result['id'], $key, true), $key);
+        }
     }
 
     public function test_copies_taxonomy_terms(): void
