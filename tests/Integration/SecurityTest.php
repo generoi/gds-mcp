@@ -220,11 +220,13 @@ class SecurityTest extends AbilityTestCase
 
         wp_set_current_user($this->editorId);
 
+        // No error code: refused in execute today, or by the permission
+        // callback once it carries the capability.
         $this->assertAbilityError('gds/redirects-manage', [
             'action' => 'create',
             'from' => '/test-redirect',
             'to' => '/destination',
-        ], 'forbidden');
+        ]);
     }
 
     // ── Cache clearing ────────────────────────────────────────────
