@@ -119,7 +119,7 @@ final class HelpAbility
         return [
             'groups' => array_values($groups),
             'total' => $total,
-            'tip' => 'Read resources first (blocks://catalog, site://pages, design://css-vars, acf://fields) to understand the site, then use tools to create/update content.',
+            'tip' => 'Read resources first (blocks://catalog, site://pages, theme://json, acf://fields) to understand the site, then use tools to create/update content.',
         ];
     }
 

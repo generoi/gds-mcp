@@ -23,21 +23,36 @@ $wpdb->query(
     )
 );
 
-foreach (['gds_mcp_oauth_rt_', 'gds_mcp_oauth_client_'] as $prefix) {
-    $names = $wpdb->get_col(
-        $wpdb->prepare(
-            "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
-            $wpdb->esc_like($prefix).'%'
-        )
-    );
+$removeSiteOptions = static function (): void {
+    global $wpdb;
 
-    foreach ($names as $name) {
-        delete_option($name);
+    foreach (['gds_mcp_oauth_rt_', 'gds_mcp_oauth_client_'] as $prefix) {
+        $names = $wpdb->get_col(
+            $wpdb->prepare(
+                "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s",
+                $wpdb->esc_like($prefix).'%'
+            )
+        );
+
+        foreach ($names as $name) {
+            delete_option($name);
+        }
     }
+
+    delete_option('gds_mcp_oauth_clients');
+    wp_clear_scheduled_hook('gds_mcp_oauth_cleanup');
+
+    // Polylang strings remembered from wp-admin (Integrations\Polylang\RegisteredStrings).
+    delete_option('gds_mcp_pll_registered_strings');
+};
+
+// Each site of a network keeps its own refresh tokens and clients.
+if (is_multisite()) {
+    foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $siteId) {
+        switch_to_blog((int) $siteId);
+        $removeSiteOptions();
+        restore_current_blog();
+    }
+} else {
+    $removeSiteOptions();
 }
-
-delete_option('gds_mcp_oauth_clients');
-wp_clear_scheduled_hook('gds_mcp_oauth_cleanup');
-
-// Polylang strings remembered from wp-admin (Integrations\Polylang\RegisteredStrings).
-delete_option('gds_mcp_pll_registered_strings');

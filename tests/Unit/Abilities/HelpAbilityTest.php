@@ -70,4 +70,18 @@ class HelpAbilityTest extends WP_UnitTestCase
             $this->assertNotNull($resource['uri'], "Resource {$resource['name']} should have a URI");
         }
     }
+
+    public function test_the_tip_names_registered_resources(): void
+    {
+        $result = (new HelpAbility)->execute([]);
+        $uris = [];
+        foreach ($result['groups'] as $group) {
+            $uris = [...$uris, ...array_filter(array_column($group['abilities'], 'uri'))];
+        }
+
+        preg_match_all('#[a-z]+://[a-z-]+#', $result['tip'], $named);
+
+        $this->assertNotEmpty($named[0]);
+        $this->assertSame([], array_diff($named[0], $uris));
+    }
 }
