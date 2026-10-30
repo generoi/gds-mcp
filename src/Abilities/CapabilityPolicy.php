@@ -72,8 +72,9 @@ final class CapabilityPolicy
         // The rest need the floor every MCP caller already meets (edit_posts
         // unless filtered): show_in_rest also puts them on core's
         // /wp-abilities/v1 run route, which checks only this callback, so a
-        // public default would let anonymous visitors run them.
-        $cap = self::map()[$name] ?? Server::capability();
+        // public default would let anonymous visitors run them. A floor
+        // filtered to empty still gets edit_posts.
+        $cap = self::map()[$name] ?? (Server::capability() ?: 'edit_posts');
 
         return apply_filters('gds-mcp/ability_capability', $cap, $name);
     }

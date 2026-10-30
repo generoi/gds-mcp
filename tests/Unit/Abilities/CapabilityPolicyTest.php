@@ -62,6 +62,19 @@ class CapabilityPolicyTest extends WP_UnitTestCase
         remove_all_filters('gds-mcp/oauth_capability');
     }
 
+    public function test_an_empty_mcp_floor_still_gates_unmapped_abilities(): void
+    {
+        add_filter('gds-mcp/oauth_capability', '__return_empty_string');
+        $out = CapabilityPolicy::applyCapability(['permission_callback' => '__return_true'], 'gds/content-list');
+        remove_all_filters('gds-mcp/oauth_capability');
+
+        $this->assertNotSame('__return_true', $out['permission_callback']);
+        wp_set_current_user(0);
+        $this->assertFalse((bool) ($out['permission_callback'])());
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
+        $this->assertTrue((bool) ($out['permission_callback'])());
+    }
+
     public function test_anonymous_visitors_cannot_run_abilities_over_rest(): void
     {
         wp_set_current_user(0);

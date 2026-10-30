@@ -135,7 +135,7 @@ final class SeoAbility
             $metaKeys = array_map(static fn ($key) => '_yoast_wpseo_'.$key, array_keys($stored));
             $captured = Snapshot::partialPost($object->ID, $metaKeys);
             // Empty status: undoing SEO must not revert a publish or untrash.
-            $before = $captured ? new PartialPostSnapshot($object->ID, '', $captured->metaPrev) : null;
+            $before = $captured ? new PartialPostSnapshot($object->ID, '', $captured->metaPrev, $captured->serialized) : null;
 
             SeoFields::writePost($object->ID, $stored);
 

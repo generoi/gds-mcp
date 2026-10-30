@@ -170,11 +170,8 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', "Post {$snapshot->id} no longer exists.");
         }
 
-        // The meta goes back even when the status cannot; the error says so.
-        $updated = $snapshot->status !== ''
-            ? wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status], true)
-            : null;
-
+        // The meta goes back first, so the status update's save hooks see
+        // it, and even when the status cannot; the error says so.
         foreach ($snapshot->metaPrev as $key => $values) {
             delete_post_meta($snapshot->id, $key);
             if ($values === null) {
@@ -188,6 +185,9 @@ final class RestoreSnapshot
             }
         }
 
+        $updated = $snapshot->status !== ''
+            ? wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status], true)
+            : null;
         if (is_wp_error($updated)) {
             return new WP_Error('restore_failed', "The meta of post {$snapshot->id} was restored, but not its status: ".$updated->get_error_message());
         }
