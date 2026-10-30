@@ -190,7 +190,7 @@ final class CreateTranslationAbility
         $translations[$language] = $newId;
         pll_save_post_translations($translations);
 
-        self::copyPostMeta($sourceId, $newId);
+        self::copyPostMeta($sourceId, $newId, duplicate: false);
         self::copyPostTaxonomies($sourceId, $newId, $source->post_type);
 
         $thumbnailId = (int) ($input['featured_media'] ?? get_post_thumbnail_id($sourceId));

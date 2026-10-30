@@ -107,7 +107,7 @@ final class DuplicatePostAbility
             return $newId;
         }
 
-        self::copyPostMeta($sourceId, $newId);
+        self::copyPostMeta($sourceId, $newId, duplicate: true);
         self::copyPostTaxonomies($sourceId, $newId, $source->post_type);
 
         $thumbnail = get_post_thumbnail_id($sourceId);

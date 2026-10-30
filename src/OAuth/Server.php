@@ -51,7 +51,7 @@ final class Server
             'mcp_adapter_discover_abilities_capability',
             'mcp_adapter_get_ability_info_capability',
         ] as $filter) {
-            add_filter($filter, [self::class, 'capability']);
+            add_filter($filter, [self::class, 'raiseFloor']);
         }
 
         if (! self::enabled()) {
@@ -95,6 +95,16 @@ final class Server
     public static function capability(): string
     {
         return (string) apply_filters('gds-mcp/oauth_capability', 'edit_posts');
+    }
+
+    /**
+     * Raise the adapter's default `read` floor to {@see capability()}. A
+     * capability someone else already set is kept: this only raises, never
+     * lowers.
+     */
+    public static function raiseFloor(mixed $capability): mixed
+    {
+        return $capability === 'read' ? self::capability() : $capability;
     }
 
     /**

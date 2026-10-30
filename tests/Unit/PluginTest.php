@@ -70,6 +70,8 @@ class PluginTest extends WP_UnitTestCase
             'mcp_adapter_get_ability_info_capability',
         ] as $filter) {
             $this->assertSame('edit_posts', apply_filters($filter, 'read'), $filter);
+            // A stricter capability set elsewhere is kept, never lowered.
+            $this->assertSame('manage_options', apply_filters($filter, 'manage_options'), $filter);
         }
     }
 }

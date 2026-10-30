@@ -142,6 +142,22 @@ class CreateTranslationIntegrationTest extends TestCase
         $this->assertSame('closed', $translation->ping_status);
     }
 
+    public function test_translation_keeps_the_product_identifiers_a_duplicate_drops(): void
+    {
+        $sourceId = $this->createPost(['post_type' => 'post']);
+        $keys = ['_sku' => 'SKU-1', '_global_unique_id' => '0123456789012', 'total_sales' => '12', '_wc_review_count' => '3'];
+        foreach ($keys as $key => $value) {
+            update_post_meta($sourceId, $key, $value);
+        }
+
+        $result = (new CreateTranslationAbility)->execute(['source_id' => $sourceId, 'lang' => 'fi']);
+
+        // Polylang for WooCommerce shares these across a product's languages.
+        foreach ($keys as $key => $value) {
+            $this->assertSame($value, get_post_meta($result['id'], $key, true), $key);
+        }
+    }
+
     public function test_contributor_cannot_publish_a_translation(): void
     {
         $contributor = self::factory()->user->create(['role' => 'contributor']);

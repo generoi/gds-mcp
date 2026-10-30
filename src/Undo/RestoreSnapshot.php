@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Undo;
 
+use GeneroWP\MCP\Abilities\NavMenuItemsAbility;
 use GeneroWP\MCP\Integrations\Yoast\SeoFields;
 use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
 use GeneroWP\MCP\Undo\Snapshots\PostFieldsSnapshot;
@@ -116,7 +117,9 @@ final class RestoreSnapshot
             }
         }
 
-        foreach ($snapshot->terms as $taxonomy => $ids) {
+        // Snapshots written before Polylang's taxonomies were left out may
+        // still hold them.
+        foreach (array_diff_key($snapshot->terms, array_flip(PostFieldsSnapshot::polylangTaxonomies())) as $taxonomy => $ids) {
             wp_set_object_terms($snapshot->id, $ids, $taxonomy, false);
         }
 
@@ -177,12 +180,13 @@ final class RestoreSnapshot
         }
 
         // Since WP 5.6 untrashing gives a draft. Put back the status the post
-        // had when it was trashed; rows recorded without it keep core's draft.
+        // had when it was trashed: the one the undo row recorded, or for rows
+        // without it the one core kept in _wp_trash_meta_status.
         $status = (string) ($data['status'] ?? '');
-        $priorStatus = static fn ($newStatus, $postId) => (int) $postId === $id ? $status : $newStatus;
-        if ($status !== '') {
-            add_filter('wp_untrash_post_status', $priorStatus, 10, 2);
-        }
+        $priorStatus = static fn ($newStatus, $postId, $previousStatus) => (int) $postId === $id
+            ? ($status !== '' ? $status : ((string) $previousStatus ?: $newStatus))
+            : $newStatus;
+        add_filter('wp_untrash_post_status', $priorStatus, 10, 3);
         $untrashed = wp_untrash_post($id);
         remove_filter('wp_untrash_post_status', $priorStatus, 10);
 
@@ -212,10 +216,11 @@ final class RestoreSnapshot
 
     /**
      * Recreate a deleted menu item (they have no trash), under its original id
-     * when that is still free. Its former sub-items are pointed back at it and
-     * the menu's order is put back as it was before the delete closed the gap.
+     * when that is still free. Its former sub-items are pointed back at it, and
+     * the gap the delete closed is reopened against the menu as it is now, so
+     * items added or moved since keep their places relative to each other.
      *
-     * data: { item: PostFieldsSnapshot, children: list<int>, orders: array<int, int> }
+     * data: { item: PostFieldsSnapshot, children: list<int> }
      *
      * @param  array<string, mixed>  $data
      * @return RestoreSummary|WP_Error
@@ -227,14 +232,28 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', 'Snapshot was missing the menu item id.');
         }
 
+        $menuId = (int) ($snapshot->terms['nav_menu'][0] ?? 0);
+        if (! $menuId || ! term_exists($menuId, 'nav_menu')) {
+            return new WP_Error('restore_failed', 'The menu this item belonged to no longer exists.');
+        }
+
+        $order = (int) $snapshot->post['menu_order'];
+        NavMenuItemsAbility::shiftOrder($menuId, $order, +1);
+
         // wp_insert_post() keeps import_id only when no post has that id.
         $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $snapshot->post), true);
         if (is_wp_error($newId)) {
+            NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
+
             return $newId;
         }
 
         $restored = self::restorePost((new PostFieldsSnapshot($newId, $snapshot->post, $snapshot->meta, $snapshot->terms, true))->toArray());
         if (is_wp_error($restored)) {
+            // All or nothing: no half-restored item left in the menu.
+            wp_delete_post($newId, true);
+            NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
+
             return $restored;
         }
 
@@ -243,15 +262,10 @@ final class RestoreSnapshot
                 update_post_meta((int) $childId, '_menu_item_menu_item_parent', (string) $newId);
             }
         }
-        foreach ((array) ($data['orders'] ?? []) as $itemId => $order) {
-            if (get_post_type((int) $itemId) === 'nav_menu_item') {
-                wp_update_post(['ID' => (int) $itemId, 'menu_order' => (int) $order]);
-            }
-        }
 
         $summary = ['restored' => 'recreate-menu-item', 'id' => $newId];
         if ($newId !== $snapshot->id) {
-            $summary['note'] = "The menu item was restored under a new id ({$newId}; was {$snapshot->id}) because the old id had been reused.";
+            $summary['caveats'] = ["The menu item came back under a new id ({$newId}; was {$snapshot->id}) because the old id had been reused."];
         }
 
         return $summary;
@@ -315,11 +329,49 @@ final class RestoreSnapshot
         if (! $id || get_post_type($id) !== 'attachment') {
             return ['restored' => 'delete-attachment', 'id' => $id, 'note' => 'Already removed.'];
         }
+        // Since the upload it may have become a featured image or been put in
+        // content; deleting the file would break those, so leave it.
+        $usedBy = self::attachmentUsers($id);
+        if ($usedBy) {
+            return new WP_Error('restore_failed', sprintf('The uploaded file is now used by post(s) %s, so it was not deleted. Remove it from them first, or delete it in the Media Library.', implode(', ', $usedBy)));
+        }
         if (! wp_delete_attachment($id, true)) {
             return new WP_Error('restore_failed', "Failed to delete attachment {$id}.");
         }
 
         return ['restored' => 'delete-attachment', 'id' => $id];
+    }
+
+    /**
+     * Posts that use an attachment as featured image or in their content (by
+     * its wp-image-{id} class, or its URL, size variants included).
+     *
+     * @return list<int>
+     */
+    private static function attachmentUsers(int $id): array
+    {
+        global $wpdb;
+
+        $url = (string) wp_get_attachment_url($id);
+        // Without the extension, so -300x200 size variants match too.
+        $urlStem = $url !== '' ? (string) preg_replace('/\.[^.\/]+$/', '', $url) : '';
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_thumbnail_id' AND meta_value = %d",
+            $id
+        ));
+        $ids = array_merge($ids, $wpdb->get_col($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts}
+             WHERE post_type NOT IN ('revision', 'attachment') AND post_status != 'trash'
+             AND (post_content REGEXP %s OR (%s != '' AND post_content LIKE %s))",
+            'wp-image-'.$id.'([^0-9]|$)',
+            $urlStem,
+            '%'.$wpdb->esc_like($urlStem).'%'
+        )));
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery
+
+        return array_values(array_unique(array_map('intval', $ids)));
     }
 
     /**

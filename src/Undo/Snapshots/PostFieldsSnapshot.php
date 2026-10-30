@@ -77,7 +77,7 @@ final class PostFieldsSnapshot
         }
 
         $terms = [];
-        foreach (get_object_taxonomies(get_post_type($id) ?: 'post') as $tax) {
+        foreach (array_diff(get_object_taxonomies(get_post_type($id) ?: 'post'), self::polylangTaxonomies()) as $tax) {
             // An empty taxonomy is recorded too, so the restore clears terms
             // added since.
             $ids = wp_get_object_terms($id, $tax, ['fields' => 'ids']);
@@ -159,6 +159,18 @@ final class PostFieldsSnapshot
             'terms' => $this->terms,
             'meta_complete' => $this->metaComplete,
         ];
+    }
+
+    /**
+     * Polylang's own taxonomies (language, translation group). They are
+     * Polylang's to manage: restoring an empty translation group would unlink
+     * the post from its translations. A relink has its own undo.
+     *
+     * @return list<string>
+     */
+    public static function polylangTaxonomies(): array
+    {
+        return array_values(get_taxonomies(['_pll' => true]));
     }
 
     /** @return array<string, list<string>> */

@@ -103,59 +103,123 @@ HTML;
     }
 
     /**
-     * A hostname that resolves without DNS (the machine's own name, through
-     * /etc/hosts) and that core's IPv4 check is told to let through, so the
-     * request reaches the real HTTP stack and only PublicUrlGuard stands in
-     * the way.
+     * Send requests to `localhost` through the real HTTP stack with
+     * PublicUrlGuard as the only check: core's own (IPv4-only) check is told
+     * the host is external, the site is moved off localhost so it is not
+     * "the site itself", and the guard resolves localhost to $addresses.
+     * localhost resolves through /etc/hosts on every runner, so core needs
+     * no DNS.
+     *
+     * @param  array{v4: list<string>, v6: list<string>, v6_failed: bool}  $addresses
      */
-    public static function hostCoreLetsThrough(): string
+    public static function resolveLocalhostTo(array $addresses): void
     {
-        $host = (string) gethostname();
-        if ($host === '' || gethostbyname($host) === $host) {
-            self::markTestSkipped('The machine name does not resolve locally.');
-        }
         add_filter('http_request_host_is_external', '__return_true');
+        add_filter('option_home', fn () => 'https://example.org', 99);
+        self::setResolver(static fn (string $host): array => $addresses);
+    }
 
-        return $host;
+    public static function setResolver(?\Closure $resolver): void
+    {
+        PublicUrlGuard::resolveForTests($resolver);
     }
 
     public function test_refuses_a_hostname_with_a_private_ipv6_address(): void
     {
         // The pre_http_request stub would answer before the real HTTP stack.
         remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
-        $host = self::hostCoreLetsThrough();
         // A public A record next to a unique-local AAAA: core resolves only
         // the IPv4 address.
-        PublicUrlGuard::$resolver = static fn (string $host): array => ['93.184.216.34', 'fd00::1'];
+        self::resolveLocalhostTo(['v4' => ['93.184.216.34'], 'v6' => ['fd00::1'], 'v6_failed' => false]);
 
         try {
-            $error = $this->assertAbilityError('gds/web-fetch', ['url' => "https://{$host}/"]);
+            $error = $this->assertAbilityError('gds/web-fetch', ['url' => 'https://localhost/']);
         } finally {
-            PublicUrlGuard::$resolver = null;
+            self::setResolver(null);
         }
 
-        $this->assertStringContainsString('private or reserved address (fd00::1)', $error->get_error_message());
+        // One message for every refusal: nothing about the internal address.
+        $this->assertStringContainsString('only public https addresses', $error->get_error_message());
+        $this->assertStringNotContainsString('fd00', $error->get_error_message());
     }
 
     public function test_refuses_a_hostname_that_resolves_to_a_private_address(): void
     {
         remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
-        $host = self::hostCoreLetsThrough();
+        self::resolveLocalhostTo(['v4' => ['10.0.0.5'], 'v6' => [], 'v6_failed' => false]);
 
-        $error = $this->assertAbilityError('gds/web-fetch', ['url' => "https://{$host}/"]);
+        try {
+            $error = $this->assertAbilityError('gds/web-fetch', ['url' => 'https://localhost/']);
+        } finally {
+            self::setResolver(null);
+        }
 
-        $this->assertStringContainsString('private or reserved address', $error->get_error_message());
+        $this->assertStringContainsString('only public https addresses', $error->get_error_message());
     }
 
-    public function test_refuses_a_redirect_to_a_non_public_address(): void
+    public function test_a_failed_aaaa_lookup_is_refused_without_an_a_record(): void
+    {
+        self::setResolver(static fn (string $host): array => ['v4' => [], 'v6' => [], 'v6_failed' => true]);
+        $withoutA = PublicUrlGuard::urlError('https://servfail.example.com/');
+        self::setResolver(static fn (string $host): array => ['v4' => ['93.184.216.34'], 'v6' => [], 'v6_failed' => true]);
+        $withA = PublicUrlGuard::urlError('https://servfail.example.com/');
+        self::setResolver(null);
+
+        $this->assertNotNull($withoutA);
+        $this->assertNull($withA, 'With an A record the fetch goes on, over IPv4 only.');
+    }
+
+    public function test_curl_is_pinned_to_the_checked_address(): void
+    {
+        if (! function_exists('curl_init')) {
+            $this->markTestSkipped('cURL is not available.');
+        }
+        self::setResolver(static fn (string $host): array => ['v4' => ['93.184.216.34'], 'v6' => ['2606:2800:220:1::1'], 'v6_failed' => false]);
+
+        // The hooks Requests fires for one hop; a pin cURL rejects throws.
+        PublicUrlGuard::guard(static function (): void {
+            do_action('requests-requests.before_request', 'https://pinned.example.com/');
+            $handle = curl_init();
+            do_action('requests-curl.before_send', $handle);
+        });
+        self::setResolver(null);
+
+        $this->assertTrue(true);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function nonPublicIpv6(): array
+    {
+        return array_map(fn ($ip) => [$ip], array_combine(
+            ['site-local', 'IPv4-compatible', 'NAT64 local-use', '6to4', 'Teredo', 'discard-only'],
+            ['fec0::1', '::7f00:1', '64:ff9b:1::1', '2002:7f00:1::1', '2001:0:4136:e378::1', '100::1'],
+        ));
+    }
+
+    /**
+     * @dataProvider nonPublicIpv6
+     */
+    public function test_reserved_ipv6_ranges_are_not_public(string $ip): void
+    {
+        $this->assertFalse(PublicUrlGuard::isPublicIp($ip));
+        $this->assertTrue(PublicUrlGuard::isPublicIp('2606:4700::1111'));
+    }
+
+    public function test_refuses_a_redirect_to_a_hostname_with_a_private_address(): void
     {
         remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
-        RedirectingTransport::install('https://169.254.169.254/latest/meta-data/');
+        // The literal 169.254.169.254 core already refuses; a hostname whose
+        // AAAA is private only PublicUrlGuard does.
+        self::resolveLocalhostTo(['v4' => ['93.184.216.34'], 'v6' => ['fe80::1'], 'v6_failed' => false]);
+        RedirectingTransport::install('https://localhost/latest/meta-data/');
 
         try {
             $this->assertAbilityError('gds/web-fetch', ['url' => 'https://93.184.216.34/']);
         } finally {
             RedirectingTransport::uninstall();
+            self::setResolver(null);
         }
 
         $this->assertSame(['https://93.184.216.34/'], RedirectingTransport::$requested, 'The redirect target is never requested.');

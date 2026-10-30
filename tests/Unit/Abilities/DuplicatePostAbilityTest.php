@@ -93,7 +93,7 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
     public function test_does_not_copy_redirect_canonical_or_unique_product_ids(): void
     {
         $sourceId = self::factory()->post->create(['title' => 'Source']);
-        $keys = ['_yoast_wpseo_redirect' => 'https://example.com/elsewhere', '_yoast_wpseo_canonical' => get_permalink($sourceId), '_sku' => 'SKU-1', '_global_unique_id' => '0123456789012'];
+        $keys = ['_yoast_wpseo_redirect' => 'https://example.com/elsewhere', '_yoast_wpseo_canonical' => get_permalink($sourceId), '_sku' => 'SKU-1', '_global_unique_id' => '0123456789012', 'total_sales' => '12', '_wc_review_count' => '3'];
         foreach ($keys as $key => $value) {
             update_post_meta($sourceId, $key, $value);
         }

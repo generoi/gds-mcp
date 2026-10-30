@@ -67,6 +67,9 @@ class TranslationAuditIntegrationTest extends TestCase
 
         $alone = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
         pll_set_post_language($alone, 'en');
+        // Written in Finnish: not a translation into Finnish, so not counted.
+        $finnishOnly = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
+        pll_set_post_language($finnishOnly, 'fi');
 
         $en = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
         $fi = $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
@@ -77,6 +80,7 @@ class TranslationAuditIntegrationTest extends TestCase
         $result = (new TranslationAuditAbility)->execute(['post_type' => 'post', 'lang' => 'fi', 'per_page' => 500]);
 
         // The post with no translation at all is untranslated, not partial.
+        $this->assertSame(2, $result['summary']['total_posts']);
         $this->assertSame(1, $result['summary']['untranslated']);
         $this->assertSame(0, $result['summary']['partially_translated']);
         $this->assertSame(1, $result['summary']['fully_translated']);

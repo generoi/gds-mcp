@@ -32,10 +32,13 @@ final class Clients
     private const MAX_AGE = 60 * DAY_IN_SECONDS;
 
     /**
-     * Registrations one address may make in an hour. Claude registers once
-     * per connection, so a person connecting is nowhere near it.
+     * Registrations one network may make per clock hour. Generous: claude.ai
+     * registers a client per connection from a shared pool of egress
+     * addresses, so a tight limit would let anyone on that pool lock every
+     * claude.ai user out. The real protection is that eviction never touches
+     * a client with a live connection; this only bounds the churn.
      */
-    private const REGISTRATIONS_PER_HOUR = 20;
+    private const REGISTRATIONS_PER_HOUR = 500;
 
     private const THROTTLE_PREFIX = 'gds_mcp_oauth_reg_';
 
@@ -54,12 +57,13 @@ final class Clients
             throw Server::error('invalid_request', 'Client registration requires HTTPS.', 400);
         }
 
-        // Registration is open to anyone, so one address must not be able to
-        // churn the store.
-        $throttleKey = self::THROTTLE_PREFIX.md5((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        // Registration is open to anyone, so one network must not be able to
+        // churn the store. A fixed window — the key names the clock hour — so
+        // a client retrying does not keep pushing its own limit out.
+        $throttleKey = self::THROTTLE_PREFIX.md5(self::network((string) ($_SERVER['REMOTE_ADDR'] ?? ''))).'_'.intdiv(time(), HOUR_IN_SECONDS);
         $recent = (int) get_transient($throttleKey);
         if ($recent >= self::REGISTRATIONS_PER_HOUR) {
-            throw Server::error('too_many_requests', 'Too many client registrations from this address. Try again later.', 429);
+            throw Server::error('too_many_requests', 'Too many client registrations from this network. Try again later.', 429);
         }
         set_transient($throttleKey, $recent + 1, HOUR_IN_SECONDS);
 
@@ -219,9 +223,12 @@ final class Clients
 
         // Only if age alone has not kept the store in check. A client somebody
         // is connected through is never evicted: it could not re-authorize.
+        // Nor is the one just registered, which is about to be used. When
+        // every other client is live the store goes over the cap rather than
+        // break a connection.
         if (count($index) - count($stale) > self::MAX_CLIENTS) {
             $live = self::clientsWithLiveGrants();
-            $candidates = array_diff_key($index, $live, array_flip($stale));
+            $candidates = array_diff_key($index, $live, array_flip($stale), [$client['client_id'] => true]);
             asort($candidates);
             $overflow = array_slice(array_keys($candidates), 0, max(0, count($index) - count($stale) - self::MAX_CLIENTS));
             $stale = array_merge($stale, $overflow);
@@ -233,6 +240,19 @@ final class Clients
         }
 
         update_option(self::INDEX_OPTION, $index, false);
+    }
+
+    /**
+     * The network an address throttles as: itself for IPv4, its /64 for IPv6,
+     * where one host commonly holds the whole /64.
+     */
+    private static function network(string $address): string
+    {
+        $packed = @inet_pton($address);
+
+        return $packed !== false && strlen($packed) === 16
+            ? (string) inet_ntop(substr($packed, 0, 8).str_repeat("\0", 8)).'/64'
+            : $address;
     }
 
     /**

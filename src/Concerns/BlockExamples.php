@@ -80,7 +80,7 @@ trait BlockExamples
 
         // Only content anyone can see on the site: public types plus the
         // patterns and templates it is built from, never password-protected.
-        $types = array_values(array_merge(get_post_types(['public' => true]), ['wp_block', 'wp_template', 'wp_template_part']));
+        $types = self::searchablePostTypes();
         if ($postType) {
             $types = array_values(array_intersect($types, [$postType]));
         }
@@ -155,6 +155,17 @@ trait BlockExamples
         }
 
         return $results;
+    }
+
+    /**
+     * Post types whose content anyone can see on the site: public types plus
+     * the patterns and templates it is built from.
+     *
+     * @return list<string>
+     */
+    private static function searchablePostTypes(): array
+    {
+        return array_values(array_merge(get_post_types(['public' => true]), ['wp_block', 'wp_template', 'wp_template_part']));
     }
 
     /**

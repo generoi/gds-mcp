@@ -820,21 +820,46 @@ class OAuthFlowTest extends TestCase
         $this->assertCount(1, Grants::all($this->editor), 'Revoking on another site leaves this site\'s grant.');
     }
 
-    public function test_registration_is_throttled_per_address(): void
+    public function test_registration_is_throttled_per_network_in_a_fixed_window(): void
     {
-        $_SERVER['REMOTE_ADDR'] = '203.0.113.7';
-        for ($i = 0; $i < 20; $i++) {
-            $this->registerClient();
-        }
+        $window = intdiv(time(), HOUR_IN_SECONDS);
+        // An IPv6 host throttles as its /64; this one is at the limit.
+        set_transient('gds_mcp_oauth_reg_'.md5('2001:db8:1:2::/64').'_'.$window, 500, HOUR_IN_SECONDS);
 
+        $_SERVER['REMOTE_ADDR'] = '2001:db8:1:2:aaaa::7';
         $_SERVER['REQUEST_METHOD'] = 'POST';
         $refused = $this->capture(fn () => Clients::handleRegistration((string) wp_json_encode(['redirect_uris' => [self::REDIRECT_URI]])));
         $this->assertSame(429, $refused->status);
 
-        // Another address is unaffected.
+        // Another network is unaffected, and below the limit a registration
+        // goes through.
+        $_SERVER['REMOTE_ADDR'] = '2001:db8:1:3::7';
+        $this->registerClient();
         $_SERVER['REMOTE_ADDR'] = '203.0.113.8';
         $this->registerClient();
+        $this->assertSame(1, get_transient('gds_mcp_oauth_reg_'.md5('203.0.113.8').'_'.$window));
         unset($_SERVER['REMOTE_ADDR']);
+    }
+
+    public function test_a_full_client_store_never_evicts_the_client_just_registered(): void
+    {
+        $connected = null;
+        $this->connect($connected);
+
+        // Every other registration is live, so nothing may be evicted.
+        $index = [$connected => time() - DAY_IN_SECONDS];
+        for ($i = 0; $i < 2000; $i++) {
+            $index['gmc_live'.$i] = time() - 3600 + $i;
+        }
+        update_option('gds_mcp_oauth_clients', $index, false);
+        for ($i = 0; $i < 2000; $i++) {
+            add_user_meta($this->editor, Grants::metaPrefix().'live'.$i, ['client_id' => 'gmc_live'.$i, 'resource' => $this->resource, 'last_used' => time(), 'refresh' => null], true);
+        }
+
+        $client = $this->registerClient();
+
+        $this->assertArrayHasKey($client['client_id'], get_option('gds_mcp_oauth_clients'));
+        $this->assertNotNull(Clients::get($client['client_id']));
     }
 
     public function test_a_full_client_store_never_evicts_a_connected_client(): void

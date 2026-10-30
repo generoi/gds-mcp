@@ -150,6 +150,11 @@ final class BulkUpdatePostsAbility
         // (merge) restore so we never snapshot full content/meta.
         $touchedMetaKeys = array_merge(array_keys((array) $setMeta), array_values((array) $deleteMeta));
 
+        // With EMPTY_TRASH_DAYS at 0, wp_trash_post() deletes for good.
+        if ($setStatus === 'trash' && ! EMPTY_TRASH_DAYS) {
+            return new WP_Error('trash_not_supported', 'The trash is disabled on this site (EMPTY_TRASH_DAYS is 0), so trashing would delete the posts permanently. Delete them in wp-admin if they should be removed for good.');
+        }
+
         $results = [];
         $updated = 0;
         $undoItems = [];
@@ -194,8 +199,13 @@ final class BulkUpdatePostsAbility
 
                         continue;
                     }
-                    // False also when the value was already that, which writes nothing.
-                    $written = update_post_meta($post->ID, $key, wp_slash($value)) !== false || $written;
+                    if (update_post_meta($post->ID, $key, wp_slash($value)) !== false) {
+                        $written = true;
+                    } elseif (get_post_meta($post->ID, $key, true) != $value) {
+                        // False also when the value was already that, which
+                        // writes nothing and is no error.
+                        $errors[] = ['id' => $post->ID, 'error' => sprintf('Could not save the meta key "%s".', $key)];
+                    }
                 }
 
                 foreach ($deleteMeta as $key) {

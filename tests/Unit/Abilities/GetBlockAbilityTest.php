@@ -146,6 +146,9 @@ class GetBlockAbilityTest extends WP_UnitTestCase
         $this->assertNotContains($protected, $found);
         $this->assertNotContains($internal, $found);
 
+        $result = (new GetBlockAbility)->execute(['name' => 'core/paragraph', 'search_posts' => true, 'search_post_type' => 'internal_note']);
+        $this->assertStringContainsString('not searched', $result['block']['post_examples_note']);
+
         unregister_post_type('internal_note');
     }
 

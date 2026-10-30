@@ -72,14 +72,29 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
         add_term_meta($term['term_id'], 'hero_image', '42');
         add_term_meta($term['term_id'], 'json_field', wp_slash('{"a":"\"q\""}'));
         add_term_meta($term['term_id'], 'product_count_product_cat', '7');
+        // Which keys follow is Polylang's call, as when translating in
+        // wp-admin; ACF and Polylang for WooCommerce add theirs here.
+        add_filter('pll_copy_term_metas', fn (array $keys) => [...$keys, 'hero_image', 'json_field']);
+        // Polylang loads its sync module only when languages exist at boot,
+        // which in the test database they don't; on a site they do.
+        $loadedSync = ! isset(PLL()->sync);
+        if ($loadedSync) {
+            PLL()->sync = PLL() instanceof \PLL_Admin_Base ? new \PLL_Admin_Sync(PLL()) : new \PLL_Sync(PLL());
+        }
 
-        $result = (new CreateTermTranslationAbility)->execute([
-            'source_id' => $term['term_id'],
-            'taxonomy' => 'category',
-            'lang' => 'fi',
-            'name' => 'C:\Temp',
-            'description' => 'Path C:\Users',
-        ]);
+        try {
+            $result = (new CreateTermTranslationAbility)->execute([
+                'source_id' => $term['term_id'],
+                'taxonomy' => 'category',
+                'lang' => 'fi',
+                'name' => 'C:\Temp',
+                'description' => 'Path C:\Users',
+            ]);
+        } finally {
+            if ($loadedSync) {
+                unset(PLL()->sync);
+            }
+        }
 
         $this->assertIsArray($result);
         $this->assertSame('C:\Temp', get_term($result['id'])->name);

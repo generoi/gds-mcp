@@ -243,6 +243,7 @@ class NavMenuItemsAbilityTest extends TestCase
         $a = $this->insertItem('A');
         $b = $this->insertItem('B');
         $c = $this->insertItem('C');
+        $orderOfB = (int) get_post($b)->menu_order;
 
         $result = $this->ability->executeDelete(['id' => $b]);
 
@@ -250,11 +251,10 @@ class NavMenuItemsAbilityTest extends TestCase
         $this->assertSame($b, $result['deleted']);
         $this->assertSame(['A', 'C'], $this->orderedTitles());
 
-        // Verify orders are contiguous (no gap)
-        $items = wp_get_nav_menu_items($this->menuId);
-        usort($items, fn ($x, $y) => $x->menu_order <=> $y->menu_order);
-        $this->assertSame(1, (int) $items[0]->menu_order);
-        $this->assertSame(2, (int) $items[1]->menu_order);
+        // The stored orders are contiguous (no gap). wp_get_nav_menu_items()
+        // renumbers by position, so read the posts themselves.
+        clean_post_cache($c);
+        $this->assertSame($orderOfB, (int) get_post($c)->menu_order, 'C moves up into the slot B left.');
     }
 
     // ── Move ────────────────────────────────────────────────────────────────
@@ -553,6 +553,39 @@ class NavMenuItemsAbilityTest extends TestCase
         $this->assertSame(['Child'], $this->orderedTitles($parent));
     }
 
+    public function test_delete_undo_keeps_changes_made_to_the_menu_since(): void
+    {
+        $this->insertItem('A');
+        $b = $this->insertItem('B');
+        $c = $this->insertItem('C');
+        $this->insertItem('D');
+        $undo = $this->ability->executeDelete(['id' => $b])['_undo'];
+
+        // Since the delete: D moved to the front and E was added at the end.
+        $this->ability->executeMove(['id' => $this->itemIdByTitle('D'), 'position' => 1]);
+        $this->insertItem('E');
+        $this->assertSame(['D', 'A', 'C', 'E'], $this->orderedTitles());
+
+        $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
+
+        // B goes back into its old slot, between A and C; the move and the
+        // new item are kept.
+        $this->assertSame(['D', 'A', 'B', 'C', 'E'], $this->orderedTitles());
+        $this->assertNotNull(get_post($c));
+    }
+
+    public function test_delete_undo_into_a_deleted_menu_is_refused(): void
+    {
+        $b = $this->insertItem('B');
+        $undo = $this->ability->executeDelete(['id' => $b])['_undo'];
+        wp_delete_nav_menu($this->menuId);
+
+        $result = apply_filters('gds-mcp/restore_snapshot', null, $undo);
+
+        $this->assertWPError($result);
+        $this->assertNull(get_post($b));
+    }
+
     public function test_delete_undo_repoints_children_when_the_id_was_reused(): void
     {
         $parent = $this->insertItem('Parent');
@@ -566,7 +599,7 @@ class NavMenuItemsAbilityTest extends TestCase
 
         $this->assertNotWPError($restored);
         $this->assertNotSame($child, $restored['id']);
-        $this->assertArrayHasKey('note', $restored);
+        $this->assertStringContainsString('new id', $restored['caveats'][0]);
         $this->assertSame((string) $restored['id'], get_post_meta($child, '_menu_item_menu_item_parent', true));
     }
 
@@ -736,11 +769,23 @@ class NavMenuItemsAbilityTest extends TestCase
         ], $overrides));
     }
 
+    private function itemIdByTitle(string $title): int
+    {
+        foreach (wp_get_nav_menu_items($this->menuId) as $item) {
+            if ($item->title === $title) {
+                return (int) $item->ID;
+            }
+        }
+
+        return 0;
+    }
+
     /** @return array<int, int> item id → menu_order */
     private function menuOrders(): array
     {
+        // OBJECT output keeps the stored menu_order; the default renumbers.
         $orders = [];
-        foreach (wp_get_nav_menu_items($this->menuId) as $item) {
+        foreach (wp_get_nav_menu_items($this->menuId, ['output' => OBJECT]) as $item) {
             $orders[(int) $item->ID] = (int) $item->menu_order;
         }
         ksort($orders);

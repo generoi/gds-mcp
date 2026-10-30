@@ -4,6 +4,14 @@ namespace GeneroWP\MCP\Concerns;
 
 trait AcfAware
 {
+    /**
+     * Field types ACF stores as sent, so a stored value can tell a refused
+     * write from an unchanged one.
+     *
+     * @var list<string>
+     */
+    private static array $comparableAcfTypes = ['text', 'textarea', 'number', 'range', 'email', 'url', 'password', 'wysiwyg', 'oembed', 'color_picker', 'radio', 'button_group'];
+
     private static function acfAvailable(): bool
     {
         return function_exists('get_field_objects') && function_exists('update_field');
@@ -31,8 +39,12 @@ trait AcfAware
 
                 continue;
             }
-            // update_field() is also false when the value was already stored.
-            if (! update_field($fieldObj['key'], $value, $postId) && acf_get_value($postId, $fieldObj) != $value) {
+            // update_field() ends in update_metadata(), which unslashes.
+            $saved = update_field($fieldObj['key'], wp_slash($value), $postId);
+            // It is also false when the value was already stored, and for a
+            // group, repeater or date the stored value is in another shape
+            // than the one sent; only plain fields can be compared.
+            if (! $saved && in_array($fieldObj['type'] ?? '', self::$comparableAcfTypes, true) && acf_get_value($postId, $fieldObj) != $value) {
                 $errors[(string) $key] = 'ACF did not save the value.';
             }
         }

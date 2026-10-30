@@ -185,6 +185,11 @@ final class TranslationAuditAbility
                         continue 2;
                     }
                 }
+                // A post written in the target language, with no other
+                // language, is not a translation into it: leave it out.
+                if ($targetLanguage && array_keys($translations) === [$targetLanguage]) {
+                    continue;
+                }
                 $typeTotal++;
 
                 // Find missing languages.

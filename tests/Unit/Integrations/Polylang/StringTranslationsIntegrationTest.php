@@ -65,6 +65,21 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
         }
 
         $this->assertContains('Only in admin', array_column($strings, 'string'));
+        // Registered with Polylang itself, whose import accepts a translation
+        // only for a string registered in that request.
+        $this->assertArrayHasKey(md5('Only in admin'), \PLL_Admin_Strings::get_strings());
+    }
+
+    public function test_remembering_drops_strings_no_longer_registered(): void
+    {
+        if (! PLL() instanceof \PLL_Admin_Base) {
+            $this->markTestSkipped('Polylang does not run its admin context here.');
+        }
+        update_option('gds_mcp_pll_registered_strings', [md5('Gone') => ['name' => 'gone', 'string' => 'Gone', 'context' => 'GDS MCP Tests', 'multiline' => false]], false);
+
+        RegisteredStrings::remember();
+
+        $this->assertNotContains('Gone', array_column(get_option('gds_mcp_pll_registered_strings'), 'string'));
     }
 
     public function test_update_and_read_string_translation(): void
