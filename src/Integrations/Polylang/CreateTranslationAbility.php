@@ -146,6 +146,10 @@ final class CreateTranslationAbility
             'post_status' => $input['status'] ?? 'draft',
         ];
 
+        if (in_array($postData['post_status'], ['publish', 'private', 'future'], true) && ! current_user_can($typeObj->cap->publish_posts)) {
+            return new WP_Error('forbidden', 'You do not have permission to publish posts of this type.', ['status' => 403]);
+        }
+
         // Keep the source's author, unless that would hand the caller a post
         // they may not edit.
         $mayAssignAuthor = current_user_can($typeObj->cap->edit_others_posts);
@@ -170,7 +174,9 @@ final class CreateTranslationAbility
             }
         }
 
-        $newId = wp_insert_post($postData, true);
+        // wp_insert_post() unslashes its input; slash so serialized block
+        // attributes keep their backslashes.
+        $newId = wp_insert_post(wp_slash($postData), true);
 
         if (is_wp_error($newId)) {
             return $newId;

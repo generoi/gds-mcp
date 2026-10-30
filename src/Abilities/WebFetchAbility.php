@@ -12,7 +12,7 @@ use WP_Error;
  * - Only http/https schemes
  * - Response size capped at 500 KB
  * - 15s timeout
- * - Requires `read` capability (minimal — any logged-in user)
+ * - Requires `edit_posts` (subscribers must not get a server-side fetcher)
  *
  * Content negotiation:
  * - Sends `Accept: text/markdown, text/plain;q=0.9, text/html;q=0.8, * /*;q=0.1`
@@ -113,7 +113,7 @@ final class WebFetchAbility
 
     public static function permissionCheck(): bool
     {
-        return current_user_can('read');
+        return current_user_can('edit_posts');
     }
 
     /**

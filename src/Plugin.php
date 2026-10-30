@@ -56,12 +56,29 @@ class Plugin
             return;
         }
 
-        $adapterClass = '\\WP\\MCP\\Core\\McpAdapter';
+        // Boot through the adapter's Plugin class, as its own plugin file does.
+        // Since 0.7 the adapter warns when McpAdapter runs without it (bundled
+        // as a library). Plugin::instance() is a no-op once the adapter plugin
+        // has booted itself.
+        $adapterClass = '\\WP\\MCP\\Plugin';
         if (! class_exists($adapterClass)) {
+            add_action('admin_notices', [self::class, 'missingAdapterNotice']);
+
             return;
         }
 
         $adapterClass::instance();
+    }
+
+    public static function missingAdapterNotice(): void
+    {
+        if (! current_user_can('activate_plugins')) {
+            return;
+        }
+
+        echo '<div class="notice notice-error"><p>'
+            .esc_html__('GDS MCP needs the MCP Adapter plugin. Install and activate it, or no MCP endpoint is served.', 'gds-mcp')
+            .'</p></div>';
     }
 
     public static function clearSchemaCache(): void

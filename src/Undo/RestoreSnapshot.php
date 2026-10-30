@@ -78,7 +78,9 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', "Post {$snapshot->id} no longer exists.");
         }
 
-        $result = wp_update_post(['ID' => $snapshot->id] + $snapshot->post, true);
+        // wp_update_post()/add_post_meta() unslash their input; the snapshot
+        // holds raw DB values, so slash them or backslashes are stripped.
+        $result = wp_update_post(wp_slash(['ID' => $snapshot->id] + $snapshot->post), true);
         if (is_wp_error($result)) {
             return $result;
         }
@@ -92,7 +94,7 @@ final class RestoreSnapshot
             }
             delete_post_meta($snapshot->id, $key);
             foreach ($values as $value) {
-                add_post_meta($snapshot->id, $key, maybe_unserialize($value));
+                add_post_meta($snapshot->id, $key, wp_slash(maybe_unserialize($value)));
             }
         }
         // A key added since the snapshot is removed only when the snapshot
@@ -139,9 +141,10 @@ final class RestoreSnapshot
                 continue;
             }
             // Values were captured via get_post_meta($id,$key) (already
-            // unserialized); add_post_meta re-serializes as needed.
+            // unserialized); add_post_meta re-serializes as needed but also
+            // unslashes, hence wp_slash().
             foreach ($values as $value) {
-                add_post_meta($snapshot->id, $key, $value);
+                add_post_meta($snapshot->id, $key, wp_slash($value));
             }
         }
 
@@ -199,7 +202,7 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', "Term {$snapshot->termId} no longer exists.");
         }
 
-        $result = wp_update_term($snapshot->termId, $snapshot->taxonomy, $snapshot->fields);
+        $result = wp_update_term($snapshot->termId, $snapshot->taxonomy, wp_slash($snapshot->fields));
         if (is_wp_error($result)) {
             return $result;
         }
@@ -209,7 +212,7 @@ final class RestoreSnapshot
         }
         foreach ($snapshot->meta as $key => $values) {
             foreach ($values as $value) {
-                add_term_meta($snapshot->termId, $key, maybe_unserialize($value));
+                add_term_meta($snapshot->termId, $key, wp_slash(maybe_unserialize($value)));
             }
         }
 
@@ -356,7 +359,7 @@ final class RestoreSnapshot
         }
         foreach ($meta as $key => $values) {
             foreach ((array) $values as $value) {
-                add_term_meta($termId, $key, maybe_unserialize($value));
+                add_term_meta($termId, $key, wp_slash(maybe_unserialize($value)));
             }
         }
     }

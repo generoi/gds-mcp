@@ -99,7 +99,8 @@ final class ManageRedirectsAbility
             return new WP_Error('no_redirect_plugin', 'No supported redirect plugin found.');
         }
 
-        if (! current_user_can('edit_others_posts')) {
+        // Redirects are site-wide routing, an admin setting in every provider.
+        if (! current_user_can('manage_options')) {
             return new WP_Error('forbidden', 'You do not have permission to manage redirects.', ['status' => 403]);
         }
 

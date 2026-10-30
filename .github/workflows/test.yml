@@ -44,8 +44,10 @@ jobs:
       - name: Install Composer dependencies
         run: composer install --no-interaction
 
-      # In CI, use a minimal .wp-env.override.json that only mounts our plugin.
-      # Free plugins are installed via WP-CLI after wp-env starts.
+      # In CI, use a minimal .wp-env.override.json that mounts our plugin and,
+      # ahead of it, the MCP adapter it declares in Requires Plugins (wp-env
+      # activates mounted plugins in order). Other free plugins are installed
+      # via WP-CLI after wp-env starts.
       # Commercial plugins (polylang-pro, gravityforms) are not available in CI;
       # their tests skip gracefully.
       - name: Configure wp-env for CI
@@ -54,15 +56,11 @@ jobs:
       - name: Start wp-env
         run: npx @wordpress/env start
 
-      # Install free plugins from wordpress.org + MCP adapter from GitHub releases.
+      # Install free plugins from wordpress.org.
       - name: Install integration plugins
         run: |
           npx @wordpress/env run tests-cli wp plugin install \
             polylang wordpress-seo safe-redirect-manager redirection stream advanced-custom-fields \
-            --activate
-          # MCP adapter (not on wordpress.org yet)
-          npx @wordpress/env run tests-cli wp plugin install \
-            https://github.com/WordPress/mcp-adapter/releases/download/v0.4.1/mcp-adapter.zip \
             --activate
 
       - name: Activate gds-mcp

@@ -11,11 +11,13 @@ final class TranslationAuditAbility
 {
     use PolylangAware;
 
+    private const PER_PAGE = 200;
+
     public static function register(): void
     {
         HelpAbility::registerAbility('gds/translations-audit', [
             'label' => 'Translation Audit',
-            'description' => 'Audit all content for missing translations. Reports which posts are untranslated, partially translated, or fully translated across all languages.',
+            'description' => 'Audit all content for missing translations. Reports which posts are untranslated, partially translated, or fully translated across all languages. Paged: summary counts cover the current page; use page/total_pages to walk the rest.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -33,12 +35,26 @@ final class TranslationAuditAbility
                         'description' => 'Post status to audit.',
                         'default' => 'publish',
                     ],
+                    'per_page' => [
+                        'type' => 'integer',
+                        'description' => 'Posts to audit per page (default 200, max 500).',
+                        'default' => self::PER_PAGE,
+                    ],
+                    'page' => [
+                        'type' => 'integer',
+                        'description' => 'Page number (1-based). See total_pages in the output.',
+                        'default' => 1,
+                    ],
                 ],
                 'additionalProperties' => false,
             ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
+                    'total' => ['type' => 'integer'],
+                    'page' => ['type' => 'integer'],
+                    'per_page' => ['type' => 'integer'],
+                    'total_pages' => ['type' => 'integer'],
                     'summary' => [
                         'type' => 'object',
                         'properties' => [
@@ -85,7 +101,7 @@ final class TranslationAuditAbility
                     ],
                 ],
             ],
-            'permission_callback' => '__return_true',
+            'permission_callback' => [self::class, 'permissionCheck'],
             'execute_callback' => [new self, 'execute'],
             'meta' => [
                 'annotations' => [
@@ -95,6 +111,17 @@ final class TranslationAuditAbility
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Published content is visible to any editor; other statuses (drafts,
+     * private, trash) may belong to other users.
+     */
+    public static function permissionCheck(mixed $input = []): bool
+    {
+        $status = ((array) ($input ?? []))['status'] ?? 'publish';
+
+        return current_user_can($status === 'publish' ? 'edit_posts' : 'edit_others_posts');
     }
 
     /**
@@ -111,6 +138,8 @@ final class TranslationAuditAbility
         $languageSlugs = array_column($languages, 'slug');
         $targetLanguage = $input['lang'] ?? null;
         $status = $input['status'] ?? 'publish';
+        $perPage = max(1, min(500, (int) ($input['per_page'] ?? self::PER_PAGE)));
+        $page = max(1, (int) ($input['page'] ?? 1));
 
         // Determine post types to audit.
         if (! empty($input['post_type'])) {
@@ -126,29 +155,36 @@ final class TranslationAuditAbility
         $untranslated = 0;
         $byType = [];
 
-        foreach ($postTypes as $postType) {
-            $query = new WP_Query([
-                'post_type' => $postType,
-                'post_status' => $status,
-                'posts_per_page' => 2000,
-                'fields' => 'ids',
-                'lang' => '', // Disable Polylang's automatic language filtering.
-            ]);
+        $query = new WP_Query([
+            'post_type' => $postTypes,
+            'post_status' => $status,
+            'posts_per_page' => $perPage,
+            'paged' => $page,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+            'fields' => 'ids',
+            'lang' => '', // Disable Polylang's automatic language filtering.
+        ]);
 
-            // Deduplicate: only process each translation group once.
-            $processedGroups = [];
+        $postsByType = [];
+        foreach ($query->posts as $postId) {
+            $postsByType[get_post_type($postId)][] = $postId;
+        }
+
+        foreach ($postsByType as $postType => $postIds) {
             $typeMissing = [];
             $typeTotal = 0;
 
-            foreach ($query->posts as $postId) {
+            foreach ($postIds as $postId) {
                 $translations = pll_get_post_translations($postId);
-                ksort($translations);
-                $groupKey = implode('-', $translations);
 
-                if (isset($processedGroups[$groupKey])) {
-                    continue;
+                // Report each translation group once, at its lowest-id member
+                // with the same status — stable across pages.
+                foreach ($translations as $siblingId) {
+                    if ($siblingId < $postId && get_post_status($siblingId) === get_post_status($postId)) {
+                        continue 2;
+                    }
                 }
-                $processedGroups[$groupKey] = true;
                 $typeTotal++;
 
                 // Find missing languages.
@@ -194,6 +230,10 @@ final class TranslationAuditAbility
         $untranslated = $totalPosts - $fullyTranslated - $partiallyTranslated;
 
         return [
+            'total' => (int) $query->found_posts,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => (int) $query->max_num_pages,
             'summary' => [
                 'total_posts' => $totalPosts,
                 'fully_translated' => $fullyTranslated,

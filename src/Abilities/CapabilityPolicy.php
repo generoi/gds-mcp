@@ -73,9 +73,8 @@ final class CapabilityPolicy
     }
 
     /**
-     * Capability overrides for abilities that have NO authorization of their
-     * own. Deliberately narrow: most write abilities already enforce caps
-     * internally (returning `forbidden`) or via their REST controller, and
+     * Capability overrides for gds/* abilities. REST-delegated CRUD is left to
+     * its REST controller (post types and taxonomies carry their own caps) and
      * reads are intentionally public. The Gravity Forms abilities are the
      * exception — they call GFAPI directly with `permission_callback =>
      * __return_true` and no internal check, so an editor could edit/delete
@@ -90,14 +89,35 @@ final class CapabilityPolicy
      * enforces — so gating the whole set here changes nothing for a caller who
      * is allowed, and stops one who is not before any write.
      *
+     * The rest carry the coarse capability their execute callback needs
+     * anyway, so a caller who can never succeed is refused at the permission
+     * check (and the MCP client sees the tool as unavailable) rather than
+     * partway through. Per-object checks (`edit_post` on the target, the post
+     * type's `publish_posts`, …) stay in the execute callbacks.
+     *
      * @return array<string, string>
      */
     private static function map(): array
     {
         $manage = 'manage_options';
         $theme = 'edit_theme_options';
+        $edit = 'edit_posts';
 
         return [
+            'gds/posts-duplicate' => $edit,
+            'gds/posts-bulk-update' => $edit,
+            'gds/blocks-patch' => $edit,
+            'gds/content-replace' => $edit,
+            'gds/revisions-restore' => $edit,
+            'gds/translations-create' => $edit,
+            'gds/translations-link' => $edit,
+            'gds/translations-machine' => $edit,
+            'gds/seo-update' => $edit,
+            'gds/media-upload' => 'upload_files',
+            'gds/cache-clear' => $manage,
+            'gds/strings-update' => $manage,
+            'gds/activity-query' => $manage,
+            'gds/redirects-manage' => $manage,
             'gds/nav-menu-items-create' => $theme,
             'gds/nav-menu-items-update' => $theme,
             'gds/nav-menu-items-delete' => $theme,
