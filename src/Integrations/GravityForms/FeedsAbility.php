@@ -300,11 +300,14 @@ final class FeedsAbility
             'feed_order' => (int) ($input['feed_order'] ?? 0),
         ], $input);
         // A failed write puts back what was already changed, so the feed is
-        // left as it was.
-        $failed = static function (WP_Error $error) use ($undo): WP_Error {
-            RestoreSnapshot::handle(null, ['kind' => 'restore-feed', 'data' => $undo]);
+        // left as it was, or the error says it may not be.
+        $failed = static function (WP_Error $error) use ($undo, $id): WP_Error {
+            $restored = RestoreSnapshot::handle(null, ['kind' => 'restore-feed', 'data' => $undo]);
+            $outcome = is_wp_error($restored)
+                ? sprintf('Putting feed %d back also failed, so it may be partly changed: %s', $id, $restored->get_error_message())
+                : 'Nothing was changed.';
 
-            return $error;
+            return new WP_Error($error->get_error_code(), $error->get_error_message().' '.$outcome, $error->get_error_data());
         };
 
         foreach ($properties as $property => $value) {
@@ -322,7 +325,7 @@ final class FeedsAbility
         // an unchanged value since, so check what was stored.
         foreach ($properties as $property => $value) {
             if ((int) $saved[$property] !== $value) {
-                return $failed(new WP_Error('update_failed', sprintf('Could not update %s of feed %d; nothing was changed.', $property, $id)));
+                return $failed(new WP_Error('update_failed', sprintf('Could not update %s of feed %d.', $property, $id)));
             }
         }
 

@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Tests\Integration\Plugins;
 
+use GeneroWP\MCP\Integrations\GravityForms\GravityFormsAbility;
 use GeneroWP\MCP\Tests\AbilityTestCase;
 
 /**
@@ -214,6 +215,8 @@ class GravityFormsAbilityTest extends AbilityTestCase
                 ['name' => 'Hidden', 'type' => 'redirect', 'url' => "\x01javascript:alert(1)"],
                 ['name' => 'Fine', 'type' => 'redirect', 'url' => 'https://example.com/thanks'],
                 ['name' => 'Tag', 'type' => 'redirect', 'url' => '{embed_url}?sent=1'],
+                // GF would redirect to http:///thanks.
+                ['name' => 'Path', 'type' => 'redirect', 'url' => '/thanks'],
             ],
         ]);
         $id = $this->trackForm((int) $created['id']);
@@ -226,6 +229,29 @@ class GravityFormsAbilityTest extends AbilityTestCase
         $this->assertSame('', $urls['Hidden']);
         $this->assertSame('https://example.com/thanks', $urls['Fine']);
         $this->assertSame('{embed_url}?sent=1', $urls['Tag']);
+        $this->assertSame('', $urls['Path']);
+    }
+
+    public function test_notification_fallback_sanitizes_conditional_logic_and_routing(): void
+    {
+        $method = new \ReflectionMethod(GravityFormsAbility::class, 'sanitizeNotification');
+        $rule = ['fieldId' => '1<b>x</b>', 'operator' => 'bogus', 'value' => 'a<script>alert(1)</script>'];
+
+        $clean = $method->invoke(null, [
+            'name' => 'Admin <b>x</b>',
+            'conditionalLogic' => ['actionType' => 'run', 'logicType' => 'some', 'rules' => [$rule]],
+            'routing' => [$rule + ['email' => 'a@example.com']],
+        ]);
+
+        $this->assertSame('Admin x', $clean['name']);
+        $this->assertSame('show', $clean['conditionalLogic']['actionType']);
+        $this->assertSame('all', $clean['conditionalLogic']['logicType']);
+        foreach ([$clean['conditionalLogic']['rules'][0], $clean['routing'][0]] as $cleanRule) {
+            $this->assertSame('1x', $cleanRule['fieldId']);
+            $this->assertSame('is', $cleanRule['operator']);
+            $this->assertStringNotContainsString('<script>', $cleanRule['value']);
+        }
+        $this->assertSame('a@example.com', $clean['routing'][0]['email']);
     }
 
     public function test_forms_update_confirmation_message(): void

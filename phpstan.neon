@@ -23,7 +23,7 @@ parameters:
         - '#GFCommon#'
         - '#GF_Fields#'
         - '#GFFormsModel#'
-        - '#GF_Abilities_Handler_[A-Za-z]+#'
+        - '#Gravity_Forms\\Gravity_Forms\\Abilities\\GF_Abilities_Handler_(Notifications|Confirmations)#'
         # Polylang Pro functions + classes
         - '#Function pll_[a-z_]+ not found\.#'
         - '#Polylang_Pro#'

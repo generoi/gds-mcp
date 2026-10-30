@@ -5,6 +5,8 @@ namespace GeneroWP\MCP\Integrations\GravityForms;
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\RestDelegation;
 use GeneroWP\MCP\Undo\Reversible;
+use Gravity_Forms\Gravity_Forms\Abilities\GF_Abilities_Handler_Confirmations;
+use Gravity_Forms\Gravity_Forms\Abilities\GF_Abilities_Handler_Notifications;
 use WP_Error;
 
 /**
@@ -364,17 +366,10 @@ final class GravityFormsAbility
             if (! is_array($notification)) {
                 continue;
             }
-            if (class_exists('GF_Abilities_Handler_Notifications')) {
-                $notification = \GF_Abilities_Handler_Notifications::sanitize($notification);
+            if (class_exists(GF_Abilities_Handler_Notifications::class)) {
+                $notification = GF_Abilities_Handler_Notifications::sanitize($notification);
             } else {
-                foreach (['name', 'subject', 'from', 'fromName', 'replyTo', 'to', 'bcc', 'cc'] as $field) {
-                    if (isset($notification[$field])) {
-                        $notification[$field] = $text($notification[$field]);
-                    }
-                }
-                if (isset($notification['message'])) {
-                    $notification['message'] = $html($notification['message']);
-                }
+                $notification = self::sanitizeNotification($notification);
             }
             $input['notifications'][$key] = $notification;
         }
@@ -383,8 +378,8 @@ final class GravityFormsAbility
             if (! is_array($confirmation)) {
                 continue;
             }
-            if (class_exists('GF_Abilities_Handler_Confirmations')) {
-                $confirmation = \GF_Abilities_Handler_Confirmations::sanitize($confirmation);
+            if (class_exists(GF_Abilities_Handler_Confirmations::class)) {
+                $confirmation = GF_Abilities_Handler_Confirmations::sanitize($confirmation);
             } else {
                 if (isset($confirmation['name'])) {
                     $confirmation['name'] = $text($confirmation['name']);
@@ -394,12 +389,14 @@ final class GravityFormsAbility
                 }
             }
             // GF's own check lets a javascript://… URL through, and its
-            // redirect confirmation runs it. Keep http(s), a path, or a
-            // merge tag; browsers skip leading control characters too.
+            // redirect confirmation runs it. Keep http(s) or a merge tag: GF
+            // rebuilds the URL as scheme://host/path, so a bare path would
+            // redirect to http:///path. Browsers skip leading control
+            // characters too.
             if (isset($confirmation['url']) && is_string($confirmation['url'])) {
                 $url = ltrim($confirmation['url'], "\x00..\x20");
                 $scheme = strtolower((string) wp_parse_url($url, PHP_URL_SCHEME));
-                if ($url !== '' && ! in_array($scheme, ['http', 'https'], true) && ! in_array($url[0], ['/', '{', '?', '#'], true)) {
+                if ($url !== '' && ! in_array($scheme, ['http', 'https'], true) && $url[0] !== '{') {
                     $confirmation['url'] = '';
                 }
             }
@@ -407,6 +404,33 @@ final class GravityFormsAbility
         }
 
         return $input;
+    }
+
+    /**
+     * The rules of GF 3.1's notification sanitizer, for GF versions without it.
+     *
+     * @param  array<string, mixed>  $notification
+     * @return array<string, mixed>
+     */
+    private static function sanitizeNotification(array $notification): array
+    {
+        foreach (['name', 'subject', 'from', 'fromName', 'replyTo', 'to', 'bcc', 'cc'] as $field) {
+            if (isset($notification[$field]) && is_string($notification[$field])) {
+                $notification[$field] = sanitize_text_field($notification[$field]);
+            }
+        }
+        if (isset($notification['message']) && is_string($notification['message'])) {
+            $notification['message'] = \GFCommon::maybe_wp_kses($notification['message']);
+        }
+        if (isset($notification['conditionalLogic']) && is_array($notification['conditionalLogic'])) {
+            $notification['conditionalLogic'] = \GFFormsModel::sanitize_conditional_logic($notification['conditionalLogic']);
+        }
+        if (isset($notification['routing']) && is_array($notification['routing'])) {
+            $routing = \GFFormsModel::sanitize_conditional_logic(['rules' => $notification['routing']]);
+            $notification['routing'] = $routing['rules'] ?? [];
+        }
+
+        return $notification;
     }
 
     /**
