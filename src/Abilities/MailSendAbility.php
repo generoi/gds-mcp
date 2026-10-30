@@ -18,8 +18,14 @@ use WP_Error;
  */
 final class MailSendAbility
 {
-    /** Hard per-user/day cap to contain spam damage from a rogue chat. */
+    /**
+     * Hard per-user/day cap on recipients (to, cc and bcc) to contain spam
+     * damage from a rogue chat.
+     */
     private const DAILY_SEND_LIMIT = 20;
+
+    /** Recipients one email may have. */
+    private const MAX_RECIPIENTS = 10;
 
     private const DAILY_COUNTER_META = '_gds_mcp_mail_sent_today';
 
@@ -141,14 +147,22 @@ final class MailSendAbility
             return new WP_Error('invalid_reply_to', 'reply_to must be a valid email address.');
         }
 
+        $recipients = count($to) + count($cc) + count($bcc);
+        if ($recipients > self::MAX_RECIPIENTS) {
+            return new WP_Error(
+                'too_many_recipients',
+                sprintf('An email may have at most %d recipients (to, cc and bcc together); this one has %d.', self::MAX_RECIPIENTS, $recipients)
+            );
+        }
+
         // Per-user per-day cap — contains damage from a rogue chat that
         // somehow gets approval-bombed. Bypassable by admins who reset the
         // counter; intended as a speed-bump, not a hard security gate.
-        $remaining = self::decrementDailyCounter();
+        $remaining = self::decrementDailyCounter($recipients);
         if ($remaining < 0) {
             return new WP_Error(
                 'daily_limit_reached',
-                sprintf('Daily email limit of %d reached for this user. Try again tomorrow.', self::DAILY_SEND_LIMIT)
+                sprintf('Daily limit of %d email recipients would be exceeded for this user. Try again tomorrow.', self::DAILY_SEND_LIMIT)
             );
         }
 
@@ -171,7 +185,7 @@ final class MailSendAbility
 
         if (! $sent) {
             // wp_mail returns false on failure — roll back the counter.
-            self::incrementDailyCounter();
+            self::incrementDailyCounter($recipients);
 
             return new WP_Error(
                 'send_failed',
@@ -220,11 +234,11 @@ final class MailSendAbility
     }
 
     /**
-     * Decrement today's remaining-send counter and return the new value.
-     * Uses user meta keyed by date so the count resets at midnight.
-     * Returns -1 when the limit is already exhausted.
+     * Take $recipients off today's remaining-recipient count and return what
+     * is left. Uses user meta keyed by date so the count resets at midnight.
+     * Returns -1, taking nothing, when they would exceed the limit.
      */
-    private static function decrementDailyCounter(): int
+    private static function decrementDailyCounter(int $recipients): int
     {
         $userId = get_current_user_id();
         $today = wp_date('Y-m-d');
@@ -234,23 +248,21 @@ final class MailSendAbility
         self::cleanupStaleCounters($userId, $today);
 
         $sent = (int) get_user_meta($userId, $key, true);
-        if ($sent >= self::DAILY_SEND_LIMIT) {
+        if ($sent + $recipients > self::DAILY_SEND_LIMIT) {
             return -1;
         }
-        update_user_meta($userId, $key, $sent + 1);
+        update_user_meta($userId, $key, $sent + $recipients);
 
-        return self::DAILY_SEND_LIMIT - ($sent + 1);
+        return self::DAILY_SEND_LIMIT - ($sent + $recipients);
     }
 
-    private static function incrementDailyCounter(): void
+    private static function incrementDailyCounter(int $recipients): void
     {
         $userId = get_current_user_id();
         $today = wp_date('Y-m-d');
         $key = self::DAILY_COUNTER_META.'_'.$today;
         $sent = (int) get_user_meta($userId, $key, true);
-        if ($sent > 0) {
-            update_user_meta($userId, $key, $sent - 1);
-        }
+        update_user_meta($userId, $key, max(0, $sent - $recipients));
     }
 
     private static function cleanupStaleCounters(int $userId, string $today): void
