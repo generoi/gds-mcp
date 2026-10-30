@@ -123,7 +123,8 @@ final class BulkUpdatePostsAbility
         $setMeta = $input['set_meta'] ?? [];
         $deleteMeta = $input['delete_meta'] ?? [];
         $dryRun = $input['dry_run'] ?? false;
-        $limit = min((int) ($input['limit'] ?? 50), 500);
+        // WP_Query reads -1 as no limit.
+        $limit = max(1, min((int) ($input['limit'] ?? 50), 500));
 
         // Must have at least one update action.
         if (! $setStatus && ! $setMeta && ! $deleteMeta) {

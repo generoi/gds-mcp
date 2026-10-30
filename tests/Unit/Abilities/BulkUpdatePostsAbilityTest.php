@@ -246,4 +246,17 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         $this->assertSame(2, $result['matched']);
         $this->assertSame(2, $result['updated']);
     }
+
+    public function test_a_negative_or_zero_limit_does_not_lift_the_cap(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            self::factory()->post->create(['post_status' => 'publish', 'post_type' => 'post']);
+        }
+
+        foreach ([-1, 0] as $limit) {
+            $result = (new BulkUpdatePostsAbility)->execute(['post_type' => 'post', 'set_meta' => ['flag' => (string) $limit], 'limit' => $limit, 'dry_run' => true]);
+
+            $this->assertSame(1, $result['matched'], "limit {$limit}");
+        }
+    }
 }

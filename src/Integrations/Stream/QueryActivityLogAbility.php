@@ -112,7 +112,8 @@ final class QueryActivityLogAbility
         }
 
         $args = [
-            'records_per_page' => min($input['per_page'] ?? 20, 100),
+            // Stream absint()s it, so a large negative would lift the cap.
+            'records_per_page' => max(1, min((int) ($input['per_page'] ?? 20), 100)),
             'paged' => $input['paged'] ?? 1,
         ];
 
