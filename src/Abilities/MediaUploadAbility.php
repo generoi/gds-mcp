@@ -82,10 +82,6 @@ final class MediaUploadAbility
     {
         $input = (array) ($input ?? []);
 
-        if (! current_user_can('upload_files')) {
-            return new WP_Error('forbidden', 'You do not have permission to upload files.', ['status' => 403]);
-        }
-
         // Require admin functions for media_handle_sideload.
         if (! function_exists('media_handle_sideload')) {
             require_once ABSPATH.'wp-admin/includes/image.php';

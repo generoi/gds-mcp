@@ -35,16 +35,28 @@ class CapabilityPolicyTest extends WP_UnitTestCase
         }
     }
 
+    public function test_coarse_capabilities_are_checked_before_execute(): void
+    {
+        $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/posts-duplicate'));
+        $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/blocks-patch'));
+        $this->assertSame('upload_files', CapabilityPolicy::capabilityFor('gds/media-upload'));
+        $this->assertSame('manage_options', CapabilityPolicy::capabilityFor('gds/cache-clear'));
+        $this->assertSame('manage_options', CapabilityPolicy::capabilityFor('gds/redirects-manage'));
+
+        // Registered abilities carry it as their permission_callback.
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
+        $this->assertTrue(wp_get_ability('gds/posts-duplicate')->check_permissions(['id' => 1]));
+        $this->assertFalse(wp_get_ability('gds/media-upload')->check_permissions(['filename' => 'a.png']), 'Contributors cannot upload files.');
+    }
+
     public function test_other_abilities_are_left_untouched(): void
     {
-        // These enforce caps internally or via their REST controller, or are
-        // intentionally public reads — the policy must not override them.
+        // These enforce caps via their REST controller, or are intentionally
+        // public reads — the policy must not override them.
         $this->assertNull(CapabilityPolicy::capabilityFor('gds/content-update'));
         $this->assertNull(CapabilityPolicy::capabilityFor('gds/content-list'));
         $this->assertNull(CapabilityPolicy::capabilityFor('gds/terms-delete'));
-        $this->assertNull(CapabilityPolicy::capabilityFor('gds/redirects-manage'));
         $this->assertNull(CapabilityPolicy::capabilityFor('gds/help'));
-        $this->assertNull(CapabilityPolicy::capabilityFor('gds/translations-link'));
     }
 
     public function test_apply_capability_replaces_default_callback_for_forms(): void

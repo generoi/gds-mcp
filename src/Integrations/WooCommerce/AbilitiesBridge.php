@@ -45,6 +45,8 @@ final class AbilitiesBridge
             return;
         }
 
+        // WC (checked up to 11.2) has no public accessor for these: its own
+        // register_abilities() bails unless the URL is /woocommerce/mcp.
         try {
             $reflection = new ReflectionMethod(
                 '\\Automattic\\WooCommerce\\Internal\\Abilities\\AbilitiesRestBridge',
@@ -82,6 +84,14 @@ final class AbilitiesBridge
     {
         if ($allowed) {
             return true;
+        }
+        // An API-key request on /woocommerce/mcp is scoped by the key's
+        // read/write permission; never widen that. Both callbacks sit at
+        // priority 10, so which runs last depends on load order — don't rely
+        // on WC's running after this one.
+        $transport = '\\Automattic\\WooCommerce\\Internal\\MCP\\Transport\\WooCommerceRestTransport';
+        if (class_exists($transport) && $transport::get_current_user_permissions() !== null) {
+            return $allowed;
         }
         $isRead = in_array(strtoupper($method), ['GET', 'HEAD', 'OPTIONS'], true);
 

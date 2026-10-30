@@ -75,7 +75,7 @@ tests_add_filter('muplugins_loaded', function () {
         dirname(__DIR__, 5).'/vendor/wordpress/mcp-adapter/mcp-adapter.php',
         $pluginsDir.'/trunk/mcp-adapter.php',                  // wp-env GitHub trunk zip
         $pluginsDir.'/mcp-adapter-trunk/mcp-adapter.php',   // wp-env GitHub zip (alt)
-        $pluginsDir.'/mcp-adapter/mcp-adapter.php',         // wp-env regular plugin
+        gds_mcp_plugin_file('mcp-adapter/mcp-adapter.php') ?? '', // CI by slug, wp-env by wp.org zip
     ];
     foreach ($mcpAdapterPaths as $path) {
         if (file_exists($path)) {

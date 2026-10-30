@@ -48,8 +48,13 @@ final class Token
         }
 
         // The code is bound to the client and callback it was issued for, and
-        // to the PKCE challenge only the original requester can answer.
+        // to the PKCE challenge only the original requester can answer. A
+        // redirect_uri sent at authorization is required here (RFC 6749
+        // §4.1.3); codes issued before this flag existed are treated as if it
+        // was sent.
+        $redirectRequired = (bool) ($payload['redirect_uri_sent'] ?? true);
         if (! hash_equals($payload['client_id'], $clientId)
+            || ($redirectRequired && $redirectUri === '')
             || ($redirectUri !== '' && ! hash_equals($payload['redirect_uri'], $redirectUri))
             || ! self::verifyPkce($verifier, $payload['code_challenge'])) {
             throw Server::error('invalid_grant', 'The authorization code does not match this request.');

@@ -54,15 +54,11 @@ jobs:
       - name: Start wp-env
         run: npx @wordpress/env start
 
-      # Install free plugins from wordpress.org + MCP adapter from GitHub releases.
+      # Install free plugins from wordpress.org, including the MCP adapter.
       - name: Install integration plugins
         run: |
           npx @wordpress/env run tests-cli wp plugin install \
-            polylang wordpress-seo safe-redirect-manager redirection stream advanced-custom-fields \
-            --activate
-          # MCP adapter (not on wordpress.org yet)
-          npx @wordpress/env run tests-cli wp plugin install \
-            https://github.com/WordPress/mcp-adapter/releases/download/v0.4.1/mcp-adapter.zip \
+            polylang wordpress-seo safe-redirect-manager redirection stream advanced-custom-fields mcp-adapter \
             --activate
 
       - name: Activate gds-mcp

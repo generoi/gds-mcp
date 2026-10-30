@@ -8,7 +8,7 @@ Built on the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) a
 
 - PHP >= 8.0
 - WordPress >= 7.0
-- [wordpress/mcp-adapter](https://github.com/WordPress/mcp-adapter) (required for MCP HTTP/STDIO transport)
+- [MCP Adapter](https://wordpress.org/plugins/mcp-adapter/) plugin, active (required for MCP HTTP/STDIO transport; declared with `Requires Plugins: mcp-adapter`)
 
 ## Installation
 
@@ -17,7 +17,7 @@ composer require generoi/gds-mcp
 wp plugin activate gds-mcp
 ```
 
-Install and activate the MCP adapter as a normal WordPress plugin or Composer-managed dependency. `gds-mcp` bootstraps the adapter when the adapter class is present, so host projects do not need a separate adapter MU-plugin.
+Install and activate the MCP adapter as a WordPress plugin (`wp plugin install mcp-adapter --activate`, or `wordpress/mcp-adapter` through Composer, then activate it). WordPress refuses to activate `gds-mcp` until the adapter is active. If the adapter's classes are present but it is not booted, `gds-mcp` boots it through `WP\MCP\Plugin`, so host projects do not need a separate adapter MU-plugin. If the adapter is missing, an admin notice says so.
 
 ## Architecture
 
