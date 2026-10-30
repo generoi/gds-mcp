@@ -619,13 +619,15 @@ final class PatchBlockAbility
             $pos = count($content);
         } else {
             $markup = implode('', array_filter($content, 'is_string'));
+            // Leaves can be empty wrappers too (<p></p>, a spacer's <div>).
+            $leaf = $name === 'core/spacer' || preg_match('#^\s*<(p|h[1-6]|hr)\b#i', $markup);
             if (trim($markup) === '') {
                 $pos = count($content);
+            } elseif ($leaf) {
+                return new WP_Error('not_a_container', "{$name} holds no inner blocks. Insert before or after it instead.");
             } elseif (preg_match('#^(\s*<([a-z][a-z0-9-]*)\b[^>]*>)(\s*</\2>\s*)$#i', $markup, $m)) {
                 $content = [$m[1], $m[3]];
                 $pos = 1;
-            } elseif (trim(wp_strip_all_tags($markup)) !== '') {
-                return new WP_Error('not_a_container', "{$name} holds no inner blocks. Insert before or after it instead.");
             } else {
                 return new WP_Error(
                     'unknown_inner_position',
