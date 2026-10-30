@@ -162,6 +162,47 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
         $this->assertSame('pending', get_post_status($result['id']));
     }
 
+    public function test_language_is_set_before_terms_are_copied(): void
+    {
+        if (! function_exists('pll_set_post_language')) {
+            $this->markTestSkipped('Polylang is not active.');
+        }
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1]);
+            $model->clean_languages_cache();
+        }
+        $sourceId = self::factory()->post->create();
+        wp_set_object_terms($sourceId, ['news'], 'post_tag');
+        // Polylang picks terms in the language the post has at that moment.
+        $languageWhenTagged = null;
+        add_action('set_object_terms', function ($objectId, $terms, $ttIds, $taxonomy) use ($sourceId, &$languageWhenTagged) {
+            if ($taxonomy === 'post_tag' && $objectId !== $sourceId) {
+                $languageWhenTagged = pll_get_post_language($objectId);
+            }
+        }, 10, 4);
+
+        (new DuplicatePostAbility)->execute(['id' => $sourceId, 'lang' => 'fi']);
+
+        $this->assertSame('fi', $languageWhenTagged);
+    }
+
+    public function test_refuses_variable_products(): void
+    {
+        register_post_type('product');
+        register_taxonomy('product_type', 'product');
+        $sourceId = self::factory()->post->create(['post_type' => 'product']);
+        wp_set_object_terms($sourceId, 'variable', 'product_type');
+
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
+
+        $this->assertWPError($result);
+        $this->assertSame('variable_product', $result->get_error_code());
+        unregister_taxonomy('product_type');
+        unregister_post_type('product');
+    }
+
     public function test_error_for_nonexistent_post(): void
     {
         $result = (new DuplicatePostAbility)->execute(['id' => 999999]);
