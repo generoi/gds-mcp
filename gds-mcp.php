@@ -45,7 +45,8 @@ register_deactivation_hook(__FILE__, static function (bool $networkWide = false)
         return;
     }
 
-    foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $siteId) {
+    // The network it was deactivated on; others may still run the plugin.
+    foreach (get_sites(['fields' => 'ids', 'number' => 0, 'network_id' => get_current_network_id()]) as $siteId) {
         switch_to_blog((int) $siteId);
         $revoke();
         restore_current_blog();

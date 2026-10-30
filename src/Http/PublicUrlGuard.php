@@ -35,7 +35,22 @@ final class PublicUrlGuard
      * The message every refused URL gets: which internal address a host
      * resolves to is nothing a caller should learn from it.
      */
-    private const REFUSED = 'This URL cannot be fetched: only public https addresses are allowed.';
+    public const REFUSED = 'This URL cannot be fetched: only public https addresses are allowed.';
+
+    /**
+     * One error for every refusal, whoever refused: this guard, or core's
+     * own URL check ("A valid URL was not provided."), so a caller cannot
+     * tell which check an address failed. Other errors pass through.
+     */
+    public static function refusal(\WP_Error $error): \WP_Error
+    {
+        $message = $error->get_error_message();
+        if ($message === self::REFUSED || $message === __('A valid URL was not provided.')) {
+            return new \WP_Error('ssrf_blocked', self::REFUSED);
+        }
+
+        return $error;
+    }
 
     /**
      * Test seam: resolves a host to ['v4' => [...], 'v6' => [...], 'v6_failed' => bool].
@@ -85,11 +100,7 @@ final class PublicUrlGuard
             if (! is_array($pin)) {
                 return;
             }
-            $ip = str_contains($pin['ip'], ':') ? "[{$pin['ip']}]" : $pin['ip'];
-            // An empty host and port match whatever cURL parsed from the URL.
-            $pinned = curl_setopt($handle, CURLOPT_CONNECT_TO, ["::{$ip}:{$pin['port']}"])
-                && (! $pin['v4_only'] || curl_setopt($handle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4));
-            if (! $pinned) {
+            if (! curl_setopt_array($handle, self::curlPin($pin['ip'], $pin['port'], $pin['v4_only']))) {
                 throw new RequestsException(self::REFUSED, 'gds_mcp_url_not_public');
             }
         };
@@ -102,6 +113,24 @@ final class PublicUrlGuard
             remove_action('requests-requests.before_request', $check);
             remove_action('requests-curl.before_send', $connectToChecked);
         }
+    }
+
+    /**
+     * cURL options that make a request connect to $ip, whatever host cURL
+     * parses from the URL: an empty host and port in CURLOPT_CONNECT_TO match
+     * any.
+     *
+     * @return array<int, mixed>
+     */
+    public static function curlPin(string $ip, int $port, bool $v4Only): array
+    {
+        $host = str_contains($ip, ':') ? "[{$ip}]" : $ip;
+        $options = [CURLOPT_CONNECT_TO => ["::{$host}:{$port}"]];
+        if ($v4Only) {
+            $options[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
+        }
+
+        return $options;
     }
 
     /**

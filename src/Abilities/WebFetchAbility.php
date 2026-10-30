@@ -260,7 +260,7 @@ final class WebFetchAbility
         // resolved and checked, on every redirect too, by PublicUrlGuard.
         $literalIp = trim($host, '[]');
         if (filter_var($literalIp, FILTER_VALIDATE_IP) && ! PublicUrlGuard::isPublicIp($literalIp)) {
-            return new WP_Error('ssrf_blocked', 'Private or reserved IP addresses are not allowed.');
+            return new WP_Error('ssrf_blocked', PublicUrlGuard::REFUSED);
         }
 
         // Optional allowlist. Sites that want to restrict which external
@@ -289,7 +289,7 @@ final class WebFetchAbility
         ]));
 
         if (is_wp_error($response)) {
-            return $response;
+            return PublicUrlGuard::refusal($response);
         }
 
         $status = wp_remote_retrieve_response_code($response);

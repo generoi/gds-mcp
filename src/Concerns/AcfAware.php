@@ -39,13 +39,20 @@ trait AcfAware
 
                 continue;
             }
+            $comparable = in_array($fieldObj['type'] ?? '', self::$comparableAcfTypes, true);
+            $stored = $comparable ? acf_get_value($postId, $fieldObj) : null;
             // update_field() ends in update_metadata(), which unslashes.
             $saved = update_field($fieldObj['key'], wp_slash($value), $postId);
-            // It is also false when the value was already stored, and for a
-            // group, repeater or date the stored value is in another shape
-            // than the one sent; only plain fields can be compared.
-            if (! $saved && in_array($fieldObj['type'] ?? '', self::$comparableAcfTypes, true) && acf_get_value($postId, $fieldObj) != $value) {
-                $errors[(string) $key] = 'ACF did not save the value.';
+            // It is also false when the value was already stored. A refusal
+            // leaves the stored value as it was and unlike the one sent; one
+            // that ACF reshaped or sanitized on the way in is not a refusal.
+            // Groups, repeaters, dates are stored in another shape than sent,
+            // so only plain fields are judged.
+            if (! $saved && $comparable) {
+                $after = acf_get_value($postId, $fieldObj);
+                if ($after === $stored && $after != $value) {
+                    $errors[(string) $key] = 'ACF did not save the value.';
+                }
             }
         }
 

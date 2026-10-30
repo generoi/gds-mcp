@@ -154,11 +154,21 @@ final class CreateTermTranslationAbility
         pll_save_term_translations($translations);
 
         // Term meta follows the way Polylang copies it when a term is
-        // translated in wp-admin: its pll_copy_term_metas filter decides which
-        // keys (ACF's translate/copy settings, Polylang for WooCommerce's
-        // product counts), and ids in values map to the target language.
-        if (isset(\PLL()->sync->term_metas)) {
-            \PLL()->sync->term_metas->copy($sourceTermId, $newTermId, $language);
+        // translated in wp-admin: pll_duplicate_term runs its meta sync (keys
+        // from pll_copy_term_metas) and Polylang Pro's ACF integration, which
+        // copies ACF fields itself by their translate/copy settings. Without
+        // either listening, copy the meta here.
+        if (has_action('pll_duplicate_term')) {
+            do_action('pll_duplicate_term', $sourceTermId, $newTermId, $language);
+        } else {
+            foreach (get_term_meta($sourceTermId) as $key => $values) {
+                if (str_starts_with((string) $key, '_pll_') || str_starts_with((string) $key, 'product_count_')) {
+                    continue;
+                }
+                foreach ($values as $value) {
+                    add_term_meta($newTermId, (string) $key, wp_slash(maybe_unserialize($value)));
+                }
+            }
         }
 
         $newTerm = get_term($newTermId, $taxonomy);

@@ -72,29 +72,18 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
         add_term_meta($term['term_id'], 'hero_image', '42');
         add_term_meta($term['term_id'], 'json_field', wp_slash('{"a":"\"q\""}'));
         add_term_meta($term['term_id'], 'product_count_product_cat', '7');
-        // Which keys follow is Polylang's call, as when translating in
-        // wp-admin; ACF and Polylang for WooCommerce add theirs here.
-        add_filter('pll_copy_term_metas', fn (array $keys) => [...$keys, 'hero_image', 'json_field']);
         // Polylang loads its sync module only when languages exist at boot,
-        // which in the test database they don't; on a site they do.
-        $loadedSync = ! isset(PLL()->sync);
-        if ($loadedSync) {
-            PLL()->sync = PLL() instanceof \PLL_Admin_Base ? new \PLL_Admin_Sync(PLL()) : new \PLL_Sync(PLL());
-        }
+        // which in the test database they don't: nothing listens on
+        // pll_duplicate_term, so the meta is copied directly.
+        remove_all_actions('pll_duplicate_term');
 
-        try {
-            $result = (new CreateTermTranslationAbility)->execute([
-                'source_id' => $term['term_id'],
-                'taxonomy' => 'category',
-                'lang' => 'fi',
-                'name' => 'C:\Temp',
-                'description' => 'Path C:\Users',
-            ]);
-        } finally {
-            if ($loadedSync) {
-                unset(PLL()->sync);
-            }
-        }
+        $result = (new CreateTermTranslationAbility)->execute([
+            'source_id' => $term['term_id'],
+            'taxonomy' => 'category',
+            'lang' => 'fi',
+            'name' => 'C:\Temp',
+            'description' => 'Path C:\Users',
+        ]);
 
         $this->assertIsArray($result);
         $this->assertSame('C:\Temp', get_term($result['id'])->name);
@@ -102,6 +91,25 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
         $this->assertSame('42', get_term_meta($result['id'], 'hero_image', true));
         $this->assertSame('{"a":"\"q\""}', get_term_meta($result['id'], 'json_field', true));
         $this->assertSame('', get_term_meta($result['id'], 'product_count_product_cat', true));
+    }
+
+    public function test_lets_polylang_copy_the_meta_when_it_listens(): void
+    {
+        $term = wp_insert_term('Source with ACF', 'category');
+        pll_set_term_language($term['term_id'], 'en');
+        add_term_meta($term['term_id'], 'field_set_by_acf', 'x');
+        // What Polylang's meta sync and Polylang Pro's ACF integration hook.
+        $calls = [];
+        add_action('pll_duplicate_term', function ($from, $to, $lang) use (&$calls) {
+            $calls[] = [$from, $to, $lang];
+            update_term_meta($to, 'field_set_by_acf', 'copied by the integration');
+        }, 10, 3);
+
+        $result = (new CreateTermTranslationAbility)->execute(['source_id' => $term['term_id'], 'taxonomy' => 'category', 'lang' => 'fi', 'name' => 'Lähde ACF']);
+
+        $this->assertIsArray($result, is_wp_error($result) ? $result->get_error_message() : '');
+        $this->assertSame([[$term['term_id'], $result['id'], 'fi']], $calls);
+        $this->assertSame(['copied by the integration'], get_term_meta($result['id'], 'field_set_by_acf'), 'Not copied a second time.');
     }
 
     public function test_rejects_invalid_language(): void

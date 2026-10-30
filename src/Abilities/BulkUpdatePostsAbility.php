@@ -199,11 +199,12 @@ final class BulkUpdatePostsAbility
 
                         continue;
                     }
+                    $stored = get_post_meta($post->ID, $key, true);
                     if (update_post_meta($post->ID, $key, wp_slash($value)) !== false) {
                         $written = true;
-                    } elseif (get_post_meta($post->ID, $key, true) != $value) {
-                        // False also when the value was already that, which
-                        // writes nothing and is no error.
+                    } elseif (get_post_meta($post->ID, $key, true) == $stored && $stored != sanitize_meta($key, $value, 'post', $post->post_type)) {
+                        // False also when the value was already that (after the
+                        // key's sanitizer), which writes nothing and is no error.
                         $errors[] = ['id' => $post->ID, 'error' => sprintf('Could not save the meta key "%s".', $key)];
                     }
                 }

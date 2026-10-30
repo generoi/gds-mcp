@@ -568,9 +568,10 @@ class NavMenuItemsAbilityTest extends TestCase
 
         $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
 
-        // B goes back into its old slot, between A and C; the move and the
-        // new item are kept.
+        // B goes back between A and C, its neighbours, not at its old order
+        // (2, which is now A's); the move and the new item are kept.
         $this->assertSame(['D', 'A', 'B', 'C', 'E'], $this->orderedTitles());
+        $this->assertSame(range(1, 5), array_values(array_map(fn ($id) => (int) get_post($id)->menu_order, array_map([$this, 'itemIdByTitle'], ['D', 'A', 'B', 'C', 'E']))));
         $this->assertNotNull(get_post($c));
     }
 
@@ -761,11 +762,17 @@ class NavMenuItemsAbilityTest extends TestCase
 
     private function insertItem(string $title, array $overrides = []): int
     {
+        // Orders 1..n, as wp-admin saves a menu. Left at 0,
+        // wp_update_nav_menu_item() numbers the first item 0 and the next
+        // from the renumbered positions, leaving a gap.
+        $position = count(wp_get_nav_menu_items($this->menuId, ['post_status' => 'any']) ?: []) + 1;
+
         return wp_update_nav_menu_item($this->menuId, 0, array_merge([
             'menu-item-title' => $title,
             'menu-item-type' => 'custom',
             'menu-item-url' => 'https://example.com/'.sanitize_title($title),
             'menu-item-status' => 'publish',
+            'menu-item-position' => $position,
         ], $overrides));
     }
 

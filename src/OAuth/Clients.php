@@ -43,6 +43,12 @@ final class Clients
     private const THROTTLE_PREFIX = 'gds_mcp_oauth_reg_';
 
     /**
+     * How long a new registration is safe from eviction: long enough for
+     * someone to get through the consent screen.
+     */
+    private const FRESH_FOR = 15 * MINUTE_IN_SECONDS;
+
+    /**
      * @param  string|null  $rawBody  Registration body; read from the request when omitted.
      */
     public static function handleRegistration(?string $rawBody = null): void
@@ -223,12 +229,13 @@ final class Clients
 
         // Only if age alone has not kept the store in check. A client somebody
         // is connected through is never evicted: it could not re-authorize.
-        // Nor is the one just registered, which is about to be used. When
-        // every other client is live the store goes over the cap rather than
-        // break a connection.
+        // Nor is one registered in the last few minutes, which may be partway
+        // through consent. When nothing else is left the store goes over the
+        // cap rather than break a connection.
         if (count($index) - count($stale) > self::MAX_CLIENTS) {
             $live = self::clientsWithLiveGrants();
-            $candidates = array_diff_key($index, $live, array_flip($stale), [$client['client_id'] => true]);
+            $recent = array_filter($index, static fn ($used): bool => $used >= time() - self::FRESH_FOR);
+            $candidates = array_diff_key($index, $live, array_flip($stale), $recent);
             asort($candidates);
             $overflow = array_slice(array_keys($candidates), 0, max(0, count($index) - count($stale) - self::MAX_CLIENTS));
             $stale = array_merge($stale, $overflow);
@@ -243,16 +250,21 @@ final class Clients
     }
 
     /**
-     * The network an address throttles as: itself for IPv4, its /64 for IPv6,
-     * where one host commonly holds the whole /64.
+     * The network an address throttles as: itself for IPv4 (an IPv4-mapped
+     * IPv6 address counts as its IPv4 address), its /56 for IPv6, the size
+     * commonly handed to a single customer.
      */
     private static function network(string $address): string
     {
         $packed = @inet_pton($address);
+        if ($packed === false || strlen($packed) !== 16) {
+            return $address;
+        }
+        if (str_starts_with($packed, str_repeat("\0", 10)."\xff\xff")) {
+            return (string) inet_ntop(substr($packed, 12));
+        }
 
-        return $packed !== false && strlen($packed) === 16
-            ? (string) inet_ntop(substr($packed, 0, 8).str_repeat("\0", 8)).'/64'
-            : $address;
+        return (string) inet_ntop(substr($packed, 0, 7).str_repeat("\0", 9)).'/56';
     }
 
     /**

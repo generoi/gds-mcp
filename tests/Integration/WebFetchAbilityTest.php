@@ -36,6 +36,15 @@ HTML;
     protected function tearDown(): void
     {
         remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        if (is_resource($this->listener)) {
+            proc_terminate($this->listener);
+            proc_close($this->listener);
+        }
+        if ($this->listenerDir !== '') {
+            @unlink($this->listenerDir.'/router.php');
+            @unlink($this->listenerDir.'/hit');
+            @rmdir($this->listenerDir);
+        }
         parent::tearDown();
     }
 
@@ -169,22 +178,70 @@ HTML;
         $this->assertNull($withA, 'With an A record the fetch goes on, over IPv4 only.');
     }
 
-    public function test_curl_is_pinned_to_the_checked_address(): void
-    {
-        if (! function_exists('curl_init')) {
-            $this->markTestSkipped('cURL is not available.');
-        }
-        self::setResolver(static fn (string $host): array => ['v4' => ['93.184.216.34'], 'v6' => ['2606:2800:220:1::1'], 'v6_failed' => false]);
+    /** @var resource|null */
+    private $listener = null;
 
-        // The hooks Requests fires for one hop; a pin cURL rejects throws.
-        PublicUrlGuard::guard(static function (): void {
-            do_action('requests-requests.before_request', 'https://pinned.example.com/');
-            $handle = curl_init();
+    private string $listenerDir = '';
+
+    /**
+     * A plain-HTTP server on 127.0.0.1 that records whether it was reached.
+     */
+    private function startListener(): int
+    {
+        if (! function_exists('curl_init') || ! function_exists('proc_open')) {
+            $this->markTestSkipped('Needs cURL and proc_open.');
+        }
+        $this->listenerDir = sys_get_temp_dir().'/gds-mcp-listener-'.uniqid();
+        mkdir($this->listenerDir);
+        file_put_contents($this->listenerDir.'/router.php', '<?php touch(__DIR__."/hit"); echo "listener";');
+        $port = random_int(20000, 40000);
+        $this->listener = proc_open([PHP_BINARY, '-S', "127.0.0.1:{$port}", $this->listenerDir.'/router.php'], [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']], $pipes);
+
+        for ($i = 0; $i < 50; $i++) {
+            $socket = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.1);
+            if ($socket) {
+                fclose($socket);
+
+                return $port;
+            }
+            usleep(100000);
+        }
+        $this->markTestSkipped('The local listener did not start.');
+    }
+
+    public function test_the_curl_pin_connects_to_the_given_address(): void
+    {
+        $port = $this->startListener();
+
+        // A host that resolves nowhere: only the pin can get cURL anywhere.
+        $handle = curl_init("http://pin-target.invalid:{$port}/");
+        curl_setopt_array($handle, PublicUrlGuard::curlPin('127.0.0.1', $port, true) + [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+        $body = curl_exec($handle);
+
+        $this->assertSame('listener', $body, curl_error($handle));
+        $this->assertSame('127.0.0.1', curl_getinfo($handle, CURLINFO_PRIMARY_IP));
+    }
+
+    public function test_each_hop_is_pinned_to_the_address_that_was_checked(): void
+    {
+        $port = $this->startListener();
+        // DNS (here /etc/hosts) says localhost is the listener; the answer the
+        // guard checked says otherwise, as after a rebinding.
+        self::resolveLocalhostTo(['v4' => ['192.0.2.10'], 'v6' => [], 'v6_failed' => false]);
+
+        $reached = PublicUrlGuard::guard(function () use ($port) {
+            // The hooks Requests fires for one hop, around a real cURL handle.
+            do_action('requests-requests.before_request', "https://localhost:{$port}/");
+            $handle = curl_init("http://localhost:{$port}/");
+            curl_setopt_array($handle, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT_MS => 500]);
             do_action('requests-curl.before_send', $handle);
+
+            return curl_exec($handle);
         });
         self::setResolver(null);
 
-        $this->assertTrue(true);
+        $this->assertFalse($reached, 'cURL went to the checked address, not where DNS points now.');
+        $this->assertFileDoesNotExist($this->listenerDir.'/hit');
     }
 
     /**
@@ -205,6 +262,22 @@ HTML;
     {
         $this->assertFalse(PublicUrlGuard::isPublicIp($ip));
         $this->assertTrue(PublicUrlGuard::isPublicIp('2606:4700::1111'));
+    }
+
+    public function test_every_refusal_reads_the_same(): void
+    {
+        remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        // Core refuses this redirect itself, with a message of its own.
+        RedirectingTransport::install('https://169.254.169.254/latest/meta-data/');
+        try {
+            $byCore = $this->assertAbilityError('gds/web-fetch', ['url' => 'https://93.184.216.34/'], 'ssrf_blocked');
+        } finally {
+            RedirectingTransport::uninstall();
+        }
+        $literal = $this->assertAbilityError('gds/web-fetch', ['url' => 'https://[fd00::1]/'], 'ssrf_blocked');
+
+        $this->assertSame(PublicUrlGuard::REFUSED, $byCore->get_error_message());
+        $this->assertSame(PublicUrlGuard::REFUSED, $literal->get_error_message());
     }
 
     public function test_refuses_a_redirect_to_a_hostname_with_a_private_address(): void

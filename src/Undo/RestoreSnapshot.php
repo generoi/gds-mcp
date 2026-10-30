@@ -117,9 +117,18 @@ final class RestoreSnapshot
             }
         }
 
-        // Snapshots written before Polylang's taxonomies were left out may
-        // still hold them.
-        foreach (array_diff_key($snapshot->terms, array_flip(PostFieldsSnapshot::polylangTaxonomies())) as $taxonomy => $ids) {
+        // Older snapshots may still hold the translation group; never restore
+        // it. The language goes back through Polylang, which keeps its
+        // caches and the translation group consistent.
+        $terms = array_diff_key($snapshot->terms, array_flip(PostFieldsSnapshot::TRANSLATION_GROUP_TAXONOMIES));
+        if (isset($terms['language']) && function_exists('pll_set_post_language')) {
+            $language = $terms['language'] ? get_term((int) $terms['language'][0], 'language') : null;
+            if ($language instanceof \WP_Term && pll_get_post_language($snapshot->id) !== $language->slug) {
+                pll_set_post_language($snapshot->id, $language->slug);
+            }
+            unset($terms['language']);
+        }
+        foreach ($terms as $taxonomy => $ids) {
             wp_set_object_terms($snapshot->id, $ids, $taxonomy, false);
         }
 
@@ -237,18 +246,25 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', 'The menu this item belonged to no longer exists.');
         }
 
-        $order = (int) $snapshot->post['menu_order'];
+        // Back between the items it sat between: right before the one that
+        // followed it, else right after the one before it, else (both gone,
+        // or a row from before neighbours were recorded) at its old order.
+        $inMenu = static fn (int $itemId): ?\WP_Post => $itemId && has_term($menuId, 'nav_menu', $itemId) ? get_post($itemId) : null;
+        $after = $inMenu((int) ($data['after'] ?? 0));
+        $before = $inMenu((int) ($data['before'] ?? 0));
+        $order = $after ? (int) $after->menu_order : ($before ? (int) $before->menu_order + 1 : (int) $snapshot->post['menu_order']);
         NavMenuItemsAbility::shiftOrder($menuId, $order, +1);
 
         // wp_insert_post() keeps import_id only when no post has that id.
-        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $snapshot->post), true);
+        $fields = ['menu_order' => $order] + $snapshot->post;
+        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $fields), true);
         if (is_wp_error($newId)) {
             NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
 
             return $newId;
         }
 
-        $restored = self::restorePost((new PostFieldsSnapshot($newId, $snapshot->post, $snapshot->meta, $snapshot->terms, true))->toArray());
+        $restored = self::restorePost((new PostFieldsSnapshot($newId, $fields, $snapshot->meta, $snapshot->terms, true))->toArray());
         if (is_wp_error($restored)) {
             // All or nothing: no half-restored item left in the menu.
             wp_delete_post($newId, true);
@@ -329,11 +345,12 @@ final class RestoreSnapshot
         if (! $id || get_post_type($id) !== 'attachment') {
             return ['restored' => 'delete-attachment', 'id' => $id, 'note' => 'Already removed.'];
         }
-        // Since the upload it may have become a featured image or been put in
-        // content; deleting the file would break those, so leave it.
+        // Since the upload it may have become a featured image, a gallery
+        // image, the site logo, or been put in content; deleting the file
+        // would break those, so leave it.
         $usedBy = self::attachmentUsers($id);
         if ($usedBy) {
-            return new WP_Error('restore_failed', sprintf('The uploaded file is now used by post(s) %s, so it was not deleted. Remove it from them first, or delete it in the Media Library.', implode(', ', $usedBy)));
+            return new WP_Error('restore_failed', sprintf('The uploaded file is now used by %s, so it was not deleted. Remove it there first, or delete it in the Media Library.', implode(', ', $usedBy)));
         }
         if (! wp_delete_attachment($id, true)) {
             return new WP_Error('restore_failed', "Failed to delete attachment {$id}.");
@@ -343,35 +360,59 @@ final class RestoreSnapshot
     }
 
     /**
-     * Posts that use an attachment as featured image or in their content (by
-     * its wp-image-{id} class, or its URL, size variants included).
+     * What uses an attachment: post or term meta holding its id (featured
+     * image, term thumbnail, a comma-separated list like
+     * _product_image_gallery, a serialized array like an ACF gallery), the
+     * site logo or icon, or post content (its wp-image-{id} class, or its
+     * URL, size variants included).
      *
-     * @return list<int>
+     * @return list<string>
      */
     private static function attachmentUsers(int $id): array
     {
         global $wpdb;
 
-        $url = (string) wp_get_attachment_url($id);
-        // Without the extension, so -300x200 size variants match too.
-        $urlStem = $url !== '' ? (string) preg_replace('/\.[^.\/]+$/', '', $url) : '';
+        $users = [];
+        foreach (['site_logo', 'site_icon'] as $option) {
+            if ((int) get_option($option) === $id) {
+                $users[] = "the {$option} setting";
+            }
+        }
+        if ((int) get_theme_mod('custom_logo') === $id) {
+            $users[] = 'the custom_logo theme setting';
+        }
 
-        // phpcs:disable WordPress.DB.DirectDatabaseQuery
-        $ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_thumbnail_id' AND meta_value = %d",
-            $id
-        ));
-        $ids = array_merge($ids, $wpdb->get_col($wpdb->prepare(
+        // The id alone, in a comma-separated list, or as a serialized string.
+        $metaMatch = '(meta_value = %s OR meta_value REGEXP %s OR meta_value LIKE %s)';
+        $metaArgs = [(string) $id, '(^|,)'.$id.'(,|$)', '%'.$wpdb->esc_like('"'.$id.'";').'%'];
+
+        $url = (string) wp_get_attachment_url($id);
+        // The URL with or without a -300x200 size suffix, then its extension:
+        // `photo` must not match `photo-2.png`.
+        $urlPattern = $url !== '' ? preg_quote((string) preg_replace('/\.[^.\/]+$/', '', $url), '/').'(-[0-9]+x[0-9]+)?\\.' : '';
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        // Its own rows aside, and _edit_last, which holds a user id.
+        foreach ($wpdb->get_col($wpdb->prepare("SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE post_id != %d AND meta_key != '_edit_last' AND {$metaMatch}", $id, ...$metaArgs)) as $postId) {
+            $users[] = "post {$postId}";
+        }
+        foreach ($wpdb->get_col($wpdb->prepare("SELECT DISTINCT term_id FROM {$wpdb->termmeta} WHERE {$metaMatch}", ...$metaArgs)) as $termId) {
+            $users[] = "term {$termId}";
+        }
+        $inContent = $wpdb->get_col($wpdb->prepare(
             "SELECT ID FROM {$wpdb->posts}
              WHERE post_type NOT IN ('revision', 'attachment') AND post_status != 'trash'
-             AND (post_content REGEXP %s OR (%s != '' AND post_content LIKE %s))",
+             AND (post_content REGEXP %s OR (%s != '' AND post_content REGEXP %s))",
             'wp-image-'.$id.'([^0-9]|$)',
-            $urlStem,
-            '%'.$wpdb->esc_like($urlStem).'%'
-        )));
-        // phpcs:enable WordPress.DB.DirectDatabaseQuery
+            $urlPattern,
+            $urlPattern
+        ));
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        foreach ($inContent as $postId) {
+            $users[] = "post {$postId}";
+        }
 
-        return array_values(array_unique(array_map('intval', $ids)));
+        return array_values(array_unique($users));
     }
 
     /**

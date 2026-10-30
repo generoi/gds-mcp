@@ -823,22 +823,43 @@ class OAuthFlowTest extends TestCase
     public function test_registration_is_throttled_per_network_in_a_fixed_window(): void
     {
         $window = intdiv(time(), HOUR_IN_SECONDS);
-        // An IPv6 host throttles as its /64; this one is at the limit.
-        set_transient('gds_mcp_oauth_reg_'.md5('2001:db8:1:2::/64').'_'.$window, 500, HOUR_IN_SECONDS);
+        // An IPv6 host throttles as its /56; this one is at the limit.
+        set_transient('gds_mcp_oauth_reg_'.md5('2001:db8:1::/56').'_'.$window, 500, HOUR_IN_SECONDS);
 
-        $_SERVER['REMOTE_ADDR'] = '2001:db8:1:2:aaaa::7';
         $_SERVER['REQUEST_METHOD'] = 'POST';
-        $refused = $this->capture(fn () => Clients::handleRegistration((string) wp_json_encode(['redirect_uris' => [self::REDIRECT_URI]])));
-        $this->assertSame(429, $refused->status);
+        foreach (['2001:db8:1:2:aaaa::7', '2001:db8:1:ff::1'] as $address) {
+            $_SERVER['REMOTE_ADDR'] = $address;
+            $refused = $this->capture(fn () => Clients::handleRegistration((string) wp_json_encode(['redirect_uris' => [self::REDIRECT_URI]])));
+            $this->assertSame(429, $refused->status, $address);
+        }
 
         // Another network is unaffected, and below the limit a registration
-        // goes through.
-        $_SERVER['REMOTE_ADDR'] = '2001:db8:1:3::7';
+        // goes through. An IPv4-mapped address counts as its IPv4 address.
+        $_SERVER['REMOTE_ADDR'] = '2001:db8:2::7';
         $this->registerClient();
         $_SERVER['REMOTE_ADDR'] = '203.0.113.8';
         $this->registerClient();
-        $this->assertSame(1, get_transient('gds_mcp_oauth_reg_'.md5('203.0.113.8').'_'.$window));
+        $_SERVER['REMOTE_ADDR'] = '::ffff:203.0.113.8';
+        $this->registerClient();
+        $this->assertSame(2, get_transient('gds_mcp_oauth_reg_'.md5('203.0.113.8').'_'.$window));
         unset($_SERVER['REMOTE_ADDR']);
+    }
+
+    public function test_a_full_client_store_never_evicts_a_recent_registration(): void
+    {
+        // Registered a minute ago, maybe still on the consent screen.
+        $index = ['gmc_fresh' => time() - MINUTE_IN_SECONDS];
+        add_option('gds_mcp_oauth_client_gmc_fresh', ['client_id' => 'gmc_fresh'], '', false);
+        for ($i = 0; $i < 2000; $i++) {
+            $index['gmc_old'.$i] = time() - DAY_IN_SECONDS + $i;
+        }
+        update_option('gds_mcp_oauth_clients', $index, false);
+
+        $this->registerClient();
+
+        $index = get_option('gds_mcp_oauth_clients');
+        $this->assertArrayHasKey('gmc_fresh', $index);
+        $this->assertArrayNotHasKey('gmc_old0', $index, 'The oldest one goes instead.');
     }
 
     public function test_a_full_client_store_never_evicts_the_client_just_registered(): void

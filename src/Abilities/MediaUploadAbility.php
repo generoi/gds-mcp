@@ -129,7 +129,7 @@ final class MediaUploadAbility
         // slow-drip DoS; file size checked after download.
         $tmpFile = PublicUrlGuard::guard(fn () => download_url($url, 30));
         if (is_wp_error($tmpFile)) {
-            return $tmpFile;
+            return PublicUrlGuard::refusal($tmpFile);
         }
 
         // Reject excessively large downloads (default WP upload limit or 50 MB).

@@ -192,6 +192,19 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         $this->assertStringContainsString('"refused"', $result['errors'][0]['error']);
     }
 
+    public function test_a_value_the_sanitizer_makes_equal_is_not_an_error(): void
+    {
+        register_post_meta('post', 'shouty', ['sanitize_callback' => fn ($value) => strtoupper((string) $value)]);
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        update_post_meta($postId, 'shouty', 'LOUD');
+        update_post_meta($postId, 'other', 'old');
+
+        $result = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$postId], 'set_meta' => ['shouty' => 'loud', 'other' => 'new']]);
+        unregister_post_meta('post', 'shouty');
+
+        $this->assertArrayNotHasKey('errors', $result, 'Stored as LOUD already: unchanged, not refused.');
+    }
+
     public function test_counts_only_posts_where_something_was_written(): void
     {
         $same = self::factory()->post->create(['post_status' => 'draft']);

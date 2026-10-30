@@ -104,7 +104,9 @@ final class Server
      */
     public static function raiseFloor(mixed $capability): mixed
     {
-        return $capability === 'read' ? self::capability() : $capability;
+        // `read` and `exist` are held by every logged-in user, and an empty
+        // capability by everyone.
+        return in_array($capability, ['read', 'exist', '', null], true) ? self::capability() : $capability;
     }
 
     /**

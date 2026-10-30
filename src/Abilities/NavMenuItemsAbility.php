@@ -435,6 +435,14 @@ final class NavMenuItemsAbility
             'meta_value' => (string) $id,
         ]));
 
+        // Its neighbours in the menu, so an undo can put it back between them
+        // even after other items have moved.
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT]) ?: [];
+        usort($items, fn ($a, $b) => $a->menu_order <=> $b->menu_order);
+        $ids = array_map(fn ($item) => (int) $item->ID, $items);
+        $index = array_search($id, $ids, true);
+        $neighbours = $index === false ? [] : ['before' => $ids[$index - 1] ?? 0, 'after' => $ids[$index + 1] ?? 0];
+
         $deleted = wp_delete_post($id, true);
         if (! $deleted) {
             return new WP_Error('delete_failed', "Could not delete menu item {$id}.");
@@ -459,7 +467,7 @@ final class NavMenuItemsAbility
         return $this->reversible($result, 'recreate-menu-item', [
             'item' => $before->toArray(),
             'children' => $children,
-        ], 'Restore the deleted menu item');
+        ] + $neighbours, 'Restore the deleted menu item');
     }
 
     /**
