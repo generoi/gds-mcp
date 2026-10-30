@@ -121,6 +121,89 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
         $group = array_values(array_filter($blocks, fn ($b) => $b['blockName'] === 'core/group'))[0];
         $this->assertCount(1, $group['innerBlocks']);
         $this->assertSame('core/paragraph', $group['innerBlocks'][0]['blockName']);
+        $this->assertStringContainsString('<div class="wp-block-group"><!-- wp:paragraph --><p>Replaced child</p><!-- /wp:paragraph --></div>', get_post($this->postId)->post_content);
+    }
+
+    public function test_delete_occurrence_one_removes_the_first_match(): void
+    {
+        $result = (new PatchBlockAbility)->execute([
+            'id' => $this->postId,
+            'action' => 'delete',
+            'block_name' => 'core/paragraph',
+            'occurrence' => 1,
+        ]);
+
+        $this->assertTrue($result['success']);
+        $content = get_post($this->postId)->post_content;
+        $this->assertStringNotContainsString('First paragraph', $content);
+        $this->assertStringContainsString('Second paragraph', $content);
+    }
+
+    public function test_delete_leaves_other_blocks_markup_byte_identical(): void
+    {
+        $group = '<!-- wp:group --><div class="wp-block-group"><!-- wp:paragraph --><p>In group</p><!-- /wp:paragraph --></div><!-- /wp:group -->';
+        $columns = '<!-- wp:columns --><div class="wp-block-columns"><!-- wp:column --><div class="wp-block-column"><!-- wp:heading --><h2 class="wp-block-heading">Col</h2><!-- /wp:heading --></div><!-- /wp:column --></div><!-- /wp:columns -->';
+        $postId = self::factory()->post->create([
+            'post_content' => implode("\n\n", ['<!-- wp:paragraph --><p>Top</p><!-- /wp:paragraph -->', $group, $columns]),
+        ]);
+
+        $result = (new PatchBlockAbility)->execute(['id' => $postId, 'action' => 'delete', 'block_name' => 'core/paragraph']);
+
+        $this->assertTrue($result['success']);
+        $content = get_post($postId)->post_content;
+        $this->assertStringNotContainsString('Top', $content);
+        $this->assertStringContainsString($group, $content);
+        $this->assertStringContainsString($columns, $content);
+
+        // A nested delete keeps the parent's wrapper.
+        $result = (new PatchBlockAbility)->execute(['id' => $postId, 'action' => 'delete', 'block_name' => 'core/heading']);
+
+        $this->assertTrue($result['success']);
+        $this->assertStringContainsString('<!-- wp:column --><div class="wp-block-column"></div><!-- /wp:column -->', get_post($postId)->post_content);
+    }
+
+    public function test_insert_into_a_list_keeps_the_list_markup(): void
+    {
+        $postId = self::factory()->post->create([
+            'post_content' => '<!-- wp:list --><ul class="wp-block-list"><!-- wp:list-item --><li>One</li><!-- /wp:list-item --></ul><!-- /wp:list -->',
+        ]);
+
+        $result = (new PatchBlockAbility)->execute([
+            'id' => $postId,
+            'operations' => [
+                ['action' => 'insert', 'block_name' => 'core/list-item', 'position' => 'after', 'markup' => '<!-- wp:list-item --><li>Two</li><!-- /wp:list-item -->'],
+                ['action' => 'insert', 'block_name' => 'core/list', 'position' => 'append', 'markup' => '<!-- wp:list-item --><li>Three</li><!-- /wp:list-item -->'],
+            ],
+        ]);
+
+        $this->assertTrue($result['success']);
+        $this->assertSame(
+            '<!-- wp:list --><ul class="wp-block-list"><!-- wp:list-item --><li>One</li><!-- /wp:list-item --><!-- wp:list-item --><li>Two</li><!-- /wp:list-item --><!-- wp:list-item --><li>Three</li><!-- /wp:list-item --></ul><!-- /wp:list -->',
+            get_post($postId)->post_content,
+        );
+    }
+
+    public function test_insert_into_a_group_keeps_its_wrapper(): void
+    {
+        $postId = self::factory()->post->create([
+            'post_content' => implode("\n\n", [
+                '<!-- wp:group {"backgroundColor":"beige"} --><div class="wp-block-group has-beige-background-color"><!-- wp:paragraph --><p>Existing</p><!-- /wp:paragraph --></div><!-- /wp:group -->',
+                '<!-- wp:group {"className":"empty"} --><div class="wp-block-group empty"></div><!-- /wp:group -->',
+            ]),
+        ]);
+
+        $result = (new PatchBlockAbility)->execute([
+            'id' => $postId,
+            'operations' => [
+                ['action' => 'insert', 'block_name' => 'core/group', 'occurrence' => 1, 'position' => 'prepend', 'markup' => '<!-- wp:paragraph --><p>New</p><!-- /wp:paragraph -->'],
+                ['action' => 'insert', 'block_name' => 'core/group', 'occurrence' => 2, 'position' => 'append', 'markup' => '<!-- wp:paragraph --><p>Filled</p><!-- /wp:paragraph -->'],
+            ],
+        ]);
+
+        $this->assertTrue($result['success']);
+        $content = get_post($postId)->post_content;
+        $this->assertStringContainsString('<div class="wp-block-group has-beige-background-color"><!-- wp:paragraph --><p>New</p><!-- /wp:paragraph --><!-- wp:paragraph --><p>Existing</p><!-- /wp:paragraph --></div>', $content);
+        $this->assertStringContainsString('<div class="wp-block-group empty"><!-- wp:paragraph --><p>Filled</p><!-- /wp:paragraph --></div>', $content);
     }
 
     public function test_occurrence_zero_patches_all(): void
