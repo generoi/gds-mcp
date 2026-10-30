@@ -50,6 +50,63 @@ class RestoreSnapshotTest extends TestCase
         $this->assertNotContains($catNew, $terms);
     }
 
+    public function test_restore_post_says_when_saving_filtered_the_content(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+        kses_init();
+        $id = self::factory()->post->create(['post_content' => '<p>Hi</p><script>track()</script>']);
+        $before = Snapshot::postFields($id);
+        $this->assertStringContainsString('<script>', $before->post['post_content']);
+        wp_update_post(['ID' => $id, 'post_content' => 'Changed']);
+
+        $full = $this->restore('restore-post', $before);
+        $this->assertArrayNotHasKey('caveats', $full);
+
+        wp_update_post(['ID' => $id, 'post_content' => 'Changed']);
+        wp_set_current_user(self::factory()->user->create(['role' => 'author']));
+        kses_init();
+        $filtered = $this->restore('restore-post', $before);
+        kses_remove_filters();
+
+        $this->assertStringNotContainsString('<script>', get_post($id)->post_content);
+        $this->assertStringContainsString('unfiltered_html', $filtered['caveats'][0] ?? '');
+    }
+
+    public function test_restore_post_reports_terms_it_could_not_restore(): void
+    {
+        $id = self::factory()->post->create();
+        $before = Snapshot::postFields($id)->toArray();
+        $before['terms']['no_longer_registered'] = [1];
+
+        $result = $this->restore('restore-post', $before);
+
+        $this->assertStringContainsString('no_longer_registered', $result['caveats'][0] ?? '');
+    }
+
+    public function test_restore_post_partial_returns_a_failed_status_update(): void
+    {
+        $id = self::factory()->post->create(['post_status' => 'publish']);
+        $before = Snapshot::partialPost($id, []);
+        add_filter('wp_insert_post_empty_content', '__return_true');
+
+        $result = $this->restore('restore-post-partial', $before);
+
+        $this->assertWPError($result);
+    }
+
+    public function test_restore_yoast_redirect_keeps_backslashes(): void
+    {
+        $id = self::factory()->post->create();
+        $control = self::factory()->post->create();
+        // Stored the way a save of that value stores it (Yoast may encode the
+        // backslash), not with it unslashed away.
+        update_post_meta($control, '_yoast_wpseo_redirect', wp_slash('https://example.com/a\b'));
+
+        $this->assertNotWPError($this->restore('restore-redirect', ['provider' => 'yoast', 'post_id' => $id, 'prev_meta' => 'https://example.com/a\b']));
+        $this->assertSame(get_post_meta($control, '_yoast_wpseo_redirect', true), get_post_meta($id, '_yoast_wpseo_redirect', true));
+        $this->assertNotSame('https://example.com/ab', get_post_meta($id, '_yoast_wpseo_redirect', true));
+    }
+
     public function test_restore_post_clears_terms_added_to_an_empty_taxonomy(): void
     {
         $id = self::factory()->post->create();
@@ -67,7 +124,10 @@ class RestoreSnapshotTest extends TestCase
         if (! function_exists('pll_save_post_translations')) {
             $this->markTestSkipped('Polylang is not active.');
         }
+        // WP_UnitTestCase rollback removes language terms; Polylang's cache
+        // may still list them.
         $model = PLL()->model;
+        $model->clean_languages_cache();
         foreach ([['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0], ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1]] as $lang) {
             if (! $model->get_language($lang['slug'])) {
                 $model->add_language($lang);
@@ -281,6 +341,58 @@ class RestoreSnapshotTest extends TestCase
         $this->assertNotWPError($this->restore('restore-term', $before));
 
         $this->assertSame('Original name', get_term($term, 'category')->name);
+    }
+
+    public function test_recreate_term_puts_back_its_language_and_translations(): void
+    {
+        if (! function_exists('pll_save_term_translations')) {
+            $this->markTestSkipped('Polylang is not active.');
+        }
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        foreach ([['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0], ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1]] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->clean_languages_cache();
+        $en = self::factory()->term->create(['taxonomy' => 'category', 'name' => 'News']);
+        $fi = self::factory()->term->create(['taxonomy' => 'category', 'name' => 'Uutiset']);
+        pll_set_term_language($en, 'en');
+        pll_set_term_language($fi, 'fi');
+        pll_save_term_translations(['en' => $en, 'fi' => $fi]);
+
+        $before = json_decode((string) wp_json_encode(Snapshot::termForRecreate($fi, 'category')->toArray()), true);
+        // What PLL_CRUD_Terms does on pre_delete_term; it is not hooked here,
+        // as the test languages are added after Polylang initialised.
+        $model->term->delete_translation($fi);
+        $model->term->delete_language($fi);
+        wp_delete_term($fi, 'category');
+        $this->assertSame(['en' => $en], pll_get_term_translations($en));
+
+        $this->assertNotWPError($this->restore('recreate-term', $before));
+        $this->assertSame('fi', pll_get_term_language($fi));
+        $this->assertSame(['en' => $en, 'fi' => $fi], pll_get_term_translations($en));
+    }
+
+    public function test_recreate_term_under_a_new_id_keeps_its_yoast_seo(): void
+    {
+        if (! function_exists('wpseo_split_shared_term')) {
+            $this->markTestSkipped('Yoast SEO is not active.');
+        }
+        global $wpdb;
+        $term = self::factory()->term->create(['taxonomy' => 'category', 'name' => 'With SEO']);
+        update_option('wpseo_taxonomy_meta', ['category' => [$term => ['wpseo_title' => 'Custom title']]]);
+        $before = Snapshot::termForRecreate($term, 'category');
+        wp_delete_term($term, 'category');
+        // The id is taken again before the undo.
+        $wpdb->insert($wpdb->terms, ['term_id' => $term, 'name' => 'Squatter', 'slug' => 'squatter']);
+
+        $result = $this->restore('recreate-term', $before);
+
+        $this->assertNotWPError($result);
+        $this->assertNotSame($term, $result['term_id']);
+        $this->assertSame('Custom title', get_option('wpseo_taxonomy_meta')['category'][$result['term_id']]['wpseo_title'] ?? null);
     }
 
     public function test_recreate_term_preserves_original_id_and_assignments(): void

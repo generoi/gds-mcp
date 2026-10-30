@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Undo;
 
 use GeneroWP\MCP\Abilities\NavMenuItemsAbility;
+use GeneroWP\MCP\Integrations\Polylang\RegisteredStrings;
 use GeneroWP\MCP\Integrations\Yoast\SeoFields;
 use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
 use GeneroWP\MCP\Undo\Snapshots\PostFieldsSnapshot;
@@ -128,11 +129,26 @@ final class RestoreSnapshot
             }
             unset($terms['language']);
         }
+        $caveats = [];
         foreach ($terms as $taxonomy => $ids) {
-            wp_set_object_terms($snapshot->id, $ids, $taxonomy, false);
+            $set = wp_set_object_terms($snapshot->id, $ids, $taxonomy, false);
+            if (is_wp_error($set)) {
+                $caveats[] = sprintf('The %s terms were not restored: %s', $taxonomy, $set->get_error_message());
+            }
         }
 
-        return ['restored' => 'post', 'id' => $snapshot->id];
+        // Saving filters content for users without unfiltered_html, so markup
+        // someone else wrote may not come back as it was.
+        if (get_post_field('post_content', $snapshot->id, 'raw') !== $snapshot->post['post_content']) {
+            $caveats[] = 'The content was saved differently from the snapshot: WordPress filtered it on save, most likely removing HTML that your account is not allowed to post (unfiltered_html). Check the post, or have an administrator undo it.';
+        }
+
+        $summary = ['restored' => 'post', 'id' => $snapshot->id];
+        if ($caveats) {
+            $summary['caveats'] = $caveats;
+        }
+
+        return $summary;
     }
 
     /**
@@ -155,7 +171,10 @@ final class RestoreSnapshot
         }
 
         if ($snapshot->status !== '') {
-            wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status]);
+            $updated = wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status], true);
+            if (is_wp_error($updated)) {
+                return $updated;
+            }
         }
 
         foreach ($snapshot->metaPrev as $key => $values) {
@@ -215,6 +234,10 @@ final class RestoreSnapshot
         $id = (int) ($data['id'] ?? 0);
         if (! $id || ! get_post($id)) {
             return ['restored' => 'trash', 'id' => $id, 'note' => 'Already removed.'];
+        }
+        // With EMPTY_TRASH_DAYS at 0, wp_trash_post() deletes for good.
+        if (! EMPTY_TRASH_DAYS) {
+            return new WP_Error('trash_not_supported', "The trash is disabled on this site (EMPTY_TRASH_DAYS is 0), so undoing would delete post {$id} permanently. Delete it in wp-admin if it should be removed for good.");
         }
         if (! wp_trash_post($id)) {
             return new WP_Error('restore_failed', "Failed to remove post {$id}.");
@@ -386,9 +409,11 @@ final class RestoreSnapshot
             $users[] = 'the custom_logo theme setting';
         }
 
-        // The id alone, in a comma-separated list, or as a serialized string.
-        $metaMatch = '(meta_value = %s OR meta_value REGEXP %s OR meta_value LIKE %s)';
-        $metaArgs = [(string) $id, '(^|,)'.$id.'(,|$)', '%'.$wpdb->esc_like('"'.$id.'";').'%'];
+        // The id alone, first, last or inside a comma-separated list, or as a
+        // serialized string. LIKE, not REGEXP: MySQL's regex engine can fail
+        // on a large value, which would refuse the undo.
+        $metaMatch = '(meta_value = %s OR meta_value LIKE %s OR meta_value LIKE %s OR meta_value LIKE %s OR meta_value LIKE %s)';
+        $metaArgs = [(string) $id, $id.',%', '%,'.$id, '%,'.$id.',%', '%'.$wpdb->esc_like('"'.$id.'";').'%'];
 
         $url = (string) wp_get_attachment_url($id);
         // The URL with or without a -300x200 size suffix, then its extension:
@@ -473,6 +498,7 @@ final class RestoreSnapshot
             self::restoreTermMeta($oldId, $snapshot->meta);
             self::reattachObjects($ttId, $snapshot->objectIds);
             wp_update_term_count_now([$ttId], $snapshot->taxonomy);
+            self::restoreTermTranslation($oldId, $snapshot);
 
             return [
                 'restored' => 'recreate-term',
@@ -496,6 +522,13 @@ final class RestoreSnapshot
         self::restoreTermMeta($newId, $snapshot->meta);
         foreach ($snapshot->objectIds as $objectId) {
             wp_set_object_terms($objectId, [$newId], $snapshot->taxonomy, true);
+        }
+        self::restoreTermTranslation($newId, $snapshot);
+
+        // Yoast keeps a deleted term's SEO entry under its id; move it to the
+        // new one, as Yoast does when core splits a shared term.
+        if (function_exists('wpseo_split_shared_term')) {
+            wpseo_split_shared_term($oldId, $newId, 0, $snapshot->taxonomy);
         }
 
         return [
@@ -535,6 +568,23 @@ final class RestoreSnapshot
                 ]);
             }
             clean_object_term_cache($objectId, get_post_type($objectId) ?: 'post');
+        }
+    }
+
+    /**
+     * Polylang removes a term's language and translation link when it is
+     * deleted; put both back, linking only the translations still there.
+     */
+    private static function restoreTermTranslation(int $termId, TermForRecreateSnapshot $snapshot): void
+    {
+        if ($snapshot->language === '' || ! function_exists('pll_set_term_language')) {
+            return;
+        }
+        pll_set_term_language($termId, $snapshot->language);
+
+        $group = array_filter($snapshot->translations, fn ($id) => $id !== $snapshot->termId && get_term($id) instanceof \WP_Term);
+        if ($group) {
+            pll_save_term_translations([$snapshot->language => $termId] + $group);
         }
     }
 
@@ -798,7 +848,8 @@ final class RestoreSnapshot
         if ($prev === null || $prev === '') {
             delete_post_meta($postId, '_yoast_wpseo_redirect');
         } else {
-            update_post_meta($postId, '_yoast_wpseo_redirect', $prev);
+            // update_post_meta() unslashes.
+            update_post_meta($postId, '_yoast_wpseo_redirect', wp_slash($prev));
         }
 
         return ['restored' => 'restore-redirect', 'post_id' => $postId];
@@ -872,6 +923,7 @@ final class RestoreSnapshot
 
         $mo = new \PLL_MO;
         $mo->import_from_db($langObject);
+        $translation = RegisteredStrings::sanitizeTranslation($string, $translation, $mo->translate($string));
         $mo->add_entry($mo->make_entry($string, $translation));
         $mo->export_to_db($langObject);
 
