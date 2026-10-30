@@ -180,11 +180,11 @@ final class RestoreSnapshot
             if ($values === null) {
                 continue;
             }
-            // Values were captured via get_post_meta($id,$key) (already
-            // unserialized); add_post_meta re-serializes as needed but also
-            // unslashes, hence wp_slash().
+            // Values are captured serialized, as stored (older rows hold
+            // plain strings, written back as they are); add_post_meta
+            // re-serializes as needed but also unslashes, hence wp_slash().
             foreach ($values as $value) {
-                add_post_meta($snapshot->id, $key, wp_slash($value));
+                add_post_meta($snapshot->id, $key, wp_slash($snapshot->serialized ? maybe_unserialize($value) : $value));
             }
         }
 
@@ -903,6 +903,9 @@ final class RestoreSnapshot
                 $group = $row->group;
                 ksort($group);
                 $groups[implode(',', $group)] = $group;
+            } elseif ($row->id) {
+                // It stood alone before: take it out of the group it joined.
+                PLL()->model->post->delete_translation($row->id);
             }
         }
         foreach ($groups as $group) {

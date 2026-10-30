@@ -187,4 +187,32 @@ class AcfIntegrationTest extends WP_UnitTestCase
         $this->assertSame(['refused_field'], array_keys($result['fields_errors'] ?? []), 'Only the refused plain field is reported, not the unchanged group.');
         $this->assertSame('C:\Temp', get_field('path_field', $postId));
     }
+
+    public function test_content_update_filters_html_for_users_without_unfiltered_html(): void
+    {
+        acf_add_local_field_group([
+            'key' => 'group_test_kses',
+            'title' => 'Kses Test',
+            'fields' => [['key' => 'field_kses', 'label' => 'Kses', 'name' => 'kses_field', 'type' => 'wysiwyg']],
+            'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'post']]],
+            'active' => true,
+        ]);
+        $author = self::factory()->user->create(['role' => 'author']);
+        wp_set_current_user($author);
+        $this->assertFalse(current_user_can('unfiltered_html'));
+        $postId = self::factory()->post->create(['post_status' => 'publish', 'post_author' => $author]);
+
+        (new GenericPostTypeAbility)->executeUpdate([
+            'type' => 'posts',
+            'id' => $postId,
+            'fields' => ['kses_field' => '<p>Hi</p><script>alert(1)</script>'],
+        ]);
+
+        $this->assertSame('<p>Hi</p>alert(1)', get_post_meta($postId, 'kses_field', true));
+
+        // null still deletes the value.
+        (new GenericPostTypeAbility)->executeUpdate(['type' => 'posts', 'id' => $postId, 'fields' => ['kses_field' => null]]);
+
+        $this->assertSame([], get_post_meta($postId, 'kses_field'));
+    }
 }

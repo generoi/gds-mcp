@@ -153,7 +153,8 @@ final class PostFieldsSnapshot
             post: $post,
             meta: self::normaliseMeta($raw['meta'] ?? null),
             terms: self::normaliseTerms($raw['terms'] ?? null),
-            metaComplete: ! empty($raw['meta_complete']),
+            // `metaComplete`: a row from 0.8.1 or before, nested in a bulk undo.
+            metaComplete: ! empty($raw['meta_complete'] ?? $raw['metaComplete'] ?? false),
         );
     }
 

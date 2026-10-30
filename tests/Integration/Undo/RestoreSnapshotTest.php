@@ -111,6 +111,34 @@ class RestoreSnapshotTest extends TestCase
         $this->assertNotSame('https://example.com/ab', get_post_meta($id, '_yoast_wpseo_redirect', true));
     }
 
+    public function test_bulk_rows_from_older_releases_restore_their_values_as_stored(): void
+    {
+        $id = self::factory()->post->create();
+        update_post_meta($id, 'plain', 'changed');
+        $other = self::factory()->post->create();
+        $otherBefore = Snapshot::postFields($other)->toArray();
+        update_post_meta($other, 'added_since', 'x');
+        // A 0.8.1 audit row: nested snapshots JSON-encoded by property name,
+        // meta values as plain strings.
+        $otherBefore['metaComplete'] = $otherBefore['meta_complete'];
+        unset($otherBefore['meta_complete']);
+        $row = ['items' => [
+            ['kind' => 'restore-post-partial', 'data' => ['id' => $id, 'status' => '', 'metaPrev' => [
+                'plain' => ['before'],
+                'looks_serialized' => ['a:1:{i:0;s:1:"x";}'],
+                'looks_like_an_object' => ['O:8:"stdClass":0:{}'],
+            ]]],
+            ['kind' => 'restore-post', 'data' => $otherBefore],
+        ]];
+
+        $this->assertNotWPError($this->restore('bulk', $row));
+
+        $this->assertSame('before', get_post_meta($id, 'plain', true));
+        $this->assertSame('a:1:{i:0;s:1:"x";}', get_post_meta($id, 'looks_serialized', true));
+        $this->assertSame('O:8:"stdClass":0:{}', get_post_meta($id, 'looks_like_an_object', true), 'Never unserialized into an object.');
+        $this->assertSame([], get_post_meta($other, 'added_since'), 'metaComplete is read too.');
+    }
+
     public function test_restore_post_clears_terms_added_to_an_empty_taxonomy(): void
     {
         $id = self::factory()->post->create();
