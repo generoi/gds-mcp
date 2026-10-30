@@ -16,6 +16,13 @@ final class CreateTermTranslationAbility
     use PolylangAware;
     use Reversible;
 
+    /**
+     * Polylang Pro's ACF integration, which hooks its static
+     * on_duplicate_term() to pll_duplicate_term
+     * (polylang-pro/src/integrations/ACF/Dispatcher.php).
+     */
+    private const PRO_ACF_DISPATCHER = 'WP_Syntex\\Polylang_Pro\\Integrations\\ACF\\Dispatcher';
+
     public static function register(): void
     {
         HelpAbility::registerAbility('gds/translations-create-term', [
@@ -146,23 +153,33 @@ final class CreateTermTranslationAbility
 
         $newTermId = $result['term_id'];
 
-        // Term meta (ACF fields, WooCommerce thumbnail and order, …) follows,
-        // except Polylang internals and counts derived from the source's posts.
-        foreach (get_term_meta($sourceTermId) as $key => $values) {
-            if (str_starts_with((string) $key, '_pll_') || str_starts_with((string) $key, 'product_count_')) {
-                continue;
-            }
-            foreach ($values as $value) {
-                add_term_meta($newTermId, (string) $key, wp_slash(maybe_unserialize($value)));
-            }
-        }
-
         // Set language and link translations.
         pll_set_term_language($newTermId, $language);
 
         $translations = pll_get_term_translations($sourceTermId);
         $translations[$language] = $newTermId;
         pll_save_term_translations($translations);
+
+        // Term meta follows the way Polylang copies it when a term is
+        // translated in wp-admin: pll_duplicate_term runs its meta sync (keys
+        // from pll_copy_term_metas, none by default) and, on Polylang Pro, the
+        // ACF integration, which copies ACF fields by their translate/copy
+        // settings. Without that integration (free Polylang) the rest of the
+        // meta — ACF fields included — is copied here, apart from what the
+        // action already wrote. With it, copying here would override ACF's
+        // "ignore" settings.
+        do_action('pll_duplicate_term', $sourceTermId, $newTermId, $language);
+        if (! has_action('pll_duplicate_term', [self::PRO_ACF_DISPATCHER, 'on_duplicate_term'])) {
+            $written = get_term_meta($newTermId);
+            foreach (get_term_meta($sourceTermId) as $key => $values) {
+                if (isset($written[$key]) || str_starts_with((string) $key, '_pll_') || str_starts_with((string) $key, 'product_count_')) {
+                    continue;
+                }
+                foreach ($values as $value) {
+                    add_term_meta($newTermId, (string) $key, wp_slash(maybe_unserialize($value)));
+                }
+            }
+        }
 
         $newTerm = get_term($newTermId, $taxonomy);
 

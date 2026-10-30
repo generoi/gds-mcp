@@ -31,6 +31,14 @@ final class PostFieldsSnapshot
     private const OPTIONAL_FIELDS = ['post_author', 'post_date', 'post_date_gmt', 'post_password', 'comment_status'];
 
     /**
+     * Polylang's translation groups. Restoring one, even an empty one, would
+     * unlink the post from its translations or link it to others; a relink
+     * has its own undo. The post's `language` is captured, and restored
+     * through Polylang.
+     */
+    public const TRANSLATION_GROUP_TAXONOMIES = ['post_translations', 'term_translations'];
+
+    /**
      * @param  PostCoreFields  $post
      * @param  array<string, list<string>>  $meta  Raw `get_post_meta($id)` shape: key → list of stored values.
      * @param  array<string, list<int>>  $terms  Taxonomy slug → list of term ids.
@@ -77,7 +85,7 @@ final class PostFieldsSnapshot
         }
 
         $terms = [];
-        foreach (get_object_taxonomies(get_post_type($id) ?: 'post') as $tax) {
+        foreach (array_diff(get_object_taxonomies(get_post_type($id) ?: 'post'), self::TRANSLATION_GROUP_TAXONOMIES) as $tax) {
             // An empty taxonomy is recorded too, so the restore clears terms
             // added since.
             $ids = wp_get_object_terms($id, $tax, ['fields' => 'ids']);

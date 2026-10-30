@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Http;
 
+use PHPUnit\Framework\TestCase;
 use WpOrg\Requests\Exception as RequestsException;
 
 /**
@@ -13,26 +14,66 @@ use WpOrg\Requests\Exception as RequestsException;
  * Older WordPress releases also missed 169.254/16 and 100.64/10.
  * {@see guard()} checks each request Requests sends — the first one and every
  * redirect it follows — against all of the host's A and AAAA addresses, and
- * aborts unless every one is public.
+ * aborts unless every one is public. cURL is then made to connect to an
+ * address that was checked, so a second DNS answer (rebinding) or a URL that
+ * cURL parses differently from PHP cannot send it elsewhere.
  */
 final class PublicUrlGuard
 {
     /**
-     * Ranges that are not reachable on the public internet.
+     * Ranges that are not reachable on the public internet, or that carry
+     * another address inside them (6to4, Teredo, NAT64).
      */
     private const NON_PUBLIC = [
         '0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16',
         '172.16.0.0/12', '192.0.0.0/24', '192.168.0.0/16', '198.18.0.0/15', '224.0.0.0/3',
-        '::/127', 'fc00::/7', 'fe80::/10', 'ff00::/8',
+        '::/96', '100::/64', '2001::/32', '2002::/16', '64:ff9b:1::/48',
+        'fc00::/7', 'fe80::/10', 'fec0::/10', 'ff00::/8',
     ];
 
     /**
-     * Resolves a host to all its addresses. Tests swap in a stub so they need
-     * no DNS.
-     *
-     * @var (\Closure(string): list<string>)|null
+     * The message every refused URL gets: which internal address a host
+     * resolves to is nothing a caller should learn from it.
      */
-    public static ?\Closure $resolver = null;
+    public const REFUSED = 'This URL cannot be fetched: only public https addresses are allowed.';
+
+    /**
+     * One error for every refusal, whoever refused: this guard, or core's
+     * own URL check ("A valid URL was not provided."), so a caller cannot
+     * tell which check an address failed. Other errors pass through.
+     */
+    public static function refusal(\WP_Error $error): \WP_Error
+    {
+        $message = $error->get_error_message();
+        if ($message === self::REFUSED || $message === __('A valid URL was not provided.')) {
+            return new \WP_Error('ssrf_blocked', self::REFUSED);
+        }
+
+        return $error;
+    }
+
+    /**
+     * Test seam: resolves a host to ['v4' => [...], 'v6' => [...], 'v6_failed' => bool].
+     *
+     * @var (\Closure(string): array{v4: list<string>, v6: list<string>, v6_failed: bool})|null
+     */
+    private static ?\Closure $resolver = null;
+
+    /**
+     * Replace DNS for a test. Refused outside PHPUnit, so nothing in
+     * production can swap the lookup the guard relies on.
+     *
+     * @internal
+     *
+     * @param  (\Closure(string): array{v4: list<string>, v6: list<string>, v6_failed: bool})|null  $resolver
+     */
+    public static function resolveForTests(?\Closure $resolver): void
+    {
+        if (! class_exists(TestCase::class, false)) {
+            throw new \LogicException('PublicUrlGuard::resolveForTests() is for tests only.');
+        }
+        self::$resolver = $resolver;
+    }
 
     /**
      * Run an HTTP call with every request it makes restricted to public
@@ -45,19 +86,51 @@ final class PublicUrlGuard
      */
     public static function guard(callable $request): mixed
     {
-        $check = static function ($url): void {
-            $error = self::urlError((string) $url);
-            if ($error !== null) {
-                throw new RequestsException($error, 'gds_mcp_url_not_public');
+        // The address the hop about to be sent was checked against. Requests
+        // fires before_request, then hands the hop to cURL, one hop at a time.
+        $pin = null;
+
+        $check = static function ($url) use (&$pin): void {
+            $pin = self::check((string) $url);
+            if ($pin === false) {
+                throw new RequestsException(self::REFUSED, 'gds_mcp_url_not_public');
+            }
+        };
+        $connectToChecked = static function ($handle) use (&$pin): void {
+            if (! is_array($pin)) {
+                return;
+            }
+            if (! curl_setopt_array($handle, self::curlPin($pin['ip'], $pin['port'], $pin['v4_only']))) {
+                throw new RequestsException(self::REFUSED, 'gds_mcp_url_not_public');
             }
         };
 
         add_action('requests-requests.before_request', $check);
+        add_action('requests-curl.before_send', $connectToChecked);
         try {
             return $request();
         } finally {
             remove_action('requests-requests.before_request', $check);
+            remove_action('requests-curl.before_send', $connectToChecked);
         }
+    }
+
+    /**
+     * cURL options that make a request connect to $ip, whatever host cURL
+     * parses from the URL: an empty host and port in CURLOPT_CONNECT_TO match
+     * any.
+     *
+     * @return array<int, mixed>
+     */
+    public static function curlPin(string $ip, int $port, bool $v4Only): array
+    {
+        $host = str_contains($ip, ':') ? "[{$ip}]" : $ip;
+        $options = [CURLOPT_CONNECT_TO => ["::{$host}:{$port}"]];
+        if ($v4Only) {
+            $options[CURLOPT_IPRESOLVE] = CURL_IPRESOLVE_V4;
+        }
+
+        return $options;
     }
 
     /**
@@ -65,12 +138,23 @@ final class PublicUrlGuard
      */
     public static function urlError(string $url): ?string
     {
+        return self::check($url) === false ? self::REFUSED : null;
+    }
+
+    /**
+     * Check a URL: false when it may not be fetched, null when it may and
+     * needs no pin (the site itself), else the checked address to connect to.
+     *
+     * @return array{ip: string, port: int, v4_only: bool}|false|null
+     */
+    private static function check(string $url): array|false|null
+    {
         if (wp_parse_url($url, PHP_URL_SCHEME) !== 'https') {
-            return sprintf('Only https URLs can be fetched (got %s).', $url);
+            return self::refuse("{$url} is not https");
         }
         $host = strtolower(trim((string) wp_parse_url($url, PHP_URL_HOST), '[].'));
         if ($host === '') {
-            return 'URL has no host component.';
+            return self::refuse("{$url} has no host");
         }
 
         // The site itself, as wp_http_validate_url() allows.
@@ -78,17 +162,43 @@ final class PublicUrlGuard
             return null;
         }
 
-        $ips = filter_var($host, FILTER_VALIDATE_IP) ? [$host] : (self::$resolver ?? self::resolve(...))($host);
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            $addresses = str_contains($host, ':')
+                ? ['v4' => [], 'v6' => [$host], 'v6_failed' => false]
+                : ['v4' => [$host], 'v6' => [], 'v6_failed' => false];
+        } else {
+            $addresses = (self::$resolver ?? self::resolve(...))($host);
+        }
+
+        // A failed AAAA lookup hides what cURL might connect to over IPv6;
+        // only go on over IPv4, and only if there is an IPv4 address.
+        if ($addresses['v6_failed'] && ! $addresses['v4']) {
+            return self::refuse("{$host}: AAAA lookup failed and no A record");
+        }
+        $ips = $addresses['v6_failed'] ? $addresses['v4'] : [...$addresses['v4'], ...$addresses['v6']];
         if (! $ips) {
-            return sprintf('Could not resolve %s.', $host);
+            return self::refuse("{$host} does not resolve");
         }
         foreach ($ips as $ip) {
             if (! self::isPublicIp($ip)) {
-                return sprintf('%s resolves to a private or reserved address (%s), which cannot be fetched.', $host, $ip);
+                return self::refuse("{$host} resolves to {$ip}");
             }
         }
 
-        return null;
+        return [
+            'ip' => $ips[0],
+            'port' => (int) (wp_parse_url($url, PHP_URL_PORT) ?: 443),
+            'v4_only' => $addresses['v6_failed'],
+        ];
+    }
+
+    private static function refuse(string $detail): false
+    {
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('gds-mcp refused a server-side fetch: '.$detail);
+        }
+
+        return false;
     }
 
     public static function isPublicIp(string $ip): bool
@@ -136,17 +246,24 @@ final class PublicUrlGuard
     }
 
     /**
-     * @return list<string>
+     * @return array{v4: list<string>, v6: list<string>, v6_failed: bool}
      */
     private static function resolve(string $host): array
     {
-        $ips = gethostbynamel($host) ?: [];
-        foreach (@dns_get_record($host, DNS_AAAA) ?: [] as $record) {
+        // dns_get_record() is false when the lookup failed, [] when the host
+        // has no AAAA record.
+        $records = @dns_get_record($host, DNS_AAAA);
+        $v6 = [];
+        foreach ($records ?: [] as $record) {
             if (! empty($record['ipv6'])) {
-                $ips[] = (string) $record['ipv6'];
+                $v6[] = (string) $record['ipv6'];
             }
         }
 
-        return $ips;
+        return [
+            'v4' => gethostbynamel($host) ?: [],
+            'v6' => $v6,
+            'v6_failed' => $records === false,
+        ];
     }
 }

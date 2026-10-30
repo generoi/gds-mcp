@@ -15,7 +15,7 @@ final class GetBlockAbility
     {
         HelpAbility::registerAbility('gds/blocks-get', [
             'label' => 'Get Block',
-            'description' => 'Get full details for a block: attributes, supports, styles, and example markup from the demo page or published posts. Read blocks://catalog first to discover available blocks.',
+            'description' => 'Get full details for a block: attributes, supports, styles, and example markup from the demo page or, with search_posts: true (off by default), from published posts. Read blocks://catalog first to discover available blocks.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -115,7 +115,9 @@ final class GetBlockAbility
             }
         }
 
-        if ($searchPosts) {
+        if ($searchPosts && $searchPostType && ! in_array($searchPostType, self::searchablePostTypes(), true)) {
+            $detail['post_examples_note'] = sprintf('Post type "%s" is not searched: only public post types, synced patterns and templates are.', $searchPostType);
+        } elseif ($searchPosts) {
             $postExamples = self::searchPostsForBlock($name, $searchPostType, $maxPostExamples, $style);
             if ($postExamples) {
                 $detail['post_examples'] = $postExamples;

@@ -423,9 +423,8 @@ final class NavMenuItemsAbility
 
         // Menu items have no trash (wp_delete_post() only trashes posts and
         // pages), so the delete is permanent. Capture what an undo needs to
-        // recreate the item: its fields, meta and menu term, the sub-items
-        // that pointed at it, and the order of every item the gap closing
-        // renumbers.
+        // recreate the item: its fields, meta and menu term, and the sub-items
+        // that pointed at it.
         $before = Snapshot::postFields($id);
         $children = array_map('intval', get_posts([
             'post_type' => 'nav_menu_item',
@@ -435,22 +434,24 @@ final class NavMenuItemsAbility
             'meta_key' => '_menu_item_menu_item_parent',
             'meta_value' => (string) $id,
         ]));
-        $orders = [];
-        foreach (wp_get_nav_menu_items($menuId) ?: [] as $item) {
-            if ((int) $item->ID !== $id) {
-                $orders[(int) $item->ID] = (int) $item->menu_order;
-            }
+
+        // Its neighbours in the menu, so an undo can put it back between them
+        // even after other items have moved.
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT]) ?: [];
+        usort($items, fn ($a, $b) => $a->menu_order <=> $b->menu_order);
+        $ids = array_map(fn ($item) => (int) $item->ID, $items);
+        $index = array_search($id, $ids, true);
+        $neighbours = $index === false ? [] : ['before' => $ids[$index - 1] ?? 0, 'after' => $ids[$index + 1] ?? 0];
+
+        $deleted = wp_delete_post($id, true);
+        if (! $deleted) {
+            return new WP_Error('delete_failed', "Could not delete menu item {$id}.");
         }
 
         // Sub-items move up to the deleted item's parent instead of pointing
         // at an id that no longer exists.
         foreach ($children as $childId) {
             update_post_meta($childId, '_menu_item_menu_item_parent', (string) $parentId);
-        }
-
-        $deleted = wp_delete_post($id, true);
-        if (! $deleted) {
-            return new WP_Error('delete_failed', "Could not delete menu item {$id}.");
         }
 
         // Close the gap by shifting everything after it up by one.
@@ -466,8 +467,7 @@ final class NavMenuItemsAbility
         return $this->reversible($result, 'recreate-menu-item', [
             'item' => $before->toArray(),
             'children' => $children,
-            'orders' => $orders,
-        ], 'Restore the deleted menu item');
+        ] + $neighbours, 'Restore the deleted menu item');
     }
 
     /**
@@ -848,7 +848,8 @@ final class NavMenuItemsAbility
      */
     private static function getSiblings(int $menuId, int $parentItemId, int $excludeId = 0): array
     {
-        $items = wp_get_nav_menu_items($menuId);
+        // Stored menu_order, as shiftOrder() works with (see there).
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT]);
         if (! $items) {
             return [];
         }
@@ -867,13 +868,16 @@ final class NavMenuItemsAbility
      * the usual WP cache/hook machinery runs and subsequent calls to
      * wp_get_nav_menu_items() see the current state.
      */
-    private static function shiftOrder(int $menuId, int $fromOrder, int $delta): void
+    public static function shiftOrder(int $menuId, int $fromOrder, int $delta): void
     {
         if ($delta === 0 || $menuId <= 0) {
             return;
         }
 
-        $items = wp_get_nav_menu_items($menuId, ['update_post_term_cache' => false]);
+        // OBJECT output: the default (ARRAY_A) renumbers menu_order to each
+        // item's position, which differs from the stored order as soon as a
+        // delete leaves a gap, and the shift would then skip items.
+        $items = wp_get_nav_menu_items($menuId, ['update_post_term_cache' => false, 'output' => OBJECT]);
         if (! $items) {
             return;
         }
@@ -890,7 +894,7 @@ final class NavMenuItemsAbility
 
     private static function maxMenuOrder(int $menuId): int
     {
-        $items = wp_get_nav_menu_items($menuId);
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT]);
         if (! $items) {
             return 0;
         }

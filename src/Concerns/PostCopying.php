@@ -7,15 +7,28 @@ use GeneroWP\MCP\Undo\RestoreSnapshot;
 trait PostCopying
 {
     /**
+     * WooCommerce identifiers that must be unique, and sales and review stats
+     * that belong to one product. A duplicate is a different product, so it
+     * starts without them; a translation is the same product, and Polylang for
+     * WooCommerce shares them across its languages. (A static property: traits
+     * can hold constants only from PHP 8.2.)
+     *
+     * @var list<string>
+     */
+    private static array $productIdentityMeta = ['_sku', '_global_unique_id', 'total_sales', '_wc_average_rating', '_wc_rating_count', '_wc_review_count'];
+
+    /**
      * Copy meta from one post to another, including underscore-prefixed meta
      * such as `_wp_page_template`, SEO fields and ACF field references.
+     *
+     * @param  bool  $duplicate  A new, separate post rather than a translation of the source.
      */
-    protected static function copyPostMeta(int $sourceId, int $targetId): void
+    protected static function copyPostMeta(int $sourceId, int $targetId, bool $duplicate): void
     {
         $allMeta = get_post_meta($sourceId);
 
         foreach ($allMeta as $key => $values) {
-            if (self::isPerPostMeta($key)) {
+            if (self::isPerPostMeta($key) || ($duplicate && in_array($key, self::$productIdentityMeta, true))) {
                 continue;
             }
 
@@ -33,8 +46,7 @@ trait PostCopying
      * image (set separately, translated where media is), attachment file
      * pointers (two posts sharing one file would delete it with either), Yoast
      * redirect and canonical (the copy would redirect to, or canonicalise to,
-     * its source), WooCommerce identifiers that must be unique, and review
-     * stats derived from comments that are not copied.
+     * its source).
      */
     private static function isPerPostMeta(string $key): bool
     {
@@ -43,7 +55,6 @@ trait PostCopying
             '_wp_desired_post_slug', '_thumbnail_id', '_encloseme', '_pingme',
             '_wp_attached_file', '_wp_attachment_metadata', '_wp_attachment_backup_sizes',
             '_yoast_wpseo_redirect', '_yoast_wpseo_canonical',
-            '_sku', '_global_unique_id', '_wc_average_rating', '_wc_rating_count', '_wc_review_count',
         ];
 
         return in_array($key, $keys, true) || str_starts_with($key, '_pll_') || str_starts_with($key, '_wp_trash_');

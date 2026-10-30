@@ -62,6 +62,61 @@ class RestoreSnapshotTest extends TestCase
         $this->assertSame([], wp_get_object_terms($id, 'post_tag', ['fields' => 'ids']));
     }
 
+    public function test_restore_post_leaves_polylang_translation_links_alone(): void
+    {
+        if (! function_exists('pll_save_post_translations')) {
+            $this->markTestSkipped('Polylang is not active.');
+        }
+        $model = PLL()->model;
+        foreach ([['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0], ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1]] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->clean_languages_cache();
+
+        // Snapshot taken while the post had no language or translations.
+        $en = self::factory()->post->create();
+        $before = Snapshot::postFields($en);
+        $this->assertArrayNotHasKey('post_translations', $before->terms);
+
+        $fi = self::factory()->post->create();
+        pll_set_post_language($en, 'en');
+        pll_set_post_language($fi, 'fi');
+        pll_save_post_translations(['en' => $en, 'fi' => $fi]);
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+
+        $this->assertSame($fi, pll_get_post_translations($en)['fi'] ?? null, 'The undo does not unlink the translation.');
+    }
+
+    public function test_restore_post_puts_the_language_back(): void
+    {
+        if (! function_exists('pll_set_post_language')) {
+            $this->markTestSkipped('Polylang is not active.');
+        }
+        // WP_UnitTestCase rollback removes language terms; Polylang's cache
+        // may still list them.
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        foreach ([['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0], ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1]] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->clean_languages_cache();
+
+        $id = self::factory()->post->create();
+        pll_set_post_language($id, 'en');
+        $before = Snapshot::postFields($id);
+
+        // What content-update with `lang` does.
+        pll_set_post_language($id, 'fi');
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+        $this->assertSame('en', pll_get_post_language($id));
+    }
+
     public function test_restore_post_only_rewrites_meta_that_changed(): void
     {
         global $wpdb;
@@ -191,7 +246,7 @@ class RestoreSnapshotTest extends TestCase
         $this->assertSame('trash', get_post_status($id));
 
         $this->assertNotWPError($this->restore('untrash', ['id' => $id]));
-        $this->assertSame('draft', get_post_status($id), 'A row without a status keeps core behaviour.');
+        $this->assertSame('publish', get_post_status($id), 'A row without a status falls back to the one core kept at trash time.');
     }
 
     public function test_untrash_restores_the_status_the_post_had(): void

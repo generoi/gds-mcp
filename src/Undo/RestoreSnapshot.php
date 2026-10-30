@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Undo;
 
+use GeneroWP\MCP\Abilities\NavMenuItemsAbility;
 use GeneroWP\MCP\Integrations\Yoast\SeoFields;
 use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
 use GeneroWP\MCP\Undo\Snapshots\PostFieldsSnapshot;
@@ -116,7 +117,18 @@ final class RestoreSnapshot
             }
         }
 
-        foreach ($snapshot->terms as $taxonomy => $ids) {
+        // Older snapshots may still hold the translation group; never restore
+        // it. The language goes back through Polylang, which keeps its
+        // caches and the translation group consistent.
+        $terms = array_diff_key($snapshot->terms, array_flip(PostFieldsSnapshot::TRANSLATION_GROUP_TAXONOMIES));
+        if (isset($terms['language']) && function_exists('pll_set_post_language')) {
+            $language = $terms['language'] ? get_term((int) $terms['language'][0], 'language') : null;
+            if ($language instanceof \WP_Term && pll_get_post_language($snapshot->id) !== $language->slug) {
+                pll_set_post_language($snapshot->id, $language->slug);
+            }
+            unset($terms['language']);
+        }
+        foreach ($terms as $taxonomy => $ids) {
             wp_set_object_terms($snapshot->id, $ids, $taxonomy, false);
         }
 
@@ -177,12 +189,13 @@ final class RestoreSnapshot
         }
 
         // Since WP 5.6 untrashing gives a draft. Put back the status the post
-        // had when it was trashed; rows recorded without it keep core's draft.
+        // had when it was trashed: the one the undo row recorded, or for rows
+        // without it the one core kept in _wp_trash_meta_status.
         $status = (string) ($data['status'] ?? '');
-        $priorStatus = static fn ($newStatus, $postId) => (int) $postId === $id ? $status : $newStatus;
-        if ($status !== '') {
-            add_filter('wp_untrash_post_status', $priorStatus, 10, 2);
-        }
+        $priorStatus = static fn ($newStatus, $postId, $previousStatus) => (int) $postId === $id
+            ? ($status !== '' ? $status : ((string) $previousStatus ?: $newStatus))
+            : $newStatus;
+        add_filter('wp_untrash_post_status', $priorStatus, 10, 3);
         $untrashed = wp_untrash_post($id);
         remove_filter('wp_untrash_post_status', $priorStatus, 10);
 
@@ -212,10 +225,11 @@ final class RestoreSnapshot
 
     /**
      * Recreate a deleted menu item (they have no trash), under its original id
-     * when that is still free. Its former sub-items are pointed back at it and
-     * the menu's order is put back as it was before the delete closed the gap.
+     * when that is still free. Its former sub-items are pointed back at it, and
+     * the gap the delete closed is reopened against the menu as it is now, so
+     * items added or moved since keep their places relative to each other.
      *
-     * data: { item: PostFieldsSnapshot, children: list<int>, orders: array<int, int> }
+     * data: { item: PostFieldsSnapshot, children: list<int> }
      *
      * @param  array<string, mixed>  $data
      * @return RestoreSummary|WP_Error
@@ -227,14 +241,35 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', 'Snapshot was missing the menu item id.');
         }
 
+        $menuId = (int) ($snapshot->terms['nav_menu'][0] ?? 0);
+        if (! $menuId || ! term_exists($menuId, 'nav_menu')) {
+            return new WP_Error('restore_failed', 'The menu this item belonged to no longer exists.');
+        }
+
+        // Back between the items it sat between: right before the one that
+        // followed it, else right after the one before it, else (both gone,
+        // or a row from before neighbours were recorded) at its old order.
+        $inMenu = static fn (int $itemId): ?\WP_Post => $itemId && has_term($menuId, 'nav_menu', $itemId) ? get_post($itemId) : null;
+        $after = $inMenu((int) ($data['after'] ?? 0));
+        $before = $inMenu((int) ($data['before'] ?? 0));
+        $order = $after ? (int) $after->menu_order : ($before ? (int) $before->menu_order + 1 : (int) $snapshot->post['menu_order']);
+        NavMenuItemsAbility::shiftOrder($menuId, $order, +1);
+
         // wp_insert_post() keeps import_id only when no post has that id.
-        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $snapshot->post), true);
+        $fields = ['menu_order' => $order] + $snapshot->post;
+        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $fields), true);
         if (is_wp_error($newId)) {
+            NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
+
             return $newId;
         }
 
-        $restored = self::restorePost((new PostFieldsSnapshot($newId, $snapshot->post, $snapshot->meta, $snapshot->terms, true))->toArray());
+        $restored = self::restorePost((new PostFieldsSnapshot($newId, $fields, $snapshot->meta, $snapshot->terms, true))->toArray());
         if (is_wp_error($restored)) {
+            // All or nothing: no half-restored item left in the menu.
+            wp_delete_post($newId, true);
+            NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
+
             return $restored;
         }
 
@@ -243,15 +278,10 @@ final class RestoreSnapshot
                 update_post_meta((int) $childId, '_menu_item_menu_item_parent', (string) $newId);
             }
         }
-        foreach ((array) ($data['orders'] ?? []) as $itemId => $order) {
-            if (get_post_type((int) $itemId) === 'nav_menu_item') {
-                wp_update_post(['ID' => (int) $itemId, 'menu_order' => (int) $order]);
-            }
-        }
 
         $summary = ['restored' => 'recreate-menu-item', 'id' => $newId];
         if ($newId !== $snapshot->id) {
-            $summary['note'] = "The menu item was restored under a new id ({$newId}; was {$snapshot->id}) because the old id had been reused.";
+            $summary['caveats'] = ["The menu item came back under a new id ({$newId}; was {$snapshot->id}) because the old id had been reused."];
         }
 
         return $summary;
@@ -315,11 +345,82 @@ final class RestoreSnapshot
         if (! $id || get_post_type($id) !== 'attachment') {
             return ['restored' => 'delete-attachment', 'id' => $id, 'note' => 'Already removed.'];
         }
+        // Since the upload it may have become a featured image, a gallery
+        // image, the site logo, or been put in content; deleting the file
+        // would break those, so leave it.
+        $usedBy = self::attachmentUsers($id);
+        if (is_wp_error($usedBy)) {
+            return $usedBy;
+        }
+        if ($usedBy) {
+            return new WP_Error('restore_failed', sprintf('The uploaded file is now used by %s, so it was not deleted. Remove it there first, or delete it in the Media Library.', implode(', ', $usedBy)));
+        }
         if (! wp_delete_attachment($id, true)) {
             return new WP_Error('restore_failed', "Failed to delete attachment {$id}.");
         }
 
         return ['restored' => 'delete-attachment', 'id' => $id];
+    }
+
+    /**
+     * What uses an attachment: post or term meta holding its id (featured
+     * image, term thumbnail, a comma-separated list like
+     * _product_image_gallery, a serialized array like an ACF gallery), the
+     * site logo or icon, or post content (its wp-image-{id} class, or its
+     * URL, size variants included). An error when a lookup failed: not
+     * knowing is no reason to delete.
+     *
+     * @return list<string>|WP_Error
+     */
+    private static function attachmentUsers(int $id): array|WP_Error
+    {
+        global $wpdb;
+
+        $users = [];
+        foreach (['site_logo', 'site_icon'] as $option) {
+            if ((int) get_option($option) === $id) {
+                $users[] = "the {$option} setting";
+            }
+        }
+        if ((int) get_theme_mod('custom_logo') === $id) {
+            $users[] = 'the custom_logo theme setting';
+        }
+
+        // The id alone, in a comma-separated list, or as a serialized string.
+        $metaMatch = '(meta_value = %s OR meta_value REGEXP %s OR meta_value LIKE %s)';
+        $metaArgs = [(string) $id, '(^|,)'.$id.'(,|$)', '%'.$wpdb->esc_like('"'.$id.'";').'%'];
+
+        $url = (string) wp_get_attachment_url($id);
+        // The URL with or without a -300x200 size suffix, then its extension:
+        // `photo` must not match `photo-2.png`.
+        $urlPattern = $url !== '' ? preg_quote((string) preg_replace('/\.[^.\/]+$/', '', $url), '/').'(-[0-9]+x[0-9]+)?\\.' : '';
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $lookups = [
+            // Its own rows aside, and _edit_last, which holds a user id.
+            ['post', $wpdb->prepare("SELECT DISTINCT post_id FROM {$wpdb->postmeta} WHERE post_id != %d AND meta_key != '_edit_last' AND {$metaMatch}", $id, ...$metaArgs)],
+            ['term', $wpdb->prepare("SELECT DISTINCT term_id FROM {$wpdb->termmeta} WHERE {$metaMatch}", ...$metaArgs)],
+            ['post', $wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts}
+                 WHERE post_type NOT IN ('revision', 'attachment') AND post_status != 'trash'
+                 AND (post_content REGEXP %s OR (%s != '' AND post_content REGEXP %s))",
+                'wp-image-'.$id.'([^0-9]|$)',
+                $urlPattern,
+                $urlPattern
+            )],
+        ];
+        foreach ($lookups as [$kind, $query]) {
+            $found = $wpdb->get_col($query);
+            if ($wpdb->last_error !== '') {
+                return new WP_Error('restore_failed', 'Could not check what uses the uploaded file, so it was not deleted.');
+            }
+            foreach ($found as $objectId) {
+                $users[] = "{$kind} {$objectId}";
+            }
+        }
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+        return array_values(array_unique($users));
     }
 
     /**

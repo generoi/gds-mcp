@@ -87,7 +87,9 @@ final class Grants
     {
         global $wpdb;
 
-        return is_main_site() ? self::META_PREFIX : $wpdb->get_blog_prefix().self::META_PREFIX;
+        // The main site of the main network only: with several networks each
+        // has a main site, and they share user meta too.
+        return is_main_site(null, get_main_network_id()) ? self::META_PREFIX : $wpdb->get_blog_prefix().self::META_PREFIX;
     }
 
     /**

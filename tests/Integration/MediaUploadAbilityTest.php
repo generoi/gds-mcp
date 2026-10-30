@@ -2,7 +2,6 @@
 
 namespace GeneroWP\MCP\Tests\Integration;
 
-use GeneroWP\MCP\Http\PublicUrlGuard;
 use GeneroWP\MCP\Tests\AbilityTestCase;
 use GeneroWP\MCP\Tests\Fixtures\RedirectingTransport;
 
@@ -49,6 +48,63 @@ class MediaUploadAbilityTest extends AbilityTestCase
 
         $this->assertNull(get_post($result['id']));
         $this->assertFileDoesNotExist($file);
+    }
+
+    public function test_undoing_an_upload_keeps_a_file_that_is_now_in_use(): void
+    {
+        $featured = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'featured.png']);
+        set_post_thumbnail($this->createPost(['post_type' => 'post']), $featured['id']);
+
+        $embedded = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'embedded.png']);
+        $this->createPost(['post_type' => 'post', 'post_content' => '<!-- wp:image {"id":'.$embedded['id'].'} --><figure class="wp-block-image"><img src="'.$embedded['url'].'" class="wp-image-'.$embedded['id'].'"/></figure><!-- /wp:image -->']);
+
+        $gallery = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'gallery.png']);
+        update_post_meta($this->createPost(['post_type' => 'post']), '_product_image_gallery', '7,'.$gallery['id'].',9');
+
+        $acfGallery = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'acf-gallery.png']);
+        update_post_meta($this->createPost(['post_type' => 'post']), 'gallery', [(string) $acfGallery['id'], '9']);
+
+        $termThumb = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'term-thumb.png']);
+        update_term_meta(self::factory()->category->create(), 'thumbnail_id', $termThumb['id']);
+
+        $logo = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'logo.png']);
+        update_option('site_logo', $logo['id']);
+
+        foreach ([$featured, $embedded, $gallery, $acfGallery, $termThumb, $logo] as $upload) {
+            $this->assertWPError(apply_filters('gds-mcp/restore_snapshot', null, $upload['_undo']), $upload['url']);
+            $this->assertNotNull(get_post($upload['id']));
+            wp_delete_attachment($upload['id'], true);
+        }
+    }
+
+    public function test_undoing_an_upload_keeps_the_file_when_a_reference_lookup_fails(): void
+    {
+        global $wpdb;
+        $upload = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'lookup-fails.png']);
+        // Break only the term meta lookup.
+        add_filter('query', fn (string $query) => str_contains($query, "DISTINCT term_id FROM {$wpdb->termmeta}") ? 'SELECT broken FROM' : $query);
+        $suppressed = $wpdb->suppress_errors(true);
+
+        try {
+            $result = apply_filters('gds-mcp/restore_snapshot', null, $upload['_undo']);
+        } finally {
+            $wpdb->suppress_errors($suppressed);
+        }
+
+        $this->assertWPError($result);
+        $this->assertNotNull(get_post($upload['id']), 'Not knowing is no reason to delete.');
+        wp_delete_attachment($upload['id'], true);
+    }
+
+    public function test_undoing_an_upload_is_not_blocked_by_a_similarly_named_file(): void
+    {
+        $upload = $this->assertAbilitySuccess('gds/media-upload', ['base64' => self::PIXEL_PNG, 'filename' => 'photo.png']);
+        $stem = preg_replace('/\.png$/', '', $upload['url']);
+        // photo-2.png is another file; photo-300x200.png would be a size of this one.
+        $this->createPost(['post_type' => 'post', 'post_content' => '<img src="'.$stem.'-2.png">']);
+
+        $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $upload['_undo']));
+        $this->assertNull(get_post($upload['id']));
     }
 
     public function test_upload_with_alt_text_and_title(): void
@@ -157,18 +213,17 @@ class MediaUploadAbilityTest extends AbilityTestCase
 
     public function test_refuses_a_download_that_redirects_to_a_non_public_address(): void
     {
-        $host = WebFetchAbilityTest::hostCoreLetsThrough();
-        RedirectingTransport::install("https://{$host}/secret.png");
-        PublicUrlGuard::$resolver = static fn (string $host): array => ['fe80::1'];
+        WebFetchAbilityTest::resolveLocalhostTo(['v4' => [], 'v6' => ['fe80::1'], 'v6_failed' => false]);
+        RedirectingTransport::install('https://localhost/secret.png');
 
         try {
             $error = $this->assertAbilityError('gds/media-upload', ['url' => 'https://93.184.216.34/a.png']);
         } finally {
             RedirectingTransport::uninstall();
-            PublicUrlGuard::$resolver = null;
+            WebFetchAbilityTest::setResolver(null);
         }
 
-        $this->assertStringContainsString('private or reserved address (fe80::1)', $error->get_error_message());
+        $this->assertStringContainsString('only public https addresses', $error->get_error_message());
         $this->assertCount(1, RedirectingTransport::$requested, 'The redirect target is never requested.');
     }
 

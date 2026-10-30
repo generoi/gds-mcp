@@ -160,23 +160,49 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
 
     public function test_trash_needs_delete_post_and_goes_through_the_trash(): void
     {
-        $published = self::factory()->post->create(['post_status' => 'publish']);
-        $draft = self::factory()->post->create(['post_status' => 'draft']);
+        $locked = self::factory()->post->create(['post_status' => 'publish']);
+        $published = self::factory()->post->create(['post_status' => 'publish', 'post_name' => 'kept-slug']);
         // Editable, but not deletable.
-        add_filter('map_meta_cap', static fn ($caps, $cap, $userId, $args) => $cap === 'delete_post' && (int) ($args[0] ?? 0) === $published ? ['do_not_allow'] : $caps, 10, 4);
+        add_filter('map_meta_cap', static fn ($caps, $cap, $userId, $args) => $cap === 'delete_post' && (int) ($args[0] ?? 0) === $locked ? ['do_not_allow'] : $caps, 10, 4);
 
-        $result = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$published, $draft], 'set_status' => 'trash']);
+        $result = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$locked, $published], 'set_status' => 'trash']);
 
         $this->assertSame(1, $result['updated']);
-        $this->assertSame('publish', get_post_status($published));
-        $this->assertSame($published, $result['errors'][0]['id']);
-        $this->assertSame('trash', get_post_status($draft));
-        $this->assertSame('draft', get_post_meta($draft, '_wp_trash_meta_status', true), 'A real trash, so untrash can restore it.');
+        $this->assertSame('publish', get_post_status($locked));
+        $this->assertSame($locked, $result['errors'][0]['id']);
+        $this->assertSame('trash', get_post_status($published));
+        $this->assertSame('publish', get_post_meta($published, '_wp_trash_meta_status', true), 'A real trash, so untrash can restore it.');
 
         $undo = apply_filters('gds-mcp/restore_snapshot', null, $result['_undo']);
         $this->assertNotWPError($undo);
-        $this->assertNotSame('trash', get_post_status($draft));
-        $this->assertSame(['kind' => 'untrash', 'data' => ['id' => $draft, 'status' => 'draft']], $result['_undo']['data']['items'][0]);
+        clean_post_cache($published);
+        $this->assertSame('publish', get_post_status($published), 'Undo puts the post back as published, not as a draft.');
+        $this->assertSame('kept-slug', get_post($published)->post_name);
+    }
+
+    public function test_a_refused_meta_write_is_an_error_not_an_unchanged_value(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        // Something refuses this one key.
+        add_filter('update_post_metadata', fn ($check, $id, $key) => $key === 'refused' ? false : $check, 10, 3);
+
+        $result = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$postId], 'set_meta' => ['refused' => 'x', 'kept' => 'y']]);
+
+        $this->assertSame(1, $result['updated'], 'The other key was written, so this is not a failed run.');
+        $this->assertStringContainsString('"refused"', $result['errors'][0]['error']);
+    }
+
+    public function test_a_value_the_sanitizer_makes_equal_is_not_an_error(): void
+    {
+        register_post_meta('post', 'shouty', ['sanitize_callback' => fn ($value) => strtoupper((string) $value)]);
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        update_post_meta($postId, 'shouty', 'LOUD');
+        update_post_meta($postId, 'other', 'old');
+
+        $result = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$postId], 'set_meta' => ['shouty' => 'loud', 'other' => 'new']]);
+        unregister_post_meta('post', 'shouty');
+
+        $this->assertArrayNotHasKey('errors', $result, 'Stored as LOUD already: unchanged, not refused.');
     }
 
     public function test_counts_only_posts_where_something_was_written(): void

@@ -30,10 +30,25 @@ Plugin::getInstance();
 // are only dormant — reactivating, or a deploy restoring the plugin, brings
 // every one of them back inside its 30-day life, and the screen that would
 // have listed them was unavailable for the whole window.
-register_deactivation_hook(__FILE__, static function (): void {
-    wp_clear_scheduled_hook('gds_mcp_oauth_cleanup');
+// Grants are kept per site, so a network-wide deactivation ends every site's.
+register_deactivation_hook(__FILE__, static function (bool $networkWide = false): void {
+    $revoke = static function (): void {
+        wp_clear_scheduled_hook('gds_mcp_oauth_cleanup');
+        if (class_exists(Grants::class)) {
+            Grants::revokeAll();
+        }
+    };
 
-    if (class_exists(Grants::class)) {
-        Grants::revokeAll();
+    if (! $networkWide) {
+        $revoke();
+
+        return;
+    }
+
+    // The network it was deactivated on; others may still run the plugin.
+    foreach (get_sites(['fields' => 'ids', 'number' => 0, 'network_id' => get_current_network_id()]) as $siteId) {
+        switch_to_blog((int) $siteId);
+        $revoke();
+        restore_current_blog();
     }
 });

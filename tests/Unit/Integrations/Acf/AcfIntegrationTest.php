@@ -157,4 +157,34 @@ class AcfIntegrationTest extends WP_UnitTestCase
         $this->assertSame(['not_a_field'], array_keys($result['fields_errors']));
         $this->assertSame('', get_post_meta($postId, 'not_a_field', true));
     }
+
+    public function test_content_update_reports_a_refused_write_and_keeps_backslashes(): void
+    {
+        acf_add_local_field_group([
+            'key' => 'group_test_refused',
+            'title' => 'Refused Test',
+            'fields' => [
+                ['key' => 'field_refused', 'label' => 'Refused', 'name' => 'refused_field', 'type' => 'text'],
+                ['key' => 'field_path', 'label' => 'Path', 'name' => 'path_field', 'type' => 'text'],
+                ['key' => 'field_box', 'label' => 'Box', 'name' => 'box_field', 'type' => 'group', 'sub_fields' => [
+                    ['key' => 'field_box_inner', 'label' => 'Inner', 'name' => 'inner', 'type' => 'text'],
+                ]],
+            ],
+            'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'post']]],
+            'active' => true,
+        ]);
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        update_field('field_box', ['field_box_inner' => 'same'], $postId);
+        // Something refuses this one write.
+        add_filter('acf/pre_update_value', fn ($check, $value, $id, $field) => $field['key'] === 'field_refused' ? false : $check, 10, 4);
+
+        $result = (new GenericPostTypeAbility)->executeUpdate([
+            'type' => 'posts',
+            'id' => $postId,
+            'fields' => ['refused_field' => 'nope', 'path_field' => 'C:\Temp', 'box_field' => ['inner' => 'same']],
+        ]);
+
+        $this->assertSame(['refused_field'], array_keys($result['fields_errors'] ?? []), 'Only the refused plain field is reported, not the unchanged group.');
+        $this->assertSame('C:\Temp', get_field('path_field', $postId));
+    }
 }
