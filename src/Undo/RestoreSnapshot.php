@@ -843,6 +843,9 @@ final class RestoreSnapshot
                 $group = $row->group;
                 ksort($group);
                 $groups[implode(',', $group)] = $group;
+            } elseif ($row->id) {
+                // It stood alone before: take it out of the group it joined.
+                PLL()->model->post->delete_translation($row->id);
             }
         }
         foreach ($groups as $group) {
