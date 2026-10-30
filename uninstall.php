@@ -18,7 +18,8 @@ global $wpdb;
 $wpdb->query(
     $wpdb->prepare(
         "DELETE FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
-        $wpdb->esc_like('_gds_mcp_oauth_grant_').'%'
+        // Any site's grants: on a network each key starts with the site's table prefix.
+        '%'.$wpdb->esc_like('_gds_mcp_oauth_grant_').'%'
     )
 );
 

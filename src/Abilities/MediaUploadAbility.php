@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Http\PublicUrlGuard;
 use GeneroWP\MCP\Undo\Reversible;
 use WP_Error;
 
@@ -100,6 +101,11 @@ final class MediaUploadAbility
             return new WP_Error('ambiguous_source', 'Provide either "base64" or "url", not both.');
         }
 
+        $postParent = (int) ($input['post_parent'] ?? 0);
+        if ($postParent && ! current_user_can('edit_post', $postParent)) {
+            return new WP_Error('forbidden', sprintf('You do not have permission to attach files to post %d.', $postParent), ['status' => 403]);
+        }
+
         if ($hasUrl) {
             return $this->uploadFromUrl($input);
         }
@@ -115,15 +121,13 @@ final class MediaUploadAbility
     {
         $url = $input['url'];
 
-        // Validate URL scheme to prevent SSRF.
-        $scheme = wp_parse_url($url, PHP_URL_SCHEME);
-        if (! in_array($scheme, ['http', 'https'], true)) {
-            return new WP_Error('invalid_url', 'URL must use http or https scheme.');
+        if (wp_parse_url($url, PHP_URL_SCHEME) !== 'https') {
+            return new WP_Error('invalid_url', 'URL must use https. Plain http is not allowed.');
         }
 
-        // download_url() uses wp_safe_remote_get() which blocks private IPs.
-        // Timeout prevents slow-drip DoS; file size checked after download.
-        $tmpFile = download_url($url, 30);
+        // Every hop must resolve to public addresses (SSRF). Timeout prevents
+        // slow-drip DoS; file size checked after download.
+        $tmpFile = PublicUrlGuard::guard(fn () => download_url($url, 30));
         if (is_wp_error($tmpFile)) {
             return $tmpFile;
         }

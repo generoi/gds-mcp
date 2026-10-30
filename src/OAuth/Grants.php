@@ -21,7 +21,8 @@ namespace GeneroWP\MCP\OAuth;
 final class Grants
 {
     /**
-     * Prefix of the user meta row holding one grant.
+     * Prefix of the user meta row holding one grant, before the site prefix
+     * {@see metaPrefix()} adds on a multisite network.
      */
     public const META_PREFIX = '_gds_mcp_oauth_grant_';
 
@@ -67,6 +68,24 @@ final class Grants
     // ── Grants ───────────────────────────────────────────────────
 
     /**
+     * Prefix of this site's grant rows.
+     *
+     * User meta is shared by every site of a multisite network, while the
+     * tokens a grant mints live in each site's own options. With one key for
+     * all sites, deactivating the plugin on one site revoked every site's
+     * connections and each site listed the others'. So every site but the
+     * main one keys its grants by its table prefix, as user settings do. The
+     * main site — and any single site — keeps the key grants always had, so
+     * existing connections there carry on.
+     */
+    public static function metaPrefix(): string
+    {
+        global $wpdb;
+
+        return is_main_site() ? self::META_PREFIX : $wpdb->get_blog_prefix().self::META_PREFIX;
+    }
+
+    /**
      * @param  array<string, mixed>  $grant  client_id, client_name, resource, scopes
      */
     public static function create(int $userId, array $grant): string
@@ -87,7 +106,7 @@ final class Grants
 
         $grantId = bin2hex(random_bytes(8));
 
-        add_user_meta($userId, self::META_PREFIX.$grantId, $grant + [
+        add_user_meta($userId, self::metaPrefix().$grantId, $grant + [
             'created' => time(),
             'last_used' => time(),
             'refresh' => null,
@@ -101,7 +120,7 @@ final class Grants
      */
     public static function get(int $userId, string $grantId): ?array
     {
-        $grant = get_user_meta($userId, self::META_PREFIX.$grantId, true);
+        $grant = get_user_meta($userId, self::metaPrefix().$grantId, true);
 
         return is_array($grant) ? $grant : null;
     }
@@ -112,16 +131,17 @@ final class Grants
     public static function all(int $userId): array
     {
         $grants = [];
+        $prefix = self::metaPrefix();
 
         foreach (get_user_meta($userId) as $key => $values) {
-            if (! str_starts_with((string) $key, self::META_PREFIX)) {
+            if (! str_starts_with((string) $key, $prefix)) {
                 continue;
             }
 
             // The keyless form of get_user_meta() returns raw rows.
             $grant = maybe_unserialize((string) ($values[0] ?? ''));
             if (is_array($grant)) {
-                $grants[substr((string) $key, strlen(self::META_PREFIX))] = $grant;
+                $grants[substr((string) $key, strlen($prefix))] = $grant;
             }
         }
 
@@ -142,7 +162,7 @@ final class Grants
             delete_option(self::REFRESH_PREFIX.$hash);
         }
 
-        return delete_user_meta($userId, self::META_PREFIX.$grantId);
+        return delete_user_meta($userId, self::metaPrefix().$grantId);
     }
 
     /**
@@ -169,11 +189,13 @@ final class Grants
         $ids = $wpdb->get_col(
             $wpdb->prepare(
                 "SELECT DISTINCT user_id FROM {$wpdb->usermeta} WHERE meta_key LIKE %s",
-                $wpdb->esc_like(self::META_PREFIX).'%'
+                $wpdb->esc_like(self::metaPrefix()).'%'
             )
         );
 
-        return $ids ? get_users(['include' => array_map('intval', $ids)]) : [];
+        // blog_id 0: holders on every site of a network, since a network admin
+        // or super admin may hold a grant on a site they are not a member of.
+        return $ids ? get_users(['include' => array_map('intval', $ids), 'blog_id' => 0]) : [];
     }
 
     /**
@@ -191,7 +213,7 @@ final class Grants
         $wpdb->update(
             $wpdb->usermeta,
             ['meta_value' => maybe_serialize($grant)],
-            ['user_id' => $userId, 'meta_key' => self::META_PREFIX.$grantId]
+            ['user_id' => $userId, 'meta_key' => self::metaPrefix().$grantId]
         );
         wp_cache_delete($userId, 'user_meta');
 

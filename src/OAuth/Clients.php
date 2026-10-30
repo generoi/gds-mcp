@@ -32,6 +32,14 @@ final class Clients
     private const MAX_AGE = 60 * DAY_IN_SECONDS;
 
     /**
+     * Registrations one address may make in an hour. Claude registers once
+     * per connection, so a person connecting is nowhere near it.
+     */
+    private const REGISTRATIONS_PER_HOUR = 20;
+
+    private const THROTTLE_PREFIX = 'gds_mcp_oauth_reg_';
+
+    /**
      * @param  string|null  $rawBody  Registration body; read from the request when omitted.
      */
     public static function handleRegistration(?string $rawBody = null): void
@@ -45,6 +53,15 @@ final class Clients
         if (! Server::isSecure()) {
             throw Server::error('invalid_request', 'Client registration requires HTTPS.', 400);
         }
+
+        // Registration is open to anyone, so one address must not be able to
+        // churn the store.
+        $throttleKey = self::THROTTLE_PREFIX.md5((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+        $recent = (int) get_transient($throttleKey);
+        if ($recent >= self::REGISTRATIONS_PER_HOUR) {
+            throw Server::error('too_many_requests', 'Too many client registrations from this address. Try again later.', 429);
+        }
+        set_transient($throttleKey, $recent + 1, HOUR_IN_SECONDS);
 
         // RFC 7591 §3.1: the registration request body is JSON.
         $body = json_decode($rawBody ?? (string) file_get_contents('php://input'), true);
@@ -200,11 +217,14 @@ final class Clients
         $cutoff = time() - self::MAX_AGE;
         $stale = array_keys(array_filter($index, static fn ($issued): bool => $issued < $cutoff));
 
-        // Only if age alone has not kept the store in check.
+        // Only if age alone has not kept the store in check. A client somebody
+        // is connected through is never evicted: it could not re-authorize.
         if (count($index) - count($stale) > self::MAX_CLIENTS) {
-            asort($index);
-            $overflow = array_slice(array_keys($index), 0, count($index) - self::MAX_CLIENTS);
-            $stale = array_unique(array_merge($stale, $overflow));
+            $live = self::clientsWithLiveGrants();
+            $candidates = array_diff_key($index, $live, array_flip($stale));
+            asort($candidates);
+            $overflow = array_slice(array_keys($candidates), 0, max(0, count($index) - count($stale) - self::MAX_CLIENTS));
+            $stale = array_merge($stale, $overflow);
         }
 
         foreach ($stale as $clientId) {
@@ -213,5 +233,24 @@ final class Clients
         }
 
         update_option(self::INDEX_OPTION, $index, false);
+    }
+
+    /**
+     * Client ids a live grant was made through.
+     *
+     * @return array<string, true>
+     */
+    private static function clientsWithLiveGrants(): array
+    {
+        $live = [];
+        foreach (Grants::users() as $user) {
+            foreach (Grants::all($user->ID) as $grant) {
+                if (Grants::isLive($grant)) {
+                    $live[(string) $grant['client_id']] = true;
+                }
+            }
+        }
+
+        return $live;
     }
 }

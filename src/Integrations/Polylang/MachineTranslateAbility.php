@@ -121,8 +121,33 @@ final class MachineTranslateAbility
         if (! current_user_can('edit_post', $postId)) {
             return new WP_Error('forbidden', 'You do not have permission to translate this post.', ['status' => 403]);
         }
+        if ($error = self::targetPermissionError($postId, $language)) {
+            return $error;
+        }
 
         return $this->translatePost($postId, $targetLang, $service, $language);
+    }
+
+    /**
+     * Overwriting an existing translation is an edit of that post; creating
+     * one needs create_posts. Polylang saves machine translations as drafts,
+     * so no publish check is needed.
+     */
+    public static function targetPermissionError(int $postId, string $language): ?WP_Error
+    {
+        $existingId = (int) (pll_get_post_translations($postId)[$language] ?? 0);
+        if ($existingId) {
+            return current_user_can('edit_post', $existingId)
+                ? null
+                : new WP_Error('forbidden', sprintf('You do not have permission to edit the existing %s translation (ID: %d).', $language, $existingId), ['status' => 403]);
+        }
+
+        $typeObj = get_post_type_object((string) get_post_type($postId));
+        if (! $typeObj || ! current_user_can($typeObj->cap->create_posts)) {
+            return new WP_Error('forbidden', 'You do not have permission to create posts of this type.', ['status' => 403]);
+        }
+
+        return null;
     }
 
     /**

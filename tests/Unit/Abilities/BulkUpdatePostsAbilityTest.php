@@ -158,6 +158,40 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         unregister_post_meta('post', 'locked_delete');
     }
 
+    public function test_trash_needs_delete_post_and_goes_through_the_trash(): void
+    {
+        $published = self::factory()->post->create(['post_status' => 'publish']);
+        $draft = self::factory()->post->create(['post_status' => 'draft']);
+        // Editable, but not deletable.
+        add_filter('map_meta_cap', static fn ($caps, $cap, $userId, $args) => $cap === 'delete_post' && (int) ($args[0] ?? 0) === $published ? ['do_not_allow'] : $caps, 10, 4);
+
+        $result = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$published, $draft], 'set_status' => 'trash']);
+
+        $this->assertSame(1, $result['updated']);
+        $this->assertSame('publish', get_post_status($published));
+        $this->assertSame($published, $result['errors'][0]['id']);
+        $this->assertSame('trash', get_post_status($draft));
+        $this->assertSame('draft', get_post_meta($draft, '_wp_trash_meta_status', true), 'A real trash, so untrash can restore it.');
+
+        $undo = apply_filters('gds-mcp/restore_snapshot', null, $result['_undo']);
+        $this->assertNotWPError($undo);
+        $this->assertNotSame('trash', get_post_status($draft));
+        $this->assertSame(['kind' => 'untrash', 'data' => ['id' => $draft, 'status' => 'draft']], $result['_undo']['data']['items'][0]);
+    }
+
+    public function test_counts_only_posts_where_something_was_written(): void
+    {
+        $same = self::factory()->post->create(['post_status' => 'draft']);
+        $changed = self::factory()->post->create(['post_status' => 'publish']);
+        update_post_meta($same, 'flag', 'on');
+
+        $result = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$same, $changed], 'set_status' => 'draft', 'set_meta' => ['flag' => 'on']]);
+
+        // $same already had both values, so nothing was written to it.
+        $this->assertSame(1, $result['updated']);
+        $this->assertCount(1, $result['_undo']['data']['items']);
+    }
+
     public function test_set_meta_preserves_backslashes(): void
     {
         $json = '{"label":"a \"quoted\" <word>"}';

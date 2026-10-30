@@ -11,6 +11,7 @@ use GeneroWP\MCP\OAuth\Metadata;
 use GeneroWP\MCP\OAuth\ResponseException;
 use GeneroWP\MCP\OAuth\Token;
 use GeneroWP\MCP\Tests\TestCase;
+use WP\MCP\Core\McpAdapter;
 use WP_REST_Request;
 use WP_REST_Response;
 
@@ -771,6 +772,70 @@ class OAuthFlowTest extends TestCase
         $this->assertFalse($this->authenticate($tokens['access_token']));
     }
 
+    public function test_the_main_site_keeps_its_existing_grant_key(): void
+    {
+        // Connections made before grants were scoped per site keep working.
+        $this->assertSame('_gds_mcp_oauth_grant_', Grants::metaPrefix());
+    }
+
+    public function test_each_site_of_a_network_keeps_its_own_grants(): void
+    {
+        if (! is_multisite()) {
+            $this->markTestSkipped('Multisite only.');
+        }
+
+        $this->tokenFor($this->resource);
+        $other = self::factory()->blog->create();
+
+        switch_to_blog($other);
+        $this->assertSame([], Grants::all($this->editor), 'Another site does not see this site\'s grants.');
+        Grants::create($this->editor, ['client_id' => 'gmc_other', 'client_name' => 'Other', 'resource' => rest_url('mcp/test-server'), 'scopes' => Metadata::SCOPES]);
+        // What deactivating the plugin on that site does.
+        Grants::revokeAll();
+        restore_current_blog();
+
+        $this->assertCount(1, Grants::all($this->editor), 'Revoking on another site leaves this site\'s grant.');
+    }
+
+    public function test_registration_is_throttled_per_address(): void
+    {
+        $_SERVER['REMOTE_ADDR'] = '203.0.113.7';
+        for ($i = 0; $i < 20; $i++) {
+            $this->registerClient();
+        }
+
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $refused = $this->capture(fn () => Clients::handleRegistration((string) wp_json_encode(['redirect_uris' => [self::REDIRECT_URI]])));
+        $this->assertSame(429, $refused->status);
+
+        // Another address is unaffected.
+        $_SERVER['REMOTE_ADDR'] = '203.0.113.8';
+        $this->registerClient();
+        unset($_SERVER['REMOTE_ADDR']);
+    }
+
+    public function test_a_full_client_store_never_evicts_a_connected_client(): void
+    {
+        $connected = null;
+        $this->connect($connected);
+
+        // Fill the store with registrations newer than the connected one.
+        $index = get_option('gds_mcp_oauth_clients');
+        $index[$connected] = time() - DAY_IN_SECONDS;
+        for ($i = 0; $i < 2000; $i++) {
+            $index['gmc_spam'.$i] = time() - 3600 + $i;
+        }
+        update_option('gds_mcp_oauth_clients', $index, false);
+
+        $this->registerClient();
+
+        $index = get_option('gds_mcp_oauth_clients');
+        $this->assertArrayHasKey($connected, $index);
+        $this->assertNotNull(Clients::get((string) $connected));
+        $this->assertArrayNotHasKey('gmc_spam0', $index, 'The oldest registration without a connection goes instead.');
+        $this->assertCount(2000, $index);
+    }
+
     public function test_unknown_token_authenticates_nobody(): void
     {
         $this->assertFalse($this->authenticate('gmat_not-a-real-token'));
@@ -816,6 +881,19 @@ class OAuthFlowTest extends TestCase
 
         $this->assertSame($this->resource, $document['resource']);
         $this->assertSame([untrailingslashit(home_url())], $document['authorization_servers']);
+    }
+
+    public function test_a_request_without_a_resource_gets_the_default_server(): void
+    {
+        $default = untrailingslashit(rest_url('mcp/mcp-adapter-default-server'));
+        Metadata::resources();
+        if (! class_exists(McpAdapter::class) || ! McpAdapter::instance()->get_server('mcp-adapter-default-server')) {
+            $this->markTestSkipped('The adapter\'s default server is not registered.');
+        }
+        // Another plugin's server listed first, as Gravity Forms 3.1 adds one.
+        add_filter('gds-mcp/oauth_resources', fn (): array => [untrailingslashit(rest_url('mcp/gravityforms')), $default], 20);
+
+        $this->assertSame($default, Metadata::resolveResource(null));
     }
 
     public function test_authorization_server_metadata_advertises_pkce_and_registration(): void
@@ -886,7 +964,7 @@ class OAuthFlowTest extends TestCase
     {
         $grant = Grants::all($this->editor)[$grantId];
         $grant['last_used'] = $timestamp;
-        update_user_meta($this->editor, Grants::META_PREFIX.$grantId, $grant);
+        update_user_meta($this->editor, Grants::metaPrefix().$grantId, $grant);
     }
 
     /**

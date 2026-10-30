@@ -2,14 +2,16 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Http\PublicUrlGuard;
 use WP_Error;
 
 /**
  * Fetch a URL and return its content as text/markdown for LLM consumption.
  *
  * Security:
- * - wp_safe_remote_get() blocks private/internal IPs by default (SSRF defense)
- * - Only http/https schemes
+ * - Every hop, redirects included, must resolve only to public addresses
+ *   ({@see PublicUrlGuard}; SSRF defense)
+ * - Only https
  * - Response size capped at 500 KB
  * - 15s timeout
  * - Requires `edit_posts` (subscribers must not get a server-side fetcher)
@@ -254,19 +256,11 @@ final class WebFetchAbility
             return new WP_Error('invalid_host', 'URL has no host component.');
         }
 
-        // Defense-in-depth SSRF check: if the host is a literal IP, reject
-        // private/reserved/loopback ranges directly. wp_safe_remote_get does
-        // this too, but link-local (169.254/16, AWS metadata) has leaked
-        // through in some WP versions. Belt + suspenders.
-        if (filter_var($host, FILTER_VALIDATE_IP)) {
-            $isPublic = filter_var(
-                $host,
-                FILTER_VALIDATE_IP,
-                FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
-            );
-            if (! $isPublic) {
-                return new WP_Error('ssrf_blocked', 'Private or reserved IP addresses are not allowed.');
-            }
+        // A literal IP is refused here with a clear code; hostnames are
+        // resolved and checked, on every redirect too, by PublicUrlGuard.
+        $literalIp = trim($host, '[]');
+        if (filter_var($literalIp, FILTER_VALIDATE_IP) && ! PublicUrlGuard::isPublicIp($literalIp)) {
+            return new WP_Error('ssrf_blocked', 'Private or reserved IP addresses are not allowed.');
         }
 
         // Optional allowlist. Sites that want to restrict which external
@@ -281,9 +275,7 @@ final class WebFetchAbility
             );
         }
 
-        // wp_safe_remote_get blocks requests to private IP ranges (SSRF defense).
-        // See WordPress http_request_host_is_external filter / wp_http_validate_url.
-        $response = wp_safe_remote_get($url, [
+        $response = PublicUrlGuard::guard(fn () => wp_safe_remote_get($url, [
             'timeout' => self::TIMEOUT,
             'redirection' => 3,
             'headers' => [
@@ -294,7 +286,7 @@ final class WebFetchAbility
                 'User-Agent' => self::userAgent(),
             ],
             'limit_response_size' => self::MAX_BYTES,
-        ]);
+        ]));
 
         if (is_wp_error($response)) {
             return $response;

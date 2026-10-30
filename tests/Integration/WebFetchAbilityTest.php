@@ -2,7 +2,9 @@
 
 namespace GeneroWP\MCP\Tests\Integration;
 
+use GeneroWP\MCP\Http\PublicUrlGuard;
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use GeneroWP\MCP\Tests\Fixtures\RedirectingTransport;
 
 class WebFetchAbilityTest extends AbilityTestCase
 {
@@ -74,5 +76,102 @@ HTML;
         $this->assertAbilitySuccess('gds/web-fetch', ['url' => 'https://example.com/', 'format' => 'meta']);
 
         $this->assertSame('text/html', $this->requestArgs['headers']['Accept']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function nonPublicLiteralUrls(): array
+    {
+        return [
+            'link-local metadata' => ['https://169.254.169.254/latest/meta-data/'],
+            'carrier-grade NAT' => ['https://100.64.0.1/'],
+            'IPv6 loopback' => ['https://[::1]/'],
+            'IPv6 unique local' => ['https://[fd00::1]/'],
+            'IPv6 link-local' => ['https://[fe80::1]/'],
+            'IPv4-mapped loopback' => ['https://[::ffff:127.0.0.1]/'],
+        ];
+    }
+
+    /**
+     * @dataProvider nonPublicLiteralUrls
+     */
+    public function test_refuses_non_public_ip_literals(string $url): void
+    {
+        $this->assertAbilityError('gds/web-fetch', ['url' => $url], 'ssrf_blocked');
+        $this->assertSame([], $this->requestArgs);
+    }
+
+    /**
+     * A hostname that resolves without DNS (the machine's own name, through
+     * /etc/hosts) and that core's IPv4 check is told to let through, so the
+     * request reaches the real HTTP stack and only PublicUrlGuard stands in
+     * the way.
+     */
+    public static function hostCoreLetsThrough(): string
+    {
+        $host = (string) gethostname();
+        if ($host === '' || gethostbyname($host) === $host) {
+            self::markTestSkipped('The machine name does not resolve locally.');
+        }
+        add_filter('http_request_host_is_external', '__return_true');
+
+        return $host;
+    }
+
+    public function test_refuses_a_hostname_with_a_private_ipv6_address(): void
+    {
+        // The pre_http_request stub would answer before the real HTTP stack.
+        remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        $host = self::hostCoreLetsThrough();
+        // A public A record next to a unique-local AAAA: core resolves only
+        // the IPv4 address.
+        PublicUrlGuard::$resolver = static fn (string $host): array => ['93.184.216.34', 'fd00::1'];
+
+        try {
+            $error = $this->assertAbilityError('gds/web-fetch', ['url' => "https://{$host}/"]);
+        } finally {
+            PublicUrlGuard::$resolver = null;
+        }
+
+        $this->assertStringContainsString('private or reserved address (fd00::1)', $error->get_error_message());
+    }
+
+    public function test_refuses_a_hostname_that_resolves_to_a_private_address(): void
+    {
+        remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        $host = self::hostCoreLetsThrough();
+
+        $error = $this->assertAbilityError('gds/web-fetch', ['url' => "https://{$host}/"]);
+
+        $this->assertStringContainsString('private or reserved address', $error->get_error_message());
+    }
+
+    public function test_refuses_a_redirect_to_a_non_public_address(): void
+    {
+        remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        RedirectingTransport::install('https://169.254.169.254/latest/meta-data/');
+
+        try {
+            $this->assertAbilityError('gds/web-fetch', ['url' => 'https://93.184.216.34/']);
+        } finally {
+            RedirectingTransport::uninstall();
+        }
+
+        $this->assertSame(['https://93.184.216.34/'], RedirectingTransport::$requested, 'The redirect target is never requested.');
+    }
+
+    public function test_follows_a_redirect_to_a_public_address(): void
+    {
+        remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        RedirectingTransport::install('https://93.184.216.35/');
+
+        try {
+            $result = $this->assertAbilitySuccess('gds/web-fetch', ['url' => 'https://93.184.216.34/']);
+        } finally {
+            RedirectingTransport::uninstall();
+        }
+
+        $this->assertSame('ok', $result['content']);
     }
 }
