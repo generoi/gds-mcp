@@ -287,7 +287,7 @@ final class GravityFormsAbility
 
         // Deep-convert to arrays (GFAPI expects arrays, not stdClass)
         $input = json_decode(json_encode($input ?? []), true) ?: [];
-        $input = self::normalizeFormPayload($input);
+        $input = self::normalizeFormPayload(self::sanitizeSuppliedForm($input));
 
         // Bypass the GF REST API (which expects the body as a JSON-encoded string
         // and returns cryptic "no route"/"must be sent as a JSON string" errors
@@ -306,6 +306,42 @@ final class GravityFormsAbility
 
         // Undo a create by deleting the new form.
         return $this->reversible($saved, 'delete-form', ['id' => $formId], "Delete the created form \"{$saved['title']}\"");
+    }
+
+    /**
+     * GFAPI saves forms as given; the form editor filters their HTML for users
+     * without unfiltered_html. As GF's own abilities handler does, filter the
+     * markup the caller supplied: form messages, each field through its own
+     * sanitize_settings(), and notification and confirmation messages.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private static function sanitizeSuppliedForm(array $input): array
+    {
+        foreach (['description', 'limitEntriesMessage', 'schedulePendingMessage', 'scheduleMessage', 'requireLoginMessage'] as $key) {
+            if (isset($input[$key]) && is_string($input[$key])) {
+                $input[$key] = \GFCommon::maybe_wp_kses($input[$key]);
+            }
+        }
+
+        foreach (is_array($input['fields'] ?? null) ? $input['fields'] : [] as $i => $field) {
+            if (is_array($field)) {
+                $object = \GF_Fields::create($field);
+                $object->sanitize_settings();
+                $input['fields'][$i] = array_intersect_key((array) $object, $field);
+            }
+        }
+
+        foreach (['notifications', 'confirmations'] as $group) {
+            foreach (is_array($input[$group] ?? null) ? $input[$group] : [] as $key => $item) {
+                if (isset($item['message']) && is_string($item['message'])) {
+                    $input[$group][$key]['message'] = \GFCommon::maybe_wp_kses($item['message']);
+                }
+            }
+        }
+
+        return $input;
     }
 
     /**
@@ -424,7 +460,7 @@ final class GravityFormsAbility
         // array_replace_recursive would recurse into the numerically-indexed
         // fields array and only replace entries at the same index, leaving
         // extras behind — that was the "leftover fields can't be deleted" bug.
-        $merged = array_merge($current, $input);
+        $merged = array_merge($current, self::sanitizeSuppliedForm($input));
         $merged = self::normalizeFormPayload($merged);
 
         // Use GFAPI directly — REST PUT requires GF_Field objects to already be

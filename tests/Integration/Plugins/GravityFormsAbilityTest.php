@@ -178,6 +178,31 @@ class GravityFormsAbilityTest extends AbilityTestCase
         $this->assertCount(2, $updated['fields']);
     }
 
+    public function test_forms_html_is_filtered_for_admins_without_unfiltered_html(): void
+    {
+        add_filter('map_meta_cap', fn ($caps, $cap) => $cap === 'unfiltered_html' ? ['do_not_allow'] : $caps, 10, 2);
+        $script = '<script>alert(1)</script>';
+
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Kses Test '.uniqid(),
+            'description' => 'Intro'.$script,
+            'fields' => [['type' => 'html', 'label' => 'Block', 'content' => 'Hi'.$script]],
+            'confirmations' => [['name' => 'Main', 'message' => 'Thanks'.$script, 'isDefault' => true, 'type' => 'message']],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+        $updated = $this->assertAbilitySuccess('gds/forms-update', [
+            'id' => $id,
+            'notifications' => [['name' => 'Admin', 'to' => 'a@example.com', 'subject' => 'New entry', 'message' => 'New'.$script]],
+        ]);
+
+        $form = \GFAPI::get_form($id);
+        $this->assertStringNotContainsString('<script>', $form['description']);
+        $this->assertStringNotContainsString('<script>', $form['fields'][0]->content);
+        $this->assertStringNotContainsString('<script>', reset($form['confirmations'])['message']);
+        $this->assertStringNotContainsString('<script>', reset($form['notifications'])['message']);
+        $this->assertSame('Block', $updated['fields'][0]['label']);
+    }
+
     public function test_forms_update_confirmation_message(): void
     {
         // Edit an existing confirmation's message while keeping its id

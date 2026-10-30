@@ -95,6 +95,7 @@ final class UpdateStringTranslationAbility
 
         // Get previous translation.
         $previous = $mo->translate($string);
+        $translation = RegisteredStrings::sanitizeTranslation($string, $translation, $previous);
         $previous = ($previous !== $string && $previous !== '') ? $previous : null;
 
         // Add/update the translation entry.

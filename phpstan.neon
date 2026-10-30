@@ -20,6 +20,8 @@ parameters:
         # demand a stub for code that's runtime-gated by feature detection.
         - '#Function PLL not found\.#'
         - '#GFAPI#'
+        - '#GFCommon#'
+        - '#GF_Fields#'
         # Polylang Pro functions + classes
         - '#Function pll_[a-z_]+ not found\.#'
         - '#Polylang_Pro#'
