@@ -311,6 +311,26 @@ class NavMenuItemsAbilityTest extends TestCase
         $this->assertSame(['C', 'A', 'B'], $this->orderedTitles());
     }
 
+    public function test_move_and_reorder_undo_survive_a_json_round_trip(): void
+    {
+        $parentA = $this->insertItem('Parent A');
+        $parentB = $this->insertItem('Parent B');
+        $child = $this->insertItem('Child', ['menu-item-parent-id' => $parentA]);
+
+        $move = $this->ability->executeMove(['id' => $child, 'parent_item_id' => $parentB, 'position' => 1]);
+        $reorder = $this->ability->executeReorder(['menu_id' => $this->menuId, 'item_ids_in_order' => [$parentB, $parentA]]);
+
+        // As gds-assistant stores them on the audit log; undone newest first.
+        foreach ([$reorder, $move] as $result) {
+            $undo = json_decode((string) wp_json_encode($result['_undo']), true);
+            $this->assertTrue($undo['data']['items'][0]['data']['meta_complete']);
+            $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
+        }
+
+        $this->assertSame((string) $parentA, get_post_meta($child, '_menu_item_menu_item_parent', true));
+        $this->assertSame(['Parent A', 'Parent B'], $this->orderedTitles());
+    }
+
     public function test_reorder_rejects_incomplete_list(): void
     {
         $a = $this->insertItem('A');

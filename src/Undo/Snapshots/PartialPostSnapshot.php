@@ -21,13 +21,18 @@ use WP_Post;
  */
 final class PartialPostSnapshot
 {
+    /** `meta_format` of a row whose values are stored serialized. */
+    private const SERIALIZED = 'serialized';
+
     /**
      * @param  array<string, list<string>|null>  $metaPrev  Meta key → prior values; null = key was absent.
+     * @param  bool  $serialized  Whether the values are serialized, as stored; older rows hold them as plain strings.
      */
     public function __construct(
         public readonly int $id,
         public readonly string $status,
         public readonly array $metaPrev,
+        public readonly bool $serialized = false,
     ) {}
 
     /**
@@ -43,8 +48,9 @@ final class PartialPostSnapshot
         $metaPrev = [];
         foreach (array_unique($metaKeys) as $key) {
             $values = get_post_meta($id, (string) $key); // [] when absent
+            // Serialized as stored, so arrays survive; the restore unserializes.
             $metaPrev[(string) $key] = $values !== []
-                ? array_values(array_map('strval', $values))
+                ? array_values(array_map(fn ($value) => (string) maybe_serialize($value), $values))
                 : null;
         }
 
@@ -52,6 +58,7 @@ final class PartialPostSnapshot
             id: $id,
             status: (string) $post->post_status,
             metaPrev: $metaPrev,
+            serialized: true,
         );
     }
 
@@ -62,9 +69,14 @@ final class PartialPostSnapshot
         if ($id <= 0) {
             return null;
         }
+        // Rows from 0.8.1 and before hold the values as plain strings, under
+        // `metaPrev` when the snapshot was nested in a bulk undo. They are
+        // written back as they are: unserializing one could turn a plugin's
+        // own serialized-looking string into an array or an object.
+        $rawMeta = $raw['meta_prev'] ?? $raw['metaPrev'] ?? null;
         $metaPrev = [];
-        if (is_array($raw['meta_prev'] ?? null)) {
-            foreach ($raw['meta_prev'] as $key => $values) {
+        if (is_array($rawMeta)) {
+            foreach ($rawMeta as $key => $values) {
                 $metaPrev[(string) $key] = $values === null
                     ? null
                     : array_values(array_map('strval', (array) $values));
@@ -75,16 +87,22 @@ final class PartialPostSnapshot
             id: $id,
             status: (string) ($raw['status'] ?? ''),
             metaPrev: $metaPrev,
+            serialized: ($raw['meta_format'] ?? '') === self::SERIALIZED,
         );
     }
 
-    /** @return array{id: int, status: string, meta_prev: array<string, list<string>|null>} */
+    /** @return array{id: int, status: string, meta_prev: array<string, list<string>|null>, meta_format?: string} */
     public function toArray(): array
     {
-        return [
+        $out = [
             'id' => $this->id,
             'status' => $this->status,
             'meta_prev' => $this->metaPrev,
         ];
+        if ($this->serialized) {
+            $out['meta_format'] = self::SERIALIZED;
+        }
+
+        return $out;
     }
 }

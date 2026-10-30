@@ -61,6 +61,24 @@ class LinkTranslationsAbilityTest extends TestCase
         $this->assertSame($enId, $enTranslations['en']);
     }
 
+    public function test_undo_unlinks_posts_that_stood_alone(): void
+    {
+        $enId = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        $fiId = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish']);
+        pll_set_post_language($enId, 'en');
+        pll_set_post_language($fiId, 'fi');
+
+        $result = $this->ability->execute(['translations' => ['en' => $enId, 'fi' => $fiId]]);
+        $undo = json_decode((string) wp_json_encode($result['_undo']), true);
+
+        $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
+        clean_post_cache($enId);
+        clean_post_cache($fiId);
+        $this->assertSame(['en' => $enId], pll_get_post_translations($enId));
+        $this->assertSame(['fi' => $fiId], pll_get_post_translations($fiId));
+        $this->assertSame('fi', pll_get_post_language($fiId));
+    }
+
     public function test_link_normalizes_language_even_if_not_pre_assigned(): void
     {
         // Idempotent safety: if the caller forgot to set language on one post,

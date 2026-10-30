@@ -36,18 +36,27 @@ trait Reversible
             return $result;
         }
 
-        if (is_object($data)) {
-            if (! method_exists($data, 'toArray')) {
-                throw new \InvalidArgumentException(
-                    'Reversible data object '.$data::class.' must expose toArray(): array',
-                );
-            }
-            $payload = $data->toArray();
-        } else {
-            $payload = $data;
-        }
-        $result['_undo'] = ['kind' => $kind, 'data' => $payload, 'label' => $label];
+        $result['_undo'] = ['kind' => $kind, 'data' => self::undoPayload($data), 'label' => $label];
 
         return $result;
+    }
+
+    /**
+     * The payload as gds-assistant stores it, JSON: snapshot objects nested
+     * anywhere (a bulk undo's items) go through toArray() too, or their
+     * property names would replace the keys fromArray() reads.
+     */
+    private static function undoPayload(mixed $value): mixed
+    {
+        if (is_object($value)) {
+            if (! method_exists($value, 'toArray')) {
+                throw new \InvalidArgumentException(
+                    'Reversible data object '.$value::class.' must expose toArray(): array',
+                );
+            }
+            $value = $value->toArray();
+        }
+
+        return is_array($value) ? array_map(fn ($item) => self::undoPayload($item), $value) : $value;
     }
 }

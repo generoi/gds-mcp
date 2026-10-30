@@ -316,7 +316,14 @@ final class PatchBlockAbility
     private static function guardOccurrenceZeroContent(array $op, string $where): ?WP_Error
     {
         $action = $op['action'] ?? 'patch';
-        if ($action !== 'patch' || (int) ($op['occurrence'] ?? 1) !== 0) {
+        if ((int) ($op['occurrence'] ?? 1) !== 0) {
+            return null;
+        }
+        // An insert goes in one place; 0 used to mean the first match.
+        if ($action === 'insert') {
+            return new WP_Error('occurrence_zero_insert', "{$where}: occurrence:0 (ALL) is for patch and delete only. Give the occurrence (1-based) to insert at.");
+        }
+        if ($action !== 'patch') {
             return null;
         }
 
@@ -398,9 +405,10 @@ final class PatchBlockAbility
             }
             if (isset($op['inner_blocks'])) {
                 $newInnerBlocks = self::parseMarkup($op['inner_blocks']);
+                if ($spliceError = self::spliceInnerContent($block, 0, count($block['innerBlocks'] ?? []), count($newInnerBlocks))) {
+                    return $spliceError;
+                }
                 $block['innerBlocks'] = $newInnerBlocks;
-                $block['innerHTML'] = '';
-                $block['innerContent'] = array_fill(0, count($newInnerBlocks), null);
             }
 
             return true;
@@ -440,20 +448,20 @@ final class PatchBlockAbility
         if ($position === 'prepend' || $position === 'append') {
             // Insert inside the target block's innerBlocks
             self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($newBlocks, $position) {
-                if ($position === 'prepend') {
-                    $block['innerBlocks'] = array_merge($newBlocks, $block['innerBlocks'] ?? []);
-                } else {
-                    $block['innerBlocks'] = array_merge($block['innerBlocks'] ?? [], $newBlocks);
+                $existing = $block['innerBlocks'] ?? [];
+                $at = $position === 'prepend' ? 0 : count($existing);
+                if ($spliceError = self::spliceInnerContent($block, $at, 0, count($newBlocks))) {
+                    return $spliceError;
                 }
-                // Update innerContent to match
-                $block['innerHTML'] = '';
-                $block['innerContent'] = array_fill(0, count($block['innerBlocks']), null);
+                array_splice($existing, $at, 0, $newBlocks);
+                $block['innerBlocks'] = $existing;
 
                 return true;
             });
         } else {
             // Insert before/after the target block as a sibling
-            $inserted = self::insertSibling($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $newBlocks, $position);
+            $insertedAt = null;
+            $inserted = self::insertSibling($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $newBlocks, $position, $insertedAt);
             if ($inserted) {
                 $modifiedCount = 1;
             }
@@ -469,6 +477,7 @@ final class PatchBlockAbility
     /**
      * @param  array<array<string, mixed>>  $blocks
      * @param  array<int, array<string, mixed>>  $newBlocks
+     * @param  ?int  $insertedAt  Set to the index in $blocks when the insert happened at this level.
      */
     private static function insertSibling(
         array &$blocks,
@@ -479,23 +488,26 @@ final class PatchBlockAbility
         int &$matchCount,
         array $newBlocks,
         string $position,
+        ?int &$insertedAt,
     ): bool {
         for ($i = 0; $i < count($blocks); $i++) {
             if (($blocks[$i]['blockName'] ?? null) === $targetName) {
                 $matchCount++;
                 if ($matchCount === $occurrence || $occurrence === 0) {
-                    $insertAt = $position === 'before' ? $i : $i + 1;
-                    array_splice($blocks, $insertAt, 0, $newBlocks);
+                    $insertedAt = $position === 'before' ? $i : $i + 1;
+                    array_splice($blocks, $insertedAt, 0, $newBlocks);
 
                     return true;
                 }
             }
 
             if (! empty($blocks[$i]['innerBlocks']) && $currentDepth < $maxDepth) {
-                if (self::insertSibling($blocks[$i]['innerBlocks'], $targetName, $occurrence, $maxDepth, $currentDepth + 1, $matchCount, $newBlocks, $position)) {
-                    // Update parent's innerContent
-                    $blocks[$i]['innerHTML'] = '';
-                    $blocks[$i]['innerContent'] = array_fill(0, count($blocks[$i]['innerBlocks']), null);
+                if (self::insertSibling($blocks[$i]['innerBlocks'], $targetName, $occurrence, $maxDepth, $currentDepth + 1, $matchCount, $newBlocks, $position, $insertedAt)) {
+                    // Only the direct parent's markup gains placeholders.
+                    if ($insertedAt !== null) {
+                        self::spliceInnerContent($blocks[$i], $insertedAt, 0, count($newBlocks));
+                        $insertedAt = null;
+                    }
 
                     return true;
                 }
@@ -518,7 +530,8 @@ final class PatchBlockAbility
         int &$modifiedCount,
     ): ?WP_Error {
         $matchCount = 0;
-        self::deleteBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount);
+        $removedAt = [];
+        self::deleteBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $removedAt);
 
         if ($modifiedCount === 0) {
             return new WP_Error('block_not_found', "No '{$blockName}' block found to delete.");
@@ -528,7 +541,12 @@ final class PatchBlockAbility
     }
 
     /**
+     * Counts matches in document order, like walkBlocks(), so occurrence 1 is
+     * the first one on the page.
+     *
      * @param  array<int, array<string, mixed>>  $blocks
+     * @param  list<int>  $removedAt  Indexes removed from $blocks, each as it stood when removed.
+     * @return bool Whether the single targeted occurrence was deleted.
      */
     private static function deleteBlocks(
         array &$blocks,
@@ -538,33 +556,101 @@ final class PatchBlockAbility
         int $currentDepth,
         int &$matchCount,
         int &$deletedCount,
-    ): void {
-        for ($i = count($blocks) - 1; $i >= 0; $i--) {
-            // Recurse into inner blocks first (depth-first)
-            if (! empty($blocks[$i]['innerBlocks']) && $currentDepth < $maxDepth) {
-                self::deleteBlocks($blocks[$i]['innerBlocks'], $targetName, $occurrence, $maxDepth, $currentDepth + 1, $matchCount, $deletedCount);
-
-                if ($occurrence > 0 && $deletedCount > 0) {
-                    return;
-                }
-
-                // Update parent's innerContent after child deletion
-                $blocks[$i]['innerHTML'] = '';
-                $blocks[$i]['innerContent'] = array_fill(0, count($blocks[$i]['innerBlocks']), null);
-            }
-
+        array &$removedAt,
+    ): bool {
+        $i = 0;
+        while ($i < count($blocks)) {
             if (($blocks[$i]['blockName'] ?? null) === $targetName) {
                 $matchCount++;
                 if ($occurrence === 0 || $matchCount === $occurrence) {
                     array_splice($blocks, $i, 1);
+                    $removedAt[] = $i;
                     $deletedCount++;
 
                     if ($occurrence > 0) {
-                        return;
+                        return true;
                     }
+
+                    continue;
                 }
             }
+
+            if (! empty($blocks[$i]['innerBlocks']) && $currentDepth < $maxDepth) {
+                $childRemovedAt = [];
+                $done = self::deleteBlocks($blocks[$i]['innerBlocks'], $targetName, $occurrence, $maxDepth, $currentDepth + 1, $matchCount, $deletedCount, $childRemovedAt);
+                foreach ($childRemovedAt as $at) {
+                    self::spliceInnerContent($blocks[$i], $at, 1, 0);
+                }
+
+                if ($done) {
+                    return true;
+                }
+            }
+
+            $i++;
         }
+
+        return false;
+    }
+
+    /**
+     * Keep innerContent in step with an array_splice() on innerBlocks. Each
+     * inner block has a null placeholder there, between the HTML chunks that
+     * hold the wrapper markup (<ul>, a group's <div>): only placeholders are
+     * removed or added, the chunks stay as they were.
+     *
+     * A block with no inner blocks yet has nothing to show where they go,
+     * unless its markup is one empty wrapper (<ul></ul>) or none at all
+     * (a dynamic block); anything else is refused.
+     *
+     * @param  array<string, mixed>  $block
+     */
+    private static function spliceInnerContent(array &$block, int $at, int $remove, int $insert): ?WP_Error
+    {
+        $content = $block['innerContent'] ?? [];
+        $slots = array_keys($content, null, true);
+        $name = (string) ($block['blockName'] ?? '');
+
+        if (isset($slots[$at])) {
+            $pos = $slots[$at];
+        } elseif ($slots) {
+            $pos = end($slots) + 1;
+        } elseif ($insert === 0) {
+            $pos = count($content);
+        } else {
+            $markup = implode('', array_filter($content, 'is_string'));
+            if (trim($markup) === '') {
+                $pos = count($content);
+            } elseif (preg_match('#^(\s*<([a-z][a-z0-9-]*)\b[^>]*>)(\s*</\2>\s*)$#i', $markup, $m)) {
+                $content = [$m[1], $m[3]];
+                $pos = 1;
+            } elseif (trim(wp_strip_all_tags($markup)) !== '') {
+                return new WP_Error('not_a_container', "{$name} holds no inner blocks. Insert before or after it instead.");
+            } else {
+                return new WP_Error(
+                    'unknown_inner_position',
+                    "{$name} has no inner blocks yet, and its markup does not show where they go. Insert the complete block markup, with its inner blocks, after it and delete this one.",
+                );
+            }
+        }
+
+        $removed = array_slice($slots, $at, $remove);
+        $rebuilt = [];
+        foreach ($content as $key => $chunk) {
+            if ($key === $pos) {
+                array_push($rebuilt, ...array_fill(0, $insert, null));
+            }
+            if (! in_array($key, $removed, true)) {
+                $rebuilt[] = $chunk;
+            }
+        }
+        if ($pos >= count($content)) {
+            array_push($rebuilt, ...array_fill(0, $insert, null));
+        }
+
+        $block['innerContent'] = $rebuilt;
+
+        return null;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
