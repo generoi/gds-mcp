@@ -109,6 +109,33 @@ class CreateTranslationIntegrationTest extends TestCase
         $this->assertSame('translation_exists', $result->get_error_code());
     }
 
+    public function test_preserves_backslashes_in_content_and_meta(): void
+    {
+        $content = '<!-- wp:paragraph {"placeholder":"say \"hi\" \u003cb\u003e"} --><p>C:\temp</p><!-- /wp:paragraph -->';
+        $json = '{"label":"a \"quoted\" \u003cword\u003e"}';
+        $sourceId = $this->createPost(['post_type' => 'post', 'post_content' => wp_slash($content)]);
+        update_post_meta($sourceId, 'json_field', wp_slash($json));
+
+        $result = (new CreateTranslationAbility)->execute(['source_id' => $sourceId, 'lang' => 'fi']);
+
+        $this->assertIsArray($result);
+        $this->assertSame($content, get_post($result['id'])->post_content);
+        $this->assertSame($json, get_post_meta($result['id'], 'json_field', true));
+    }
+
+    public function test_contributor_cannot_publish_a_translation(): void
+    {
+        $contributor = self::factory()->user->create(['role' => 'contributor']);
+        wp_set_current_user($contributor);
+        $sourceId = $this->createPost(['post_type' => 'post', 'post_author' => $contributor, 'post_status' => 'draft']);
+
+        $result = (new CreateTranslationAbility)->execute(['source_id' => $sourceId, 'lang' => 'fi', 'status' => 'publish']);
+
+        $this->assertWPError($result);
+        $this->assertSame('forbidden', $result->get_error_code());
+        $this->assertEmpty(pll_get_post_translations($sourceId)['fi'] ?? null, 'Nothing is created.');
+    }
+
     public function test_copies_meta_and_taxonomies(): void
     {
         $sourceId = $this->createPost([

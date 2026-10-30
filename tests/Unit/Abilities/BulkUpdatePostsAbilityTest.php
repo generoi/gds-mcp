@@ -113,6 +113,64 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         $this->assertEmpty(get_post_meta($postId, 'obsolete', true));
     }
 
+    public function test_contributor_cannot_publish(): void
+    {
+        $contributor = self::factory()->user->create(['role' => 'contributor']);
+        wp_set_current_user($contributor);
+        $id1 = self::factory()->post->create(['post_author' => $contributor, 'post_status' => 'draft']);
+        $id2 = self::factory()->post->create(['post_author' => $contributor, 'post_status' => 'draft']);
+
+        $result = (new BulkUpdatePostsAbility)->execute([
+            'post_ids' => [$id1, $id2],
+            'set_status' => 'publish',
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('forbidden', $result->get_error_code());
+        $this->assertSame('draft', get_post_status($id1));
+        $this->assertSame('draft', get_post_status($id2));
+
+        $result = (new BulkUpdatePostsAbility)->execute([
+            'post_ids' => [$id1],
+            'set_status' => 'pending',
+        ]);
+        $this->assertSame(1, $result['updated']);
+    }
+
+    public function test_meta_writes_respect_meta_capabilities(): void
+    {
+        register_post_meta('post', 'locked', ['auth_callback' => '__return_false']);
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        update_post_meta($postId, 'locked_delete', 'stays');
+        register_post_meta('post', 'locked_delete', ['auth_callback' => '__return_false']);
+
+        (new BulkUpdatePostsAbility)->execute([
+            'post_ids' => [$postId],
+            'set_meta' => ['locked' => 'nope', 'open' => 'yes'],
+            'delete_meta' => ['locked_delete'],
+        ]);
+
+        $this->assertSame('', get_post_meta($postId, 'locked', true));
+        $this->assertSame('yes', get_post_meta($postId, 'open', true));
+        $this->assertSame('stays', get_post_meta($postId, 'locked_delete', true));
+
+        unregister_post_meta('post', 'locked');
+        unregister_post_meta('post', 'locked_delete');
+    }
+
+    public function test_set_meta_preserves_backslashes(): void
+    {
+        $json = '{"label":"a \"quoted\" <word>"}';
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+
+        (new BulkUpdatePostsAbility)->execute([
+            'post_ids' => [$postId],
+            'set_meta' => ['json_field' => $json],
+        ]);
+
+        $this->assertSame($json, get_post_meta($postId, 'json_field', true));
+    }
+
     public function test_respects_limit(): void
     {
         for ($i = 0; $i < 5; $i++) {

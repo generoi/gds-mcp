@@ -16,6 +16,9 @@ class RedirectsAbilityTest extends AbilityTestCase
         if (! function_exists('srm_create_redirect') && ! class_exists('Red_Item') && ! defined('WPSEO_VERSION')) {
             $this->markTestSkipped('No redirect plugin is active.');
         }
+
+        // Redirects are an admin setting (manage_options).
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
     }
 
     public function test_redirects_ability_registered(): void

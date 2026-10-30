@@ -84,7 +84,13 @@ final class DuplicatePostAbility
         $title = $input['title'] ?? $source->post_title.' (Copy)';
         $status = $input['status'] ?? 'draft';
 
-        $newId = wp_insert_post([
+        if (in_array($status, ['publish', 'private', 'future'], true) && ! current_user_can($typeObj->cap->publish_posts)) {
+            return new WP_Error('forbidden', 'You do not have permission to publish posts of this type.', ['status' => 403]);
+        }
+
+        // wp_insert_post() unslashes its input; slash so serialized block
+        // attributes keep their backslashes.
+        $newId = wp_insert_post(wp_slash([
             'post_type' => $source->post_type,
             'post_title' => $title,
             'post_content' => $source->post_content,
@@ -94,7 +100,7 @@ final class DuplicatePostAbility
             'menu_order' => $source->menu_order,
             'comment_status' => $source->comment_status,
             'ping_status' => $source->ping_status,
-        ], true);
+        ]), true);
 
         if (is_wp_error($newId)) {
             return $newId;

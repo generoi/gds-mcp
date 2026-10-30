@@ -212,6 +212,21 @@ class SecurityTest extends AbilityTestCase
         ], 'forbidden');
     }
 
+    public function test_redirects_require_manage_options(): void
+    {
+        if (! function_exists('srm_create_redirect') && ! class_exists('Red_Item') && ! defined('WPSEO_VERSION')) {
+            $this->markTestSkipped('No redirect plugin active.');
+        }
+
+        wp_set_current_user($this->editorId);
+
+        $this->assertAbilityError('gds/redirects-manage', [
+            'action' => 'create',
+            'from' => '/test-redirect',
+            'to' => '/destination',
+        ], 'forbidden');
+    }
+
     // ── Cache clearing ────────────────────────────────────────────
 
     public function test_cache_clear_requires_manage_options(): void

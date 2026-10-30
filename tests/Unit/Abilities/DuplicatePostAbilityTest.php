@@ -97,6 +97,35 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
         $this->assertSame($attachmentId, (int) get_post_thumbnail_id($result['id']));
     }
 
+    public function test_preserves_backslashes_in_content_and_meta(): void
+    {
+        $content = '<!-- wp:paragraph {"placeholder":"say \"hi\" \u003cb\u003e"} --><p>C:\temp</p><!-- /wp:paragraph -->';
+        $json = '{"label":"a \"quoted\" \u003cword\u003e"}';
+        $sourceId = self::factory()->post->create(['post_content' => wp_slash($content)]);
+        update_post_meta($sourceId, 'json_field', wp_slash($json));
+
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId]);
+
+        $this->assertSame($content, get_post($result['id'])->post_content);
+        $this->assertSame($json, get_post_meta($result['id'], 'json_field', true));
+    }
+
+    public function test_contributor_cannot_publish_a_duplicate(): void
+    {
+        $contributor = self::factory()->user->create(['role' => 'contributor']);
+        wp_set_current_user($contributor);
+        $sourceId = self::factory()->post->create(['post_author' => $contributor, 'post_status' => 'draft']);
+
+        foreach (['publish', 'private'] as $status) {
+            $result = (new DuplicatePostAbility)->execute(['id' => $sourceId, 'status' => $status]);
+            $this->assertWPError($result, $status);
+            $this->assertSame('forbidden', $result->get_error_code());
+        }
+
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId, 'status' => 'pending']);
+        $this->assertSame('pending', get_post_status($result['id']));
+    }
+
     public function test_error_for_nonexistent_post(): void
     {
         $result = (new DuplicatePostAbility)->execute(['id' => 999999]);
