@@ -146,6 +146,13 @@ final class BulkUpdatePostsAbility
             }
         }
 
+        // update_post_meta() stores as given; filter HTML as content saves do
+        // for users who may not post it unfiltered (strings only, so null
+        // and numbers keep their type).
+        if (! current_user_can('unfiltered_html')) {
+            $setMeta = map_deep((array) $setMeta, fn ($item) => is_string($item) ? wp_kses_post($item) : $item);
+        }
+
         // The meta keys this run touches — captured per-post for a partial
         // (merge) restore so we never snapshot full content/meta.
         $touchedMetaKeys = array_merge(array_keys((array) $setMeta), array_values((array) $deleteMeta));

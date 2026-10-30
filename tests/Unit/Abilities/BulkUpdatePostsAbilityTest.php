@@ -250,6 +250,18 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         $this->assertSame([], get_post_meta($postId, 'added'));
     }
 
+    public function test_set_meta_filters_html_for_users_without_unfiltered_html(): void
+    {
+        $author = self::factory()->user->create(['role' => 'author']);
+        wp_set_current_user($author);
+        $postId = self::factory()->post->create(['post_status' => 'draft', 'post_author' => $author]);
+
+        (new BulkUpdatePostsAbility)->execute(['post_ids' => [$postId], 'set_meta' => ['note' => '<b>Hi</b><script>alert(1)</script>', 'list' => ['<i>a</i><script>x</script>']]]);
+
+        $this->assertSame('<b>Hi</b>alert(1)', get_post_meta($postId, 'note', true));
+        $this->assertSame(['<i>a</i>x'], get_post_meta($postId, 'list', true));
+    }
+
     public function test_respects_limit(): void
     {
         for ($i = 0; $i < 5; $i++) {

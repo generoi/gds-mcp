@@ -209,5 +209,10 @@ class AcfIntegrationTest extends WP_UnitTestCase
         ]);
 
         $this->assertSame('<p>Hi</p>alert(1)', get_post_meta($postId, 'kses_field', true));
+
+        // null still deletes the value.
+        (new GenericPostTypeAbility)->executeUpdate(['type' => 'posts', 'id' => $postId, 'fields' => ['kses_field' => null]]);
+
+        $this->assertSame([], get_post_meta($postId, 'kses_field'));
     }
 }

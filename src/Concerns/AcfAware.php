@@ -36,8 +36,10 @@ trait AcfAware
 
         $errors = [];
         foreach ($fields as $key => $value) {
+            // Strings only: wp_kses_post_deep() would turn null, which ACF
+            // reads as delete, and false into ''.
             if (! $allowUnfiltered) {
-                $value = wp_kses_post_deep($value);
+                $value = map_deep($value, fn ($item) => is_string($item) ? wp_kses_post($item) : $item);
             }
             // Only allow registered ACF field keys/names — reject arbitrary meta.
             $fieldObj = acf_get_field($key);
