@@ -168,6 +168,40 @@ class OAuthFlowTest extends TestCase
         $this->assertSame('invalid_grant', $error->data()['error']);
     }
 
+    public function test_redirect_uri_sent_at_authorization_is_required_at_the_token_endpoint(): void
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = $this->registerClient();
+        $code = $this->query($this->authorize($client['client_id'], $this->challenge($verifier))->location())['code'];
+
+        $_POST = [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'code_verifier' => $verifier,
+            'client_id' => $client['client_id'],
+        ];
+        $error = $this->post([Token::class, 'handle']);
+
+        $this->assertSame('invalid_grant', $error->data()['error']);
+    }
+
+    public function test_redirect_uri_may_be_omitted_when_it_was_omitted_at_authorization(): void
+    {
+        $verifier = 'verifier-'.wp_generate_password(43, false);
+        $client = $this->registerClient();
+        $code = $this->query($this->authorize($client['client_id'], $this->challenge($verifier), ['redirect_uri' => ''])->location())['code'];
+
+        $_POST = [
+            'grant_type' => 'authorization_code',
+            'code' => $code,
+            'code_verifier' => $verifier,
+            'client_id' => $client['client_id'],
+        ];
+        $response = $this->post([Token::class, 'handle']);
+
+        $this->assertSame(200, $response->status, $response->body);
+    }
+
     // ── Authorization endpoint ───────────────────────────────────
 
     public function test_pkce_is_required(): void

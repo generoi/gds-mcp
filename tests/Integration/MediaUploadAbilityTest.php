@@ -127,7 +127,7 @@ class MediaUploadAbilityTest extends AbilityTestCase
         $this->assertAbilityError('gds/media-upload', [
             'base64' => self::PIXEL_PNG,
             'filename' => 'blocked.png',
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     // ── Filename sanitization ─────────────────────────────────────

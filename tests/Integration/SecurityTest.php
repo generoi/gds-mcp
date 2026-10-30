@@ -43,7 +43,7 @@ class SecurityTest extends AbilityTestCase
             'id' => $postId,
             'block_name' => 'core/paragraph',
             'inner_html' => '<p>Hacked</p>',
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     // ── DuplicatePostAbility ──────────────────────────────────────
@@ -61,7 +61,7 @@ class SecurityTest extends AbilityTestCase
 
         $this->assertAbilityError('gds/posts-duplicate', [
             'id' => $postId,
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     // ── ManageRevisionsAbility ─────────────────────────────────────
@@ -88,7 +88,14 @@ class SecurityTest extends AbilityTestCase
 
         $this->assertAbilityError('gds/revisions-restore', [
             'id' => $revisionId,
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
+    }
+
+    public function test_bulk_update_refused_for_subscriber_before_execute(): void
+    {
+        wp_set_current_user($this->subscriberId);
+
+        $this->assertFalse(wp_get_ability('gds/posts-bulk-update')->check_permissions(['post_ids' => [1], 'set_status' => 'draft']));
     }
 
     // ── BulkUpdatePostsAbility ────────────────────────────────────
@@ -101,14 +108,15 @@ class SecurityTest extends AbilityTestCase
             'post_status' => 'draft',
         ]);
 
-        wp_set_current_user($this->subscriberId);
+        // An author may use the ability but not edit an editor's posts.
+        wp_set_current_user(self::factory()->user->create(['role' => 'author']));
 
         $result = $this->assertAbilitySuccess('gds/posts-bulk-update', [
             'post_ids' => $ids,
-            'set_status' => 'publish',
+            'set_status' => 'pending',
         ]);
 
-        // Subscriber can't edit these posts, so 0 should be updated
+        // The author can't edit these posts, so 0 should be updated
         $this->assertSame(0, $result['updated']);
 
         // Posts should still be drafts
@@ -187,7 +195,7 @@ class SecurityTest extends AbilityTestCase
         $this->assertAbilityError('gds/translations-create', [
             'source_id' => $postId,
             'lang' => 'fi',
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     // ── Redirect abilities ────────────────────────────────────────
@@ -203,13 +211,13 @@ class SecurityTest extends AbilityTestCase
         // Both list and create should be blocked
         $this->assertAbilityError('gds/redirects-manage', [
             'action' => 'list',
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
 
         $this->assertAbilityError('gds/redirects-manage', [
             'action' => 'create',
             'from' => '/test-redirect',
             'to' => '/destination',
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     public function test_redirects_require_manage_options(): void
@@ -241,7 +249,7 @@ class SecurityTest extends AbilityTestCase
 
         $this->assertAbilityError('gds/cache-clear', [
             'type' => 'flush',
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     // ── Activity log ──────────────────────────────────────────────
@@ -256,7 +264,7 @@ class SecurityTest extends AbilityTestCase
 
         $this->assertAbilityError('gds/activity-query', [
             'per_page' => 1,
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     // ── String translations ───────────────────────────────────────
@@ -273,7 +281,7 @@ class SecurityTest extends AbilityTestCase
             'string' => 'test',
             'lang' => 'fi',
             'translation' => 'testi',
-        ], 'forbidden');
+        ], 'ability_invalid_permissions');
     }
 
     // ── Read operations should still work ─────────────────────────

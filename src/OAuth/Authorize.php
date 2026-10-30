@@ -123,6 +123,9 @@ final class Authorize
             'grant' => $grantId,
             'client_id' => $client['client_id'],
             'redirect_uri' => $redirectUri,
+            // RFC 6749 §4.1.3: a redirect_uri sent here must be repeated at
+            // the token endpoint.
+            'redirect_uri_sent' => $params['redirect_uri'] !== '',
             'code_challenge' => $params['code_challenge'],
             'resource' => $resource,
         ]);
