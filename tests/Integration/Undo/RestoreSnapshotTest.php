@@ -69,6 +69,25 @@ class RestoreSnapshotTest extends TestCase
         $this->assertSame($metaId, (int) $wpdb->get_var($wpdb->prepare("SELECT meta_id FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key = 'untouched'", $id)), 'Unchanged meta is not rewritten.');
     }
 
+    public function test_restore_post_keeps_the_old_slug_redirect_and_edit_bookkeeping(): void
+    {
+        $id = self::factory()->post->create(['post_status' => 'publish', 'post_name' => 'original']);
+        $before = Snapshot::postFields($id);
+
+        wp_update_post(['ID' => $id, 'post_name' => 'renamed']);
+        update_post_meta($id, '_edit_last', '7');
+        update_post_meta($id, '_edit_lock', '123:7');
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+
+        clean_post_cache($id);
+        $this->assertSame('original', get_post($id)->post_name);
+        // Core records the slug being left so /renamed/ keeps redirecting.
+        $this->assertContains('renamed', get_post_meta($id, '_wp_old_slug'));
+        $this->assertSame('7', get_post_meta($id, '_edit_last', true));
+        $this->assertSame('123:7', get_post_meta($id, '_edit_lock', true));
+    }
+
     public function test_restore_post_from_an_old_snapshot_keeps_unknown_meta_and_fields(): void
     {
         $author = self::factory()->user->create();
@@ -160,7 +179,22 @@ class RestoreSnapshotTest extends TestCase
         $this->assertSame('trash', get_post_status($id));
 
         $this->assertNotWPError($this->restore('untrash', ['id' => $id]));
-        $this->assertNotSame('trash', get_post_status($id));
+        $this->assertSame('draft', get_post_status($id), 'A row without a status keeps core behaviour.');
+    }
+
+    public function test_untrash_restores_the_status_the_post_had(): void
+    {
+        $id = self::factory()->post->create(['post_status' => 'publish']);
+        wp_trash_post($id);
+
+        $this->assertNotWPError($this->restore('untrash', ['id' => $id, 'status' => 'publish']));
+        $this->assertSame('publish', get_post_status($id));
+
+        // The status filter is scoped to that restore.
+        $other = self::factory()->post->create(['post_status' => 'publish']);
+        wp_trash_post($other);
+        wp_untrash_post($other);
+        $this->assertSame('draft', get_post_status($other));
     }
 
     public function test_trash_undoes_a_create(): void

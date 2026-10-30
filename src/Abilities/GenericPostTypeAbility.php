@@ -22,6 +22,12 @@ final class GenericPostTypeAbility
     use Reversible;
 
     /**
+     * Post types whose REST controller never trashes, whatever the site's
+     * trash settings. (Templates and template parts are trashed by core.)
+     */
+    private const TRASHLESS_TYPES = ['wp_font_family', 'wp_font_face'];
+
+    /**
      * Register the 5 generic content abilities.
      */
     public static function register(): void
@@ -534,16 +540,24 @@ final class GenericPostTypeAbility
             return new WP_Error('invalid_type', 'Unknown content type: '.($input['type'] ?? ''));
         }
         $id = self::normalizeId($input['id'] ?? null);
+        $priorStatus = is_int($id) ? (string) get_post_status($id) : '';
 
         // Always trash (recoverable) — permanent deletion is intentionally not
-        // exposed to the assistant. Some types (templates, template parts) have
-        // no trash; WP signals this with rest_trash_not_supported, and for
-        // those deletion is unavoidably permanent, so we fall back to force.
-        // Trashable content is never force-deleted.
+        // exposed to the assistant. Font families have no trash at all, so
+        // deleting one is unavoidably permanent and we fall back to force.
+        // Core also answers rest_trash_not_supported for attachments without
+        // MEDIA_TRASH and for every type when EMPTY_TRASH_DAYS is 0; those are
+        // site settings, not a missing trash, so they are refused instead.
         $response = self::dispatchDelete($route, $id, false);
         $forced = false;
         if (self::isRestError($response)
             && self::restErrorToWpError($response)->get_error_code() === 'rest_trash_not_supported') {
+            if (! is_int($id) || ! in_array(get_post_type($id), self::TRASHLESS_TYPES, true)) {
+                return new WP_Error(
+                    'trash_not_supported',
+                    'This item cannot be moved to trash on this site (trash is disabled for it), and gds/content-delete never deletes permanently. Delete it in wp-admin if it should be removed for good.',
+                );
+            }
             $response = self::dispatchDelete($route, $id, true);
             $forced = true;
         }
@@ -553,7 +567,7 @@ final class GenericPostTypeAbility
         // Undo a trash by untrashing. (Force-deleted trashless types can't be
         // restored, so no undo is offered there.)
         if (! is_wp_error($result) && ! $forced && is_int($id) && $id) {
-            $result = $this->reversible($result, 'untrash', ['id' => $id], 'Restore the trashed item from trash');
+            $result = $this->reversible($result, 'untrash', ['id' => $id, 'status' => $priorStatus], 'Restore the trashed item from trash');
         }
 
         return $result;

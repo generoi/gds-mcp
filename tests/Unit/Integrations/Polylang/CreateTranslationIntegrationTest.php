@@ -123,6 +123,25 @@ class CreateTranslationIntegrationTest extends TestCase
         $this->assertSame($json, get_post_meta($result['id'], 'json_field', true));
     }
 
+    public function test_published_translation_keeps_password_and_discussion_settings(): void
+    {
+        $sourceId = $this->createPost([
+            'post_type' => 'post',
+            'post_status' => 'publish',
+            'post_password' => 'hunter2',
+            'comment_status' => 'closed',
+            'ping_status' => 'closed',
+        ]);
+
+        $result = (new CreateTranslationAbility)->execute(['source_id' => $sourceId, 'lang' => 'fi', 'status' => 'publish']);
+
+        $this->assertIsArray($result);
+        $translation = get_post($result['id']);
+        $this->assertSame('hunter2', $translation->post_password);
+        $this->assertSame('closed', $translation->comment_status);
+        $this->assertSame('closed', $translation->ping_status);
+    }
+
     public function test_contributor_cannot_publish_a_translation(): void
     {
         $contributor = self::factory()->user->create(['role' => 'contributor']);

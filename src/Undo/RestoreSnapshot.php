@@ -26,6 +26,12 @@ use WP_Error;
  */
 final class RestoreSnapshot
 {
+    /**
+     * Meta WordPress writes about a post's own history (old URLs, edit locks).
+     * A restore neither rewinds nor removes it, and a copy never inherits it.
+     */
+    public const BOOKKEEPING_META = ['_wp_old_slug', '_wp_old_date', '_edit_lock', '_edit_last'];
+
     public static function register(): void
     {
         add_filter('gds-mcp/restore_snapshot', [self::class, 'handle'], 10, 2);
@@ -47,6 +53,7 @@ final class RestoreSnapshot
             'restore-post-partial' => self::restorePostPartial($data),
             'untrash' => self::untrash($data),
             'trash' => self::trash($data),
+            'recreate-menu-item' => self::recreateMenuItem($data),
             'restore-term' => self::restoreTerm($data),
             'delete-term' => self::deleteTerm($data),
             'recreate-term' => self::recreateTerm($data),
@@ -87,8 +94,11 @@ final class RestoreSnapshot
 
         // Only touch keys whose values differ, so meta written by others
         // since the snapshot (and meta ids other code relies on) survive.
-        $current = get_post_meta($snapshot->id);
-        foreach ($snapshot->meta as $key => $values) {
+        // WordPress's own bookkeeping is left as it is: the update above may
+        // just have recorded the slug being left in _wp_old_slug, which keeps
+        // the old URL redirecting.
+        $current = array_diff_key(get_post_meta($snapshot->id), array_flip(self::BOOKKEEPING_META));
+        foreach (array_diff_key($snapshot->meta, array_flip(self::BOOKKEEPING_META)) as $key => $values) {
             if (array_values($current[$key] ?? []) === $values) {
                 continue;
             }
@@ -164,7 +174,18 @@ final class RestoreSnapshot
         if (get_post_status($id) !== 'trash') {
             return ['restored' => 'post', 'id' => $id, 'note' => 'Already not in trash.'];
         }
-        if (! wp_untrash_post($id)) {
+
+        // Since WP 5.6 untrashing gives a draft. Put back the status the post
+        // had when it was trashed; rows recorded without it keep core's draft.
+        $status = (string) ($data['status'] ?? '');
+        $priorStatus = static fn ($newStatus, $postId) => (int) $postId === $id ? $status : $newStatus;
+        if ($status !== '') {
+            add_filter('wp_untrash_post_status', $priorStatus, 10, 2);
+        }
+        $untrashed = wp_untrash_post($id);
+        remove_filter('wp_untrash_post_status', $priorStatus, 10);
+
+        if (! $untrashed) {
             return new WP_Error('restore_failed', "Failed to untrash post {$id}.");
         }
 
@@ -186,6 +207,53 @@ final class RestoreSnapshot
         }
 
         return ['restored' => 'trash', 'id' => $id];
+    }
+
+    /**
+     * Recreate a deleted menu item (they have no trash), under its original id
+     * when that is still free. Its former sub-items are pointed back at it and
+     * the menu's order is put back as it was before the delete closed the gap.
+     *
+     * data: { item: PostFieldsSnapshot, children: list<int>, orders: array<int, int> }
+     *
+     * @param  array<string, mixed>  $data
+     * @return RestoreSummary|WP_Error
+     */
+    private static function recreateMenuItem(array $data): array|WP_Error
+    {
+        $snapshot = PostFieldsSnapshot::fromArray((array) ($data['item'] ?? []));
+        if (! $snapshot) {
+            return new WP_Error('restore_failed', 'Snapshot was missing the menu item id.');
+        }
+
+        // wp_insert_post() keeps import_id only when no post has that id.
+        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $snapshot->post), true);
+        if (is_wp_error($newId)) {
+            return $newId;
+        }
+
+        $restored = self::restorePost((new PostFieldsSnapshot($newId, $snapshot->post, $snapshot->meta, $snapshot->terms, true))->toArray());
+        if (is_wp_error($restored)) {
+            return $restored;
+        }
+
+        foreach ((array) ($data['children'] ?? []) as $childId) {
+            if (get_post_type((int) $childId) === 'nav_menu_item') {
+                update_post_meta((int) $childId, '_menu_item_menu_item_parent', (string) $newId);
+            }
+        }
+        foreach ((array) ($data['orders'] ?? []) as $itemId => $order) {
+            if (get_post_type((int) $itemId) === 'nav_menu_item') {
+                wp_update_post(['ID' => (int) $itemId, 'menu_order' => (int) $order]);
+            }
+        }
+
+        $summary = ['restored' => 'recreate-menu-item', 'id' => $newId];
+        if ($newId !== $snapshot->id) {
+            $summary['note'] = "The menu item was restored under a new id ({$newId}; was {$snapshot->id}) because the old id had been reused.";
+        }
+
+        return $summary;
     }
 
     /**

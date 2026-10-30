@@ -95,6 +95,6 @@ class UndoRoundTripTest extends AbilityTestCase
         $this->assertSame('untrash', $result['_undo']['kind'] ?? null);
 
         $this->assertNotWPError($this->restore($result));
-        $this->assertNotSame('trash', get_post_status($postId));
+        $this->assertSame('publish', get_post_status($postId), 'Undo puts back the status it had, not a draft.');
     }
 }

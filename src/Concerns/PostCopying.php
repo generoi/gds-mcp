@@ -2,6 +2,8 @@
 
 namespace GeneroWP\MCP\Concerns;
 
+use GeneroWP\MCP\Undo\RestoreSnapshot;
+
 trait PostCopying
 {
     /**
@@ -28,12 +30,21 @@ trait PostCopying
     /**
      * Meta that belongs to one post's lifecycle and must not follow a copy:
      * edit locks, slug/trash bookkeeping, Polylang internals, the featured
-     * image (set separately, translated where media is), and attachment file
-     * pointers (two posts sharing one file would delete it with either).
+     * image (set separately, translated where media is), attachment file
+     * pointers (two posts sharing one file would delete it with either), Yoast
+     * redirect and canonical (the copy would redirect to, or canonicalise to,
+     * its source), WooCommerce identifiers that must be unique, and review
+     * stats derived from comments that are not copied.
      */
     private static function isPerPostMeta(string $key): bool
     {
-        $keys = ['_edit_lock', '_edit_last', '_wp_old_slug', '_wp_old_date', '_wp_desired_post_slug', '_thumbnail_id', '_encloseme', '_pingme', '_wp_attached_file', '_wp_attachment_metadata'];
+        $keys = [
+            ...RestoreSnapshot::BOOKKEEPING_META,
+            '_wp_desired_post_slug', '_thumbnail_id', '_encloseme', '_pingme',
+            '_wp_attached_file', '_wp_attachment_metadata', '_wp_attachment_backup_sizes',
+            '_yoast_wpseo_redirect', '_yoast_wpseo_canonical',
+            '_sku', '_global_unique_id', '_wc_average_rating', '_wc_rating_count', '_wc_review_count',
+        ];
 
         return in_array($key, $keys, true) || str_starts_with($key, '_pll_') || str_starts_with($key, '_wp_trash_');
     }

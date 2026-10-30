@@ -144,6 +144,9 @@ final class CreateTranslationAbility
             'post_content' => $input['content'] ?? $source->post_content,
             'post_excerpt' => $input['excerpt'] ?? $source->post_excerpt,
             'post_status' => $input['status'] ?? 'draft',
+            'post_password' => $source->post_password,
+            'comment_status' => $source->comment_status,
+            'ping_status' => $source->ping_status,
         ];
 
         if (in_array($postData['post_status'], ['publish', 'private', 'future'], true) && ! current_user_can($typeObj->cap->publish_posts)) {

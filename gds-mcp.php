@@ -9,7 +9,6 @@ Author:       Genero
 Author URI:   https://genero.fi/
 License:      MIT License
 License URI:  http://opensource.org/licenses/MIT
-Requires Plugins: mcp-adapter
 */
 
 use GeneroWP\MCP\OAuth\Grants;
