@@ -50,6 +50,22 @@ class TranslationAuditIntegrationTest extends TestCase
         $this->assertContains('Untranslated Post', $allMissing);
     }
 
+    public function test_audit_is_paged(): void
+    {
+        $ids = [];
+        for ($i = 0; $i < 3; $i++) {
+            $ids[] = $this->createPost(['post_type' => 'post', 'post_status' => 'publish', 'post_title' => "Paged {$i}"]);
+        }
+
+        $result = (new TranslationAuditAbility)->execute(['post_type' => 'post', 'per_page' => 2, 'page' => 2]);
+
+        $this->assertSame(2, $result['per_page']);
+        $this->assertSame(2, $result['page']);
+        $this->assertGreaterThanOrEqual(3, $result['total']);
+        $this->assertSame((int) ceil($result['total'] / 2), $result['total_pages']);
+        $this->assertLessThanOrEqual(2, $result['summary']['total_posts']);
+    }
+
     public function test_audit_returns_structure(): void
     {
         $result = (new TranslationAuditAbility)->execute([]);

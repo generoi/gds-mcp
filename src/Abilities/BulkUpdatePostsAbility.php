@@ -123,6 +123,17 @@ final class BulkUpdatePostsAbility
             return $posts;
         }
 
+        // Publishing needs publish_posts, not just edit_post. Check every
+        // target up front so a refused publish changes nothing.
+        if (in_array($setStatus, ['publish', 'private', 'future'], true)) {
+            foreach ($posts as $post) {
+                $typeObj = get_post_type_object($post->post_type);
+                if (current_user_can('edit_post', $post->ID) && (! $typeObj || ! current_user_can($typeObj->cap->publish_posts))) {
+                    return new WP_Error('forbidden', sprintf('You do not have permission to publish posts of type "%s".', $post->post_type), ['status' => 403]);
+                }
+            }
+        }
+
         // The meta keys this run touches — captured per-post for a partial
         // (merge) restore so we never snapshot full content/meta.
         $touchedMetaKeys = array_merge(array_keys((array) $setMeta), array_values((array) $deleteMeta));
@@ -150,15 +161,17 @@ final class BulkUpdatePostsAbility
                     ]);
                 }
 
+                // The meta caps also deny protected keys unless a plugin
+                // registered an auth callback for them.
                 foreach ($setMeta as $key => $value) {
-                    if (is_protected_meta($key, 'post')) {
+                    if (! current_user_can('edit_post_meta', $post->ID, $key)) {
                         continue;
                     }
-                    update_post_meta($post->ID, $key, $value);
+                    update_post_meta($post->ID, $key, wp_slash($value));
                 }
 
                 foreach ($deleteMeta as $key) {
-                    if (is_protected_meta($key, 'post')) {
+                    if (! current_user_can('delete_post_meta', $post->ID, $key)) {
                         continue;
                     }
                     delete_post_meta($post->ID, $key);

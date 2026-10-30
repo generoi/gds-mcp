@@ -16,8 +16,10 @@ trait PostCopying
                 continue;
             }
 
+            // add_post_meta() unslashes, so re-slash the raw DB value or
+            // backslashes (escaped quotes in JSON, block attributes) are lost.
             foreach ($values as $value) {
-                add_post_meta($targetId, $key, maybe_unserialize($value));
+                add_post_meta($targetId, $key, wp_slash(maybe_unserialize($value)));
             }
         }
     }
