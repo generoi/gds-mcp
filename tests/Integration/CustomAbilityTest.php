@@ -56,12 +56,11 @@ class CustomAbilityTest extends AbilityTestCase
         }
     }
 
-    public function test_help_works_unauthenticated(): void
+    public function test_help_is_refused_unauthenticated(): void
     {
         wp_set_current_user(0);
 
-        $result = $this->assertAbilitySuccess('gds/help');
-        $this->assertGreaterThan(0, $result['total']);
+        $this->assertAbilityError('gds/help', [], 'ability_invalid_permissions');
     }
 
     // ── Duplicate ─────────────────────────────────────────────────

@@ -283,39 +283,26 @@ class SecurityTest extends AbilityTestCase
         ], 'ability_invalid_permissions');
     }
 
-    // ── Read operations should still work ─────────────────────────
+    // ── Reads need edit_posts too ─────────────────────────────────
+    // Every ability is also on core's /wp-abilities/v1 run route, which
+    // checks only the ability's own permission.
 
-    public function test_subscriber_can_list_published_content(): void
+    public function test_subscriber_cannot_list_content_or_use_help(): void
     {
         wp_set_current_user($this->editorId);
         $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
 
         wp_set_current_user($this->subscriberId);
 
-        $result = $this->assertAbilitySuccess('gds/content-list', [
-            'type' => 'posts',
-            'per_page' => 1,
-        ]);
-        $this->assertGreaterThanOrEqual(1, $result['total']);
+        $this->assertAbilityError('gds/content-list', ['type' => 'posts', 'per_page' => 1], 'ability_invalid_permissions');
+        $this->assertAbilityError('gds/help', [], 'ability_invalid_permissions');
     }
 
-    public function test_subscriber_can_use_help(): void
-    {
-        wp_set_current_user($this->subscriberId);
-
-        $result = $this->assertAbilitySuccess('gds/help');
-        $this->assertGreaterThan(0, $result['total']);
-    }
-
-    public function test_unauthenticated_can_list_published_content(): void
+    public function test_unauthenticated_cannot_list_published_content(): void
     {
         $this->createPost(['post_type' => 'post', 'post_status' => 'publish']);
         wp_set_current_user(0);
 
-        $result = $this->assertAbilitySuccess('gds/content-list', [
-            'type' => 'posts',
-            'per_page' => 1,
-        ]);
-        $this->assertGreaterThanOrEqual(1, $result['total']);
+        $this->assertAbilityError('gds/content-list', ['type' => 'posts', 'per_page' => 1], 'ability_invalid_permissions');
     }
 }

@@ -270,17 +270,12 @@ class ContentAbilityTest extends AbilityTestCase
 
     // ── Permissions ───────────────────────────────────────────────
 
-    public function test_list_published_works_unauthenticated(): void
+    public function test_list_published_is_refused_unauthenticated(): void
     {
         $this->createPost(['post_type' => 'page', 'post_status' => 'publish']);
         wp_set_current_user(0);
 
-        $result = $this->assertAbilitySuccess('gds/content-list', [
-            'type' => 'pages',
-            'per_page' => 1,
-        ]);
-
-        $this->assertGreaterThanOrEqual(1, $result['total']);
+        $this->assertAbilityError('gds/content-list', ['type' => 'pages', 'per_page' => 1], 'ability_invalid_permissions');
     }
 
     public function test_list_draft_blocked_for_subscriber(): void

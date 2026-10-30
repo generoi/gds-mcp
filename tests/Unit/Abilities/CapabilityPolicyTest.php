@@ -49,14 +49,24 @@ class CapabilityPolicyTest extends WP_UnitTestCase
         $this->assertFalse(wp_get_ability('gds/media-upload')->check_permissions(['filename' => 'a.png']), 'Contributors cannot upload files.');
     }
 
-    public function test_other_abilities_are_left_untouched(): void
+    public function test_other_abilities_need_edit_posts(): void
     {
-        // These enforce caps via their REST controller, or are intentionally
-        // public reads — the policy must not override them.
-        $this->assertNull(CapabilityPolicy::capabilityFor('gds/content-update'));
-        $this->assertNull(CapabilityPolicy::capabilityFor('gds/content-list'));
-        $this->assertNull(CapabilityPolicy::capabilityFor('gds/terms-delete'));
-        $this->assertNull(CapabilityPolicy::capabilityFor('gds/help'));
+        $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/content-update'));
+        $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/content-list'));
+        $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/blocks-get'));
+        $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/help'));
+    }
+
+    public function test_anonymous_visitors_cannot_run_abilities_over_rest(): void
+    {
+        wp_set_current_user(0);
+        $request = new \WP_REST_Request('GET', '/wp-abilities/v1/abilities/gds/blocks-get/run');
+        $request->set_query_params(['input' => ['name' => 'core/paragraph']]);
+
+        $response = rest_do_request($request);
+
+        $this->assertSame(401, $response->get_status());
+        $this->assertSame('rest_ability_cannot_execute', $response->as_error()->get_error_code());
     }
 
     public function test_apply_capability_replaces_default_callback_for_forms(): void
@@ -74,12 +84,14 @@ class CapabilityPolicyTest extends WP_UnitTestCase
         $this->assertTrue((bool) ($out['permission_callback'])(), 'Admin must pass forms-update.');
     }
 
-    public function test_apply_capability_leaves_unmapped_abilities_alone(): void
+    public function test_apply_capability_gates_unmapped_abilities_at_edit_posts(): void
     {
-        $args = ['permission_callback' => '__return_true'];
-        $out = CapabilityPolicy::applyCapability($args, 'gds/content-list');
+        $out = CapabilityPolicy::applyCapability(['permission_callback' => '__return_true'], 'gds/content-list');
 
-        $this->assertSame('__return_true', $out['permission_callback'], 'Unmapped abilities keep their public default.');
+        wp_set_current_user(0);
+        $this->assertFalse((bool) ($out['permission_callback'])());
+        wp_set_current_user(self::factory()->user->create(['role' => 'contributor']));
+        $this->assertTrue((bool) ($out['permission_callback'])());
     }
 
     public function test_apply_capability_never_loosens_an_existing_check(): void
@@ -107,7 +119,6 @@ class CapabilityPolicyTest extends WP_UnitTestCase
         }, 10, 2);
 
         $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/forms-update'));
-        // Unmapped abilities still resolve to null through the filter.
-        $this->assertNull(CapabilityPolicy::capabilityFor('gds/content-update'));
+        $this->assertSame('edit_posts', CapabilityPolicy::capabilityFor('gds/content-update'));
     }
 }

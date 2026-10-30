@@ -67,15 +67,20 @@ final class CapabilityPolicy
      */
     public static function capabilityFor(string $name): ?string
     {
-        $cap = self::map()[$name] ?? null;
+        // The rest stay at the floor every MCP and gds-assistant caller
+        // already meets: show_in_rest also puts them on core's
+        // /wp-abilities/v1 run route, which checks only this callback, so a
+        // public default would let anonymous visitors run them.
+        $cap = self::map()[$name] ?? 'edit_posts';
 
         return apply_filters('gds-mcp/ability_capability', $cap, $name);
     }
 
     /**
-     * Capability overrides for gds/* abilities. REST-delegated CRUD is left to
-     * its REST controller (post types and taxonomies carry their own caps) and
-     * reads are intentionally public. The Gravity Forms abilities are the
+     * Capability overrides for gds/* abilities; any other gds/* ability needs
+     * edit_posts. REST-delegated CRUD is left to its REST controller for the
+     * per-object checks (post types and taxonomies carry their own caps). The
+     * Gravity Forms abilities are the
      * exception — they call GFAPI directly with `permission_callback =>
      * __return_true` and no internal check, so an editor could edit/delete
      * forms and feeds (breaking integrations) or read submissions (PII).
