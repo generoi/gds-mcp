@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Http;
 
+use PHPUnit\Framework\TestCase;
 use WpOrg\Requests\Exception as RequestsException;
 
 /**
@@ -53,7 +54,7 @@ final class PublicUrlGuard
      */
     public static function resolveForTests(?\Closure $resolver): void
     {
-        if (! class_exists(\PHPUnit\Framework\TestCase::class, false)) {
+        if (! class_exists(TestCase::class, false)) {
             throw new \LogicException('PublicUrlGuard::resolveForTests() is for tests only.');
         }
         self::$resolver = $resolver;
