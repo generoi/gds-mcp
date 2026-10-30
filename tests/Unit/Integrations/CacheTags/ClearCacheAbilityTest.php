@@ -13,24 +13,26 @@ class ClearCacheAbilityTest extends WP_UnitTestCase
         wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
     }
 
-    public function test_execute_flush_returns_success(): void
+    public function test_flush_without_cachetags_says_no_page_cache_was_purged(): void
     {
-        // Without sage-cachetags, falls back to wp_cache_flush.
+        if (function_exists('app')) {
+            $this->markTestSkipped('sage-cachetags may be bound here.');
+        }
+        wp_cache_set('probe', 'cached');
+
         $result = (new ClearCacheAbility)->execute(['type' => 'flush']);
 
-        $this->assertIsArray($result);
-        $this->assertTrue($result['success']);
+        $this->assertWPError($result);
+        $this->assertSame('page_cache_not_purged', $result->get_error_code());
+        $this->assertFalse(wp_cache_get('probe'), 'On a single site the object cache is still flushed.');
     }
 
     public function test_execute_tags_requires_tags(): void
     {
         $result = (new ClearCacheAbility)->execute(['type' => 'tags']);
 
-        // Either WP_Error (missing tags) or success depending on cachetags availability.
-        if (is_wp_error($result)) {
-            $this->assertSame('missing_tags', $result->get_error_code());
-        } else {
-            $this->assertIsArray($result);
-        }
+        // Without sage-cachetags nothing can be purged at all.
+        $this->assertWPError($result);
+        $this->assertContains($result->get_error_code(), ['missing_tags', 'page_cache_not_purged']);
     }
 }
