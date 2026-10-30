@@ -22,6 +22,8 @@ parameters:
         - '#GFAPI#'
         - '#GFCommon#'
         - '#GF_Fields#'
+        - '#GFFormsModel#'
+        - '#GF_Abilities_Handler_[A-Za-z]+#'
         # Polylang Pro functions + classes
         - '#Function pll_[a-z_]+ not found\.#'
         - '#Polylang_Pro#'

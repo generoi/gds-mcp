@@ -309,20 +309,47 @@ final class GravityFormsAbility
     }
 
     /**
-     * GFAPI saves forms as given; the form editor filters their HTML for users
-     * without unfiltered_html. As GF's own abilities handler does, filter the
-     * markup the caller supplied: form messages, each field through its own
-     * sanitize_settings(), and notification and confirmation messages.
+     * GFAPI saves forms as given; the form editor sanitizes them. Do what GF
+     * 3.1's own abilities handler does (sanitize_supplied_content()) to the
+     * keys the caller supplied: form settings, each field through its own
+     * sanitize_settings(), and notifications and confirmations through GF's
+     * sanitizers where loaded, else the same rules here.
      *
      * @param  array<string, mixed>  $input
      * @return array<string, mixed>
      */
     private static function sanitizeSuppliedForm(array $input): array
     {
+        $text = static fn (mixed $value): mixed => is_string($value) ? sanitize_text_field($value) : $value;
+        $html = static fn (mixed $value): mixed => is_string($value) ? \GFCommon::maybe_wp_kses($value) : $value;
+
         foreach (['description', 'limitEntriesMessage', 'schedulePendingMessage', 'scheduleMessage', 'requireLoginMessage'] as $key) {
-            if (isset($input[$key]) && is_string($input[$key])) {
-                $input[$key] = \GFCommon::maybe_wp_kses($input[$key]);
+            if (isset($input[$key])) {
+                $input[$key] = $html($input[$key]);
             }
+        }
+        foreach (['title', 'cssClass'] as $key) {
+            if (isset($input[$key])) {
+                $input[$key] = $text($input[$key]);
+            }
+        }
+        foreach (['scheduleStart', 'scheduleEnd'] as $key) {
+            if (isset($input[$key]) && is_string($input[$key])) {
+                $input[$key] = wp_strip_all_tags($input[$key]);
+            }
+        }
+        if (isset($input['button']) && is_array($input['button'])) {
+            foreach (['text', 'imageUrl'] as $key) {
+                if (isset($input['button'][$key])) {
+                    $input['button'][$key] = $text($input['button'][$key]);
+                }
+            }
+            if (isset($input['button']['conditionalLogic'])) {
+                $input['button']['conditionalLogic'] = \GFFormsModel::sanitize_conditional_logic($input['button']['conditionalLogic']);
+            }
+        }
+        if (isset($input['save']['button']['text'])) {
+            $input['save']['button']['text'] = $text($input['save']['button']['text']);
         }
 
         foreach (is_array($input['fields'] ?? null) ? $input['fields'] : [] as $i => $field) {
@@ -333,12 +360,50 @@ final class GravityFormsAbility
             }
         }
 
-        foreach (['notifications', 'confirmations'] as $group) {
-            foreach (is_array($input[$group] ?? null) ? $input[$group] : [] as $key => $item) {
-                if (isset($item['message']) && is_string($item['message'])) {
-                    $input[$group][$key]['message'] = \GFCommon::maybe_wp_kses($item['message']);
+        foreach (is_array($input['notifications'] ?? null) ? $input['notifications'] : [] as $key => $notification) {
+            if (! is_array($notification)) {
+                continue;
+            }
+            if (class_exists('GF_Abilities_Handler_Notifications')) {
+                $notification = \GF_Abilities_Handler_Notifications::sanitize($notification);
+            } else {
+                foreach (['name', 'subject', 'from', 'fromName', 'replyTo', 'to', 'bcc', 'cc'] as $field) {
+                    if (isset($notification[$field])) {
+                        $notification[$field] = $text($notification[$field]);
+                    }
+                }
+                if (isset($notification['message'])) {
+                    $notification['message'] = $html($notification['message']);
                 }
             }
+            $input['notifications'][$key] = $notification;
+        }
+
+        foreach (is_array($input['confirmations'] ?? null) ? $input['confirmations'] : [] as $key => $confirmation) {
+            if (! is_array($confirmation)) {
+                continue;
+            }
+            if (class_exists('GF_Abilities_Handler_Confirmations')) {
+                $confirmation = \GF_Abilities_Handler_Confirmations::sanitize($confirmation);
+            } else {
+                if (isset($confirmation['name'])) {
+                    $confirmation['name'] = $text($confirmation['name']);
+                }
+                if (isset($confirmation['message'])) {
+                    $confirmation['message'] = $html($confirmation['message']);
+                }
+            }
+            // GF's own check lets a javascript://… URL through, and its
+            // redirect confirmation runs it. Keep http(s), a path, or a
+            // merge tag; browsers skip leading control characters too.
+            if (isset($confirmation['url']) && is_string($confirmation['url'])) {
+                $url = ltrim($confirmation['url'], "\x00..\x20");
+                $scheme = strtolower((string) wp_parse_url($url, PHP_URL_SCHEME));
+                if ($url !== '' && ! in_array($scheme, ['http', 'https'], true) && ! in_array($url[0], ['/', '{', '?', '#'], true)) {
+                    $confirmation['url'] = '';
+                }
+            }
+            $input['confirmations'][$key] = $confirmation;
         }
 
         return $input;

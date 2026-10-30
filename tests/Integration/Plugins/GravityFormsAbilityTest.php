@@ -203,6 +203,31 @@ class GravityFormsAbilityTest extends AbilityTestCase
         $this->assertSame('Block', $updated['fields'][0]['label']);
     }
 
+    public function test_forms_settings_and_redirects_are_sanitized(): void
+    {
+        $created = $this->assertAbilitySuccess('gds/forms-create', [
+            'title' => 'Sanitize <b>Test</b> '.uniqid(),
+            'button' => ['type' => 'text', 'text' => 'Send <img src=x onerror=alert(1)>'],
+            'fields' => [['type' => 'email', 'label' => 'Email']],
+            'confirmations' => [
+                ['name' => 'Script', 'type' => 'redirect', 'url' => 'javascript://x%0aalert(document.cookie)', 'isDefault' => true],
+                ['name' => 'Hidden', 'type' => 'redirect', 'url' => "\x01javascript:alert(1)"],
+                ['name' => 'Fine', 'type' => 'redirect', 'url' => 'https://example.com/thanks'],
+                ['name' => 'Tag', 'type' => 'redirect', 'url' => '{embed_url}?sent=1'],
+            ],
+        ]);
+        $id = $this->trackForm((int) $created['id']);
+
+        $form = \GFAPI::get_form($id);
+        $this->assertStringNotContainsString('<b>', $form['title']);
+        $this->assertStringNotContainsString('<img', $form['button']['text']);
+        $urls = array_column($form['confirmations'], 'url', 'name');
+        $this->assertSame('', $urls['Script']);
+        $this->assertSame('', $urls['Hidden']);
+        $this->assertSame('https://example.com/thanks', $urls['Fine']);
+        $this->assertSame('{embed_url}?sent=1', $urls['Tag']);
+    }
+
     public function test_forms_update_confirmation_message(): void
     {
         // Edit an existing confirmation's message while keeping its id
