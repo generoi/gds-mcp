@@ -69,7 +69,7 @@ class RestoreSnapshotTest extends TestCase
         kses_remove_filters();
 
         $this->assertStringNotContainsString('<script>', get_post($id)->post_content);
-        $this->assertStringContainsString('unfiltered_html', $filtered['caveats'][0] ?? '');
+        $this->assertStringContainsString('changed on save', $filtered['caveats'][0] ?? '');
     }
 
     public function test_restore_post_reports_terms_it_could_not_restore(): void
@@ -86,12 +86,16 @@ class RestoreSnapshotTest extends TestCase
     public function test_restore_post_partial_returns_a_failed_status_update(): void
     {
         $id = self::factory()->post->create(['post_status' => 'publish']);
-        $before = Snapshot::partialPost($id, []);
+        update_post_meta($id, 'flag', 'before');
+        $before = Snapshot::partialPost($id, ['flag']);
+        update_post_meta($id, 'flag', 'after');
         add_filter('wp_insert_post_empty_content', '__return_true');
 
         $result = $this->restore('restore-post-partial', $before);
 
         $this->assertWPError($result);
+        $this->assertStringContainsString('not its status', $result->get_error_message());
+        $this->assertSame('before', get_post_meta($id, 'flag', true), 'The meta is restored all the same.');
     }
 
     public function test_restore_yoast_redirect_keeps_backslashes(): void
@@ -393,6 +397,10 @@ class RestoreSnapshotTest extends TestCase
         $this->assertNotWPError($result);
         $this->assertNotSame($term, $result['term_id']);
         $this->assertSame('Custom title', get_option('wpseo_taxonomy_meta')['category'][$result['term_id']]['wpseo_title'] ?? null);
+        // And what Yoast outputs, from the rebuilt indexable.
+        if (function_exists('YoastSEO')) {
+            $this->assertStringContainsString('Custom title', (string) YoastSEO()->meta->for_term($result['term_id'])->title);
+        }
     }
 
     public function test_recreate_term_preserves_original_id_and_assignments(): void

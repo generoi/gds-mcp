@@ -147,5 +147,14 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
 
         $this->assertNotWPError($restored);
         $this->assertSame('Moialert(2)', $stored());
+
+        // With no translation yet, one that repeats the original is still
+        // filtered: Polylang compares with the previous translation, not
+        // the original.
+        $withMarkup = 'Original <script>x</script> '.uniqid();
+        pll_register_string('test_kses_original', $withMarkup, 'GDS MCP Tests');
+        $result = (new UpdateStringTranslationAbility)->execute(['string' => $withMarkup, 'lang' => $lang->slug, 'translation' => $withMarkup]);
+
+        $this->assertStringNotContainsString('<script>', $result['translation']);
     }
 }

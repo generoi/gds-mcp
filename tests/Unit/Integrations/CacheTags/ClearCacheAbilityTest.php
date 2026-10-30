@@ -22,17 +22,20 @@ class ClearCacheAbilityTest extends WP_UnitTestCase
 
         $result = (new ClearCacheAbility)->execute(['type' => 'flush']);
 
-        $this->assertWPError($result);
-        $this->assertSame('page_cache_not_purged', $result->get_error_code());
-        $this->assertFalse(wp_cache_get('probe'), 'On a single site the object cache is still flushed.');
+        $this->assertTrue($result['success']);
+        $this->assertStringContainsString('no page cache was purged', $result['message']);
+        $this->assertFalse(wp_cache_get('probe'), 'On a single site the object cache is flushed.');
     }
 
     public function test_execute_tags_requires_tags(): void
     {
+        if (! function_exists('app')) {
+            $this->markTestSkipped('sage-cachetags is not active.');
+        }
+
         $result = (new ClearCacheAbility)->execute(['type' => 'tags']);
 
-        // Without sage-cachetags nothing can be purged at all.
         $this->assertWPError($result);
-        $this->assertContains($result->get_error_code(), ['missing_tags', 'page_cache_not_purged']);
+        $this->assertSame('missing_tags', $result->get_error_code());
     }
 }

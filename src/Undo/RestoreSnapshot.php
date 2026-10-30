@@ -140,7 +140,7 @@ final class RestoreSnapshot
         // Saving filters content for users without unfiltered_html, so markup
         // someone else wrote may not come back as it was.
         if (get_post_field('post_content', $snapshot->id, 'raw') !== $snapshot->post['post_content']) {
-            $caveats[] = 'The content was saved differently from the snapshot: WordPress filtered it on save, most likely removing HTML that your account is not allowed to post (unfiltered_html). Check the post, or have an administrator undo it.';
+            $caveats[] = 'The content was changed on save, e.g. by HTML filtering, so it differs from the snapshot. Check the post.';
         }
 
         $summary = ['restored' => 'post', 'id' => $snapshot->id];
@@ -170,12 +170,10 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', "Post {$snapshot->id} no longer exists.");
         }
 
-        if ($snapshot->status !== '') {
-            $updated = wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status], true);
-            if (is_wp_error($updated)) {
-                return $updated;
-            }
-        }
+        // The meta goes back even when the status cannot; the error says so.
+        $updated = $snapshot->status !== ''
+            ? wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status], true)
+            : null;
 
         foreach ($snapshot->metaPrev as $key => $values) {
             delete_post_meta($snapshot->id, $key);
@@ -188,6 +186,10 @@ final class RestoreSnapshot
             foreach ($values as $value) {
                 add_post_meta($snapshot->id, $key, wp_slash($value));
             }
+        }
+
+        if (is_wp_error($updated)) {
+            return new WP_Error('restore_failed', "The meta of post {$snapshot->id} was restored, but not its status: ".$updated->get_error_message());
         }
 
         return ['restored' => 'post', 'id' => $snapshot->id];
@@ -529,6 +531,12 @@ final class RestoreSnapshot
         // new one, as Yoast does when core splits a shared term.
         if (function_exists('wpseo_split_shared_term')) {
             wpseo_split_shared_term($oldId, $newId, 0, $snapshot->taxonomy);
+            // Its indexable was built when the term was inserted, before the
+            // entry moved; rebuild it.
+            $term = get_term($newId, $snapshot->taxonomy);
+            if ($term instanceof \WP_Term) {
+                SeoFields::touchTerm($term);
+            }
         }
 
         return [
@@ -923,7 +931,7 @@ final class RestoreSnapshot
 
         $mo = new \PLL_MO;
         $mo->import_from_db($langObject);
-        $translation = RegisteredStrings::sanitizeTranslation($string, $translation, $mo->translate($string));
+        $translation = RegisteredStrings::sanitizeTranslation($string, $translation, $mo->translate_if_any($string));
         $mo->add_entry($mo->make_entry($string, $translation));
         $mo->export_to_db($langObject);
 
