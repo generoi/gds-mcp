@@ -45,6 +45,11 @@ function gds_mcp_plugin_file(string $plugin): ?string
  * wp-phpunit uses a fresh DB where no plugins are "activated".
  * We manually require plugin files so they initialize.
  */
+// Gravity Forms 3.1 hooks the (unprefixed) mcp_adapter_create_default_server
+// filter and turns the default server off unless its own MCP setting is on,
+// which would skip the protocol tests whenever GF is mounted.
+tests_add_filter('mcp_adapter_create_default_server', '__return_true', 99);
+
 tests_add_filter('muplugins_loaded', function () {
     $pluginsDir = dirname(__DIR__, 2);
 
