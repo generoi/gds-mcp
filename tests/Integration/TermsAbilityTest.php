@@ -153,10 +153,10 @@ class TermsAbilityTest extends AbilityTestCase
     {
         $termId = self::factory()->category->create(['name' => 'To Delete']);
 
+        // No force: terms have no trash, so the ability always deletes.
         $result = $this->assertAbilitySuccess('gds/terms-delete', [
             'taxonomy' => 'categories',
             'id' => $termId,
-            'force' => true,
         ]);
 
         $this->assertIsArray($result);

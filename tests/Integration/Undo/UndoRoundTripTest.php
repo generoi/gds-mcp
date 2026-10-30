@@ -38,7 +38,7 @@ class UndoRoundTripTest extends AbilityTestCase
         wp_set_object_terms($postId, [$termId], 'category');
 
         // The ability takes the REST base "categories", not the slug "category".
-        $result = $this->assertAbilitySuccess('gds/terms-delete', ['taxonomy' => 'categories', 'id' => $termId, 'force' => true]);
+        $result = $this->assertAbilitySuccess('gds/terms-delete', ['taxonomy' => 'categories', 'id' => $termId]);
         $this->assertSame('recreate-term', $result['_undo']['kind'] ?? null);
         $this->assertSame('category', $result['_undo']['data']['taxonomy'] ?? null, 'Snapshot must store the real taxonomy slug.');
         $this->assertNull(term_exists($termId, 'category'), 'Term is gone after delete.');

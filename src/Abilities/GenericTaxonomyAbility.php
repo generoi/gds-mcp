@@ -113,14 +113,13 @@ final class GenericTaxonomyAbility
 
         HelpAbility::registerAbility('gds/terms-delete', [
             'label' => 'Delete Term',
-            'description' => "Delete a taxonomy term. Available taxonomies: {$taxDesc}.",
+            'description' => "Delete a taxonomy term. Terms have no trash, so this deletes it for good. Available taxonomies: {$taxDesc}.",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'taxonomy' => ['type' => 'string', 'enum' => $taxEnum],
                     'id' => ['type' => 'integer', 'description' => 'Term ID'],
-                    'force' => ['type' => 'boolean', 'description' => 'Force delete (default: false)'],
                 ],
                 'required' => ['taxonomy', 'id'],
             ],
@@ -278,7 +277,6 @@ final class GenericTaxonomyAbility
         }
         $taxonomy = self::resolveTaxonomy($restBase);
         $id = (int) ($input['id'] ?? 0);
-        $force = $input['force'] ?? false;
 
         // Terms have no trash, so deletion is permanent. Capture everything
         // needed to recreate the term under its original id (see
@@ -286,7 +284,8 @@ final class GenericTaxonomyAbility
         $undo = $id ? Snapshot::termForRecreate($id, $taxonomy) : null;
 
         $request = new \WP_REST_Request('DELETE', "{$route}/{$id}");
-        $request->set_param('force', $force);
+        // The terms controller refuses a delete without it (rest_trash_not_supported).
+        $request->set_param('force', true);
 
         $response = rest_do_request($request);
         $result = self::restResponseOrError($response);
