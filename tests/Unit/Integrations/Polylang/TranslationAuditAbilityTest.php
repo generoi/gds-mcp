@@ -24,4 +24,17 @@ class TranslationAuditAbilityTest extends WP_UnitTestCase
         $this->assertWPError($result);
         $this->assertSame('polylang_not_active', $result->get_error_code());
     }
+
+    public function test_permission_depends_on_status(): void
+    {
+        $this->assertTrue(TranslationAuditAbility::permissionCheck(['status' => 'publish']));
+        $this->assertTrue(TranslationAuditAbility::permissionCheck(['status' => 'draft']), 'Editors may audit drafts.');
+
+        wp_set_current_user(self::factory()->user->create(['role' => 'author']));
+        $this->assertTrue(TranslationAuditAbility::permissionCheck([]));
+        $this->assertFalse(TranslationAuditAbility::permissionCheck(['status' => 'draft']), 'Authors may not audit other users\' drafts.');
+
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+        $this->assertFalse(TranslationAuditAbility::permissionCheck([]));
+    }
 }

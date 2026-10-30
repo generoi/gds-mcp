@@ -61,6 +61,14 @@ HTML;
         $this->assertArrayNotHasKey('content', $result);
     }
 
+    public function test_requires_edit_posts(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'subscriber']));
+
+        $this->assertAbilityError('gds/web-fetch', ['url' => 'https://example.com/'], 'ability_invalid_permissions');
+        $this->assertSame([], $this->requestArgs, 'No request is made.');
+    }
+
     public function test_meta_format_asks_for_html(): void
     {
         $this->assertAbilitySuccess('gds/web-fetch', ['url' => 'https://example.com/', 'format' => 'meta']);

@@ -50,6 +50,40 @@ class RestoreSnapshotTest extends TestCase
         $this->assertNotContains($catNew, $terms);
     }
 
+    public function test_restore_post_preserves_backslashes(): void
+    {
+        $content = '<!-- wp:paragraph {"placeholder":"say \"hi\" \u003cb\u003e"} --><p>C:\temp</p><!-- /wp:paragraph -->';
+        $json = '{"label":"a \"quoted\" \u003cword\u003e"}';
+        $id = self::factory()->post->create(['post_content' => wp_slash($content)]);
+        update_post_meta($id, 'json_field', wp_slash($json));
+
+        $before = Snapshot::postFields($id);
+        wp_update_post(['ID' => $id, 'post_content' => 'Changed']);
+        update_post_meta($id, 'json_field', 'changed');
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+
+        clean_post_cache($id);
+        // Without unfiltered_html, kses re-serializes block attributes (" may
+        // come back as \u0022), so compare the parsed attributes.
+        $this->assertSame(parse_blocks($content)[0]['attrs'], parse_blocks(get_post($id)->post_content)[0]['attrs']);
+        $this->assertStringContainsString('C:\temp', get_post($id)->post_content);
+        $this->assertSame($json, get_post_meta($id, 'json_field', true));
+    }
+
+    public function test_restore_post_partial_preserves_backslashes(): void
+    {
+        $json = '{"label":"a \"quoted\" \u003cword\u003e"}';
+        $id = self::factory()->post->create();
+        update_post_meta($id, 'json_field', wp_slash($json));
+
+        $before = Snapshot::partialPost($id, ['json_field']);
+        update_post_meta($id, 'json_field', 'changed');
+
+        $this->assertNotWPError($this->restore('restore-post-partial', $before));
+        $this->assertSame($json, get_post_meta($id, 'json_field', true));
+    }
+
     public function test_untrash_restores_a_trashed_post(): void
     {
         $id = self::factory()->post->create(['post_status' => 'publish']);
