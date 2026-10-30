@@ -6,7 +6,7 @@ Built on the [WordPress MCP Adapter](https://github.com/WordPress/mcp-adapter) a
 
 ## Requirements
 
-- PHP >= 8.0
+- PHP >= 8.2
 - WordPress >= 7.0
 - [MCP Adapter](https://wordpress.org/plugins/mcp-adapter/), as an active plugin or the `wordpress/mcp-adapter` Composer library (required for MCP HTTP/STDIO transport)
 
