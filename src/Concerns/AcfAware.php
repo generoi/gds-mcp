@@ -30,8 +30,15 @@ trait AcfAware
             return array_fill_keys(array_map('strval', array_keys($fields)), 'ACF is not active.');
         }
 
+        // update_field() stores as given; ACF's own form and REST saves filter
+        // for users who may not post unfiltered HTML, so this does too.
+        $allowUnfiltered = function_exists('acf_allow_unfiltered_html') ? acf_allow_unfiltered_html() : current_user_can('unfiltered_html');
+
         $errors = [];
         foreach ($fields as $key => $value) {
+            if (! $allowUnfiltered) {
+                $value = wp_kses_post_deep($value);
+            }
             // Only allow registered ACF field keys/names — reject arbitrary meta.
             $fieldObj = acf_get_field($key);
             if (! $fieldObj) {
