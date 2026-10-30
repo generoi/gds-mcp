@@ -752,6 +752,29 @@ class OAuthFlowTest extends TestCase
         $this->assertCount(1, Grants::all($this->editor));
     }
 
+    public function test_re_authorizing_refreshes_the_name_and_scopes(): void
+    {
+        $grant = ['client_id' => 'gmc_same', 'client_name' => 'Old name', 'resource' => $this->resource, 'scopes' => ['mcp']];
+        $grantId = Grants::create($this->editor, $grant);
+
+        $this->assertSame($grantId, Grants::create($this->editor, ['client_name' => 'New name', 'scopes' => Metadata::SCOPES] + $grant));
+
+        $stored = Grants::get($this->editor, $grantId);
+        $this->assertSame('New name', $stored['client_name']);
+        $this->assertSame(Metadata::SCOPES, $stored['scopes']);
+    }
+
+    public function test_a_code_another_exchange_already_removed_is_refused(): void
+    {
+        $code = Grants::issueCode(['user' => $this->editor, 'client_id' => 'gmc_x']);
+        $key = 'gds_mcp_oauth_code_'.hash('sha256', $code);
+        // A second exchange that read the code before the first deleted it.
+        delete_transient($key);
+        add_filter("pre_transient_{$key}", fn () => ['user' => $this->editor, 'client_id' => 'gmc_x']);
+
+        $this->assertNull(Grants::consumeCode($code));
+    }
+
     public function test_a_dead_connection_is_swept_up(): void
     {
         $tokens = $this->connect();
@@ -769,29 +792,6 @@ class OAuthFlowTest extends TestCase
 
         $this->assertSame([], Grants::all($this->editor));
         $this->assertFalse($this->authenticate($tokens['access_token']));
-    }
-
-    public function test_a_code_another_exchange_already_removed_is_refused(): void
-    {
-        $code = Grants::issueCode(['user' => $this->editor, 'client_id' => 'gmc_x']);
-        $key = 'gds_mcp_oauth_code_'.hash('sha256', $code);
-        // A second exchange that read the code before the first deleted it.
-        delete_transient($key);
-        add_filter("pre_transient_{$key}", fn () => ['user' => $this->editor, 'client_id' => 'gmc_x']);
-
-        $this->assertNull(Grants::consumeCode($code));
-    }
-
-    public function test_re_authorizing_refreshes_the_name_and_scopes(): void
-    {
-        $grant = ['client_id' => 'gmc_same', 'client_name' => 'Old name', 'resource' => $this->resource, 'scopes' => ['mcp']];
-        $grantId = Grants::create($this->editor, $grant);
-
-        $this->assertSame($grantId, Grants::create($this->editor, ['client_name' => 'New name', 'scopes' => Metadata::SCOPES] + $grant));
-
-        $stored = Grants::get($this->editor, $grantId);
-        $this->assertSame('New name', $stored['client_name']);
-        $this->assertSame(Metadata::SCOPES, $stored['scopes']);
     }
 
     public function test_unknown_token_authenticates_nobody(): void

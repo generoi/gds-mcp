@@ -47,9 +47,9 @@ final class RestoreSnapshot
             'restore-post-partial' => self::restorePostPartial($data),
             'untrash' => self::untrash($data),
             'trash' => self::trash($data),
-            'delete-attachment' => self::deleteAttachment($data),
             'restore-term' => self::restoreTerm($data),
             'delete-term' => self::deleteTerm($data),
+            'delete-attachment' => self::deleteAttachment($data),
             'recreate-term' => self::recreateTerm($data),
             'restore-form' => self::restoreForm($data),
             'delete-form' => self::deleteForm($data),
@@ -190,25 +190,6 @@ final class RestoreSnapshot
     }
 
     /**
-     * Undo an upload: delete the attachment and its files for good.
-     *
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>|WP_Error
-     */
-    private static function deleteAttachment(array $data): array|WP_Error
-    {
-        $id = (int) ($data['id'] ?? 0);
-        if (! $id || get_post_type($id) !== 'attachment') {
-            return ['restored' => 'delete-attachment', 'id' => $id, 'note' => 'Already removed.'];
-        }
-        if (! wp_delete_attachment($id, true)) {
-            return new WP_Error('restore_failed', "Failed to delete attachment {$id}.");
-        }
-
-        return ['restored' => 'delete-attachment', 'id' => $id];
-    }
-
-    /**
      * @param  array<string, mixed>  $data
      * @return RestoreSummary|WP_Error
      */
@@ -252,6 +233,25 @@ final class RestoreSnapshot
         }
 
         return ['restored' => 'delete-term', 'term_id' => $termId];
+    }
+
+    /**
+     * Undo an upload: delete the attachment and its files for good.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
+    private static function deleteAttachment(array $data): array|WP_Error
+    {
+        $id = (int) ($data['id'] ?? 0);
+        if (! $id || get_post_type($id) !== 'attachment') {
+            return ['restored' => 'delete-attachment', 'id' => $id, 'note' => 'Already removed.'];
+        }
+        if (! wp_delete_attachment($id, true)) {
+            return new WP_Error('restore_failed', "Failed to delete attachment {$id}.");
+        }
+
+        return ['restored' => 'delete-attachment', 'id' => $id];
     }
 
     /**
