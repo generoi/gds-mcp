@@ -224,7 +224,7 @@ final class BulkUpdatePostsAbility
                         // Untrash rather than set the status back, so the slug
                         // wp_trash_post() suffixed is restored too.
                         $undoItems[] = ['kind' => 'untrash', 'data' => ['id' => $post->ID, 'status' => $before->status]];
-                        $before = new PartialPostSnapshot($before->id, '', $before->metaPrev);
+                        $before = new PartialPostSnapshot($before->id, '', $before->metaPrev, $before->serialized);
                     }
                     $undoItems[] = ['kind' => 'restore-post-partial', 'data' => $before];
                 }

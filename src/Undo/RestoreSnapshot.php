@@ -163,10 +163,11 @@ final class RestoreSnapshot
             if ($values === null) {
                 continue;
             }
-            // Values were captured serialized, as stored; add_post_meta
+            // Values are captured serialized, as stored (older rows hold
+            // plain strings, written back as they are); add_post_meta
             // re-serializes as needed but also unslashes, hence wp_slash().
             foreach ($values as $value) {
-                add_post_meta($snapshot->id, $key, wp_slash(maybe_unserialize($value)));
+                add_post_meta($snapshot->id, $key, wp_slash($snapshot->serialized ? maybe_unserialize($value) : $value));
             }
         }
 
