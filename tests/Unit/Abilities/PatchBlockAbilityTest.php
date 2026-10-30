@@ -206,6 +206,36 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
         $this->assertStringContainsString('<div class="wp-block-group empty"><!-- wp:paragraph --><p>Filled</p><!-- /wp:paragraph --></div>', $content);
     }
 
+    public function test_insert_into_a_block_whose_markup_does_not_show_where_is_refused(): void
+    {
+        $cover = '<!-- wp:cover --><div class="wp-block-cover"><span aria-hidden="true" class="wp-block-cover__background has-background-dim"></span><div class="wp-block-cover__inner-container"></div></div><!-- /wp:cover -->';
+        $postId = self::factory()->post->create(['post_content' => $cover]);
+
+        $result = (new PatchBlockAbility)->execute(['id' => $postId, 'action' => 'insert', 'block_name' => 'core/cover', 'position' => 'append', 'markup' => '<!-- wp:paragraph --><p>Hi</p><!-- /wp:paragraph -->']);
+
+        $this->assertWPError($result);
+        $this->assertStringContainsString('complete block markup', $result->get_error_data()['results'][0]['error']);
+        $this->assertSame($cover, get_post($postId)->post_content);
+    }
+
+    public function test_insert_into_a_leaf_block_is_refused(): void
+    {
+        foreach (['append', 'prepend'] as $position) {
+            $result = (new PatchBlockAbility)->execute(['id' => $this->postId, 'action' => 'insert', 'block_name' => 'core/paragraph', 'position' => $position, 'markup' => '<!-- wp:paragraph --><p>Inside</p><!-- /wp:paragraph -->']);
+
+            $this->assertWPError($result, $position);
+            $this->assertStringContainsString('holds no inner blocks', $result->get_error_data()['results'][0]['error']);
+        }
+    }
+
+    public function test_insert_with_occurrence_zero_is_refused(): void
+    {
+        $result = (new PatchBlockAbility)->execute(['id' => $this->postId, 'action' => 'insert', 'block_name' => 'core/group', 'occurrence' => 0, 'position' => 'append', 'markup' => '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->']);
+
+        $this->assertWPError($result);
+        $this->assertSame('occurrence_zero_insert', $result->get_error_code());
+    }
+
     public function test_occurrence_zero_patches_all(): void
     {
         $result = (new PatchBlockAbility)->execute([

@@ -316,7 +316,14 @@ final class PatchBlockAbility
     private static function guardOccurrenceZeroContent(array $op, string $where): ?WP_Error
     {
         $action = $op['action'] ?? 'patch';
-        if ($action !== 'patch' || (int) ($op['occurrence'] ?? 1) !== 0) {
+        if ((int) ($op['occurrence'] ?? 1) !== 0) {
+            return null;
+        }
+        // An insert goes in one place; 0 used to mean the first match.
+        if ($action === 'insert') {
+            return new WP_Error('occurrence_zero_insert', "{$where}: occurrence:0 (ALL) is for patch and delete only. Give the occurrence (1-based) to insert at.");
+        }
+        if ($action !== 'patch') {
             return null;
         }
 
@@ -398,7 +405,9 @@ final class PatchBlockAbility
             }
             if (isset($op['inner_blocks'])) {
                 $newInnerBlocks = self::parseMarkup($op['inner_blocks']);
-                self::spliceInnerContent($block, 0, count($block['innerBlocks'] ?? []), count($newInnerBlocks));
+                if ($spliceError = self::spliceInnerContent($block, 0, count($block['innerBlocks'] ?? []), count($newInnerBlocks))) {
+                    return $spliceError;
+                }
                 $block['innerBlocks'] = $newInnerBlocks;
             }
 
@@ -441,9 +450,11 @@ final class PatchBlockAbility
             self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($newBlocks, $position) {
                 $existing = $block['innerBlocks'] ?? [];
                 $at = $position === 'prepend' ? 0 : count($existing);
+                if ($spliceError = self::spliceInnerContent($block, $at, 0, count($newBlocks))) {
+                    return $spliceError;
+                }
                 array_splice($existing, $at, 0, $newBlocks);
                 $block['innerBlocks'] = $existing;
-                self::spliceInnerContent($block, $at, 0, count($newBlocks));
 
                 return true;
             });
@@ -588,25 +599,38 @@ final class PatchBlockAbility
      * hold the wrapper markup (<ul>, a group's <div>): only placeholders are
      * removed or added, the chunks stay as they were.
      *
+     * A block with no inner blocks yet has nothing to show where they go,
+     * unless its markup is one empty wrapper (<ul></ul>) or none at all
+     * (a dynamic block); anything else is refused.
+     *
      * @param  array<string, mixed>  $block
      */
-    private static function spliceInnerContent(array &$block, int $at, int $remove, int $insert): void
+    private static function spliceInnerContent(array &$block, int $at, int $remove, int $insert): ?WP_Error
     {
         $content = $block['innerContent'] ?? [];
         $slots = array_keys($content, null, true);
+        $name = (string) ($block['blockName'] ?? '');
 
         if (isset($slots[$at])) {
             $pos = $slots[$at];
         } elseif ($slots) {
             $pos = end($slots) + 1;
-        } else {
-            // No inner blocks yet: the wrapper is one chunk, and they go
-            // before its closing tag.
+        } elseif ($insert === 0) {
             $pos = count($content);
-            $last = end($content);
-            if (is_string($last) && ($close = strrpos($last, '</')) !== false) {
-                array_splice($content, -1, 1, [substr($last, 0, $close), substr($last, $close)]);
-                $pos = count($content) - 1;
+        } else {
+            $markup = implode('', array_filter($content, 'is_string'));
+            if (trim($markup) === '') {
+                $pos = count($content);
+            } elseif (preg_match('#^(\s*<([a-z][a-z0-9-]*)\b[^>]*>)(\s*</\2>\s*)$#i', $markup, $m)) {
+                $content = [$m[1], $m[3]];
+                $pos = 1;
+            } elseif (trim(wp_strip_all_tags($markup)) !== '') {
+                return new WP_Error('not_a_container', "{$name} holds no inner blocks. Insert before or after it instead.");
+            } else {
+                return new WP_Error(
+                    'unknown_inner_position',
+                    "{$name} has no inner blocks yet, and its markup does not show where they go. Insert the complete block markup, with its inner blocks, after it and delete this one.",
+                );
             }
         }
 
@@ -625,6 +649,8 @@ final class PatchBlockAbility
         }
 
         $block['innerContent'] = $rebuilt;
+
+        return null;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
