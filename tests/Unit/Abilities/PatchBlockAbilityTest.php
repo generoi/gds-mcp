@@ -222,6 +222,23 @@ class PatchBlockAbilityTest extends WP_UnitTestCase
         $this->assertStringContainsString('Batch updated', $content);
     }
 
+    public function test_batch_with_a_failing_operation_saves_nothing(): void
+    {
+        $before = get_post($this->postId)->post_content;
+
+        $result = (new PatchBlockAbility)->execute([
+            'id' => $this->postId,
+            'operations' => [
+                ['block_name' => 'core/heading', 'occurrence' => 1, 'attrs' => ['textAlign' => 'center']],
+                ['block_name' => 'core/nonexistent', 'attrs' => ['foo' => 'bar']],
+            ],
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('operation_failed', $result->get_error_code());
+        $this->assertSame($before, get_post($this->postId)->post_content);
+    }
+
     public function test_block_not_found(): void
     {
         $result = (new PatchBlockAbility)->execute([

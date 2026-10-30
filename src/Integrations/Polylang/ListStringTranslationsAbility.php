@@ -77,7 +77,7 @@ final class ListStringTranslationsAbility
         }
 
         // Get all registered strings.
-        $registeredStrings = \PLL_Admin_Strings::get_strings();
+        $registeredStrings = RegisteredStrings::all();
 
         // Load translations for each language.
         $languages = self::getAllLanguages();

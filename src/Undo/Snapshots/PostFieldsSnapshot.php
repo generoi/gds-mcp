@@ -78,8 +78,10 @@ final class PostFieldsSnapshot
 
         $terms = [];
         foreach (get_object_taxonomies(get_post_type($id) ?: 'post') as $tax) {
+            // An empty taxonomy is recorded too, so the restore clears terms
+            // added since.
             $ids = wp_get_object_terms($id, $tax, ['fields' => 'ids']);
-            if (! is_wp_error($ids) && $ids) {
+            if (! is_wp_error($ids)) {
                 $terms[$tax] = array_map('intval', $ids);
             }
         }

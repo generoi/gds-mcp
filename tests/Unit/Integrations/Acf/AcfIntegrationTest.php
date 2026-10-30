@@ -3,7 +3,7 @@
 namespace GeneroWP\MCP\Tests\Unit\Integrations\Acf;
 
 use GeneroWP\MCP\Abilities\AcfFieldsResource;
-use GeneroWP\MCP\Abilities\PostTypeAbility;
+use GeneroWP\MCP\Abilities\GenericPostTypeAbility;
 use WP_UnitTestCase;
 
 /**
@@ -101,8 +101,7 @@ class AcfIntegrationTest extends WP_UnitTestCase
         $postId = self::factory()->post->create(['post_status' => 'publish']);
         update_field('read_test_field', 'hello from acf', $postId);
 
-        $posts = new PostTypeAbility('/wp/v2/posts', 'posts', 'Posts');
-        $result = $posts->executeRead(['id' => $postId]);
+        $result = (new GenericPostTypeAbility)->executeRead(['type' => 'posts', 'id' => $postId]);
 
         $this->assertIsArray($result);
         // ACF fields are exposed via the REST API's acf field
@@ -135,5 +134,27 @@ class AcfIntegrationTest extends WP_UnitTestCase
 
         // Verify via get_field.
         $this->assertSame('updated value', get_field('update_test_field', $postId));
+    }
+
+    public function test_content_update_reports_fields_it_did_not_save(): void
+    {
+        acf_add_local_field_group([
+            'key' => 'group_test_report',
+            'title' => 'Report Test',
+            'fields' => [['key' => 'field_report_test', 'label' => 'Report', 'name' => 'report_test_field', 'type' => 'text']],
+            'location' => [[['param' => 'post_type', 'operator' => '==', 'value' => 'post']]],
+            'active' => true,
+        ]);
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+
+        $result = (new GenericPostTypeAbility)->executeUpdate([
+            'type' => 'posts',
+            'id' => $postId,
+            'fields' => ['report_test_field' => 'saved', 'not_a_field' => 'x'],
+        ]);
+
+        $this->assertSame('saved', get_field('report_test_field', $postId));
+        $this->assertSame(['not_a_field'], array_keys($result['fields_errors']));
+        $this->assertSame('', get_post_meta($postId, 'not_a_field', true));
     }
 }

@@ -257,8 +257,9 @@ final class MediaUploadAbility
 
             $result = $this->formatResponse($attachmentId);
 
-            // Undo a create by trashing the attachment (keeps the file on disk).
-            return $this->reversible($result, 'trash', ['id' => $attachmentId], 'Remove the uploaded file');
+            // Undo deletes the attachment and its files: it was just created,
+            // and without MEDIA_TRASH a trashed attachment is in no list.
+            return $this->reversible($result, 'delete-attachment', ['id' => $attachmentId], 'Delete the uploaded file');
         } finally {
             // media_handle_sideload moves the temp file on success, so this is
             // a no-op then. On failure or any unhandled exception this catches

@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Tests\Integration;
 
+use GeneroWP\MCP\Abilities\GenericPostTypeAbility;
 use GeneroWP\MCP\Tests\AbilityTestCase;
 
 /**
@@ -369,6 +370,24 @@ class ContentAbilityTest extends AbilityTestCase
             $status === 'trash' || $status === false,
             'Template part should be trashed or removed, got: '.var_export($status, true),
         );
+    }
+
+    public function test_create_template_part_with_fields_uses_the_numeric_id(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'administrator']));
+
+        // `id` is the composite "{theme}//{slug}"; the fields go to wp_id.
+        $result = (new GenericPostTypeAbility)->executeCreate([
+            'type' => 'template-parts',
+            'slug' => 'promo-part',
+            'title' => 'Promo',
+            'content' => '<!-- wp:paragraph --><p>x</p><!-- /wp:paragraph -->',
+            'fields' => ['not_a_field' => 'x'],
+        ]);
+
+        $this->assertNotWPError($result);
+        $this->assertStringContainsString('//promo-part', (string) $result['id']);
+        $this->assertArrayHasKey('not_a_field', $result['fields_errors']);
     }
 
     public function test_read_numeric_id_still_works(): void

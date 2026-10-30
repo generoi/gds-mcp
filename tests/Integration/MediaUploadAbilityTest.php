@@ -33,6 +33,22 @@ class MediaUploadAbilityTest extends AbilityTestCase
         wp_delete_attachment($result['id'], true);
     }
 
+    public function test_undoing_an_upload_deletes_the_attachment_and_its_file(): void
+    {
+        $result = $this->assertAbilitySuccess('gds/media-upload', [
+            'base64' => self::PIXEL_PNG,
+            'filename' => 'undo-me.png',
+        ]);
+        $file = get_attached_file($result['id']);
+        $this->assertFileExists($file);
+        $this->assertSame('delete-attachment', $result['_undo']['kind']);
+
+        $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $result['_undo']));
+
+        $this->assertNull(get_post($result['id']));
+        $this->assertFileDoesNotExist($file);
+    }
+
     public function test_upload_with_alt_text_and_title(): void
     {
         $result = $this->assertAbilitySuccess('gds/media-upload', [

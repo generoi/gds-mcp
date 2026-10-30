@@ -65,6 +65,30 @@ class CreateTermTranslationIntegrationTest extends WP_UnitTestCase
         $this->assertSame($result['id'], $translations[$targetLang]);
     }
 
+    public function test_keeps_backslashes_and_copies_term_meta(): void
+    {
+        $term = wp_insert_term('Source', 'category');
+        pll_set_term_language($term['term_id'], 'en');
+        add_term_meta($term['term_id'], 'hero_image', '42');
+        add_term_meta($term['term_id'], 'json_field', wp_slash('{"a":"\"q\""}'));
+        add_term_meta($term['term_id'], 'product_count_product_cat', '7');
+
+        $result = (new CreateTermTranslationAbility)->execute([
+            'source_id' => $term['term_id'],
+            'taxonomy' => 'category',
+            'lang' => 'fi',
+            'name' => 'C:\Temp',
+            'description' => 'Path C:\Users',
+        ]);
+
+        $this->assertIsArray($result);
+        $this->assertSame('C:\Temp', get_term($result['id'])->name);
+        $this->assertSame('Path C:\Users', get_term($result['id'])->description);
+        $this->assertSame('42', get_term_meta($result['id'], 'hero_image', true));
+        $this->assertSame('{"a":"\"q\""}', get_term_meta($result['id'], 'json_field', true));
+        $this->assertSame('', get_term_meta($result['id'], 'product_count_product_cat', true));
+    }
+
     public function test_rejects_invalid_language(): void
     {
         $term = wp_insert_term('Test Term', 'category');
