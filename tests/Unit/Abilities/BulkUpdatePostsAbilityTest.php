@@ -231,6 +231,25 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
         $this->assertSame($json, get_post_meta($postId, 'json_field', true));
     }
 
+    public function test_undo_restores_meta_after_a_json_round_trip(): void
+    {
+        $postId = self::factory()->post->create(['post_status' => 'publish']);
+        update_post_meta($postId, 'list', ['a' => 1, 'b' => ['c']]);
+        update_post_meta($postId, 'path', wp_slash('C:\Temp'));
+
+        $result = (new BulkUpdatePostsAbility)->execute([
+            'post_ids' => [$postId],
+            'set_meta' => ['list' => 'flat', 'path' => 'D:\Other', 'added' => 'new'],
+        ]);
+        // As gds-assistant stores it on the audit log.
+        $undo = json_decode((string) wp_json_encode($result['_undo']), true);
+
+        $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
+        $this->assertSame(['a' => 1, 'b' => ['c']], get_post_meta($postId, 'list', true));
+        $this->assertSame('C:\Temp', get_post_meta($postId, 'path', true));
+        $this->assertSame([], get_post_meta($postId, 'added'));
+    }
+
     public function test_respects_limit(): void
     {
         for ($i = 0; $i < 5; $i++) {

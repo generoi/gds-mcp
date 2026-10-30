@@ -22,7 +22,7 @@ use WP_Post;
 final class PartialPostSnapshot
 {
     /**
-     * @param  array<string, list<string>|null>  $metaPrev  Meta key → prior values; null = key was absent.
+     * @param  array<string, list<string>|null>  $metaPrev  Meta key → prior values, serialized; null = key was absent.
      */
     public function __construct(
         public readonly int $id,
@@ -43,8 +43,9 @@ final class PartialPostSnapshot
         $metaPrev = [];
         foreach (array_unique($metaKeys) as $key) {
             $values = get_post_meta($id, (string) $key); // [] when absent
+            // Serialized as stored, so arrays survive; the restore unserializes.
             $metaPrev[(string) $key] = $values !== []
-                ? array_values(array_map('strval', $values))
+                ? array_values(array_map(fn ($value) => (string) maybe_serialize($value), $values))
                 : null;
         }
 

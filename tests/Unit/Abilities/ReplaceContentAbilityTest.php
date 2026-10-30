@@ -282,6 +282,24 @@ class ReplaceContentAbilityTest extends WP_UnitTestCase
         $this->assertCount(2, $result['_undo']['data']['items']);
     }
 
+    public function test_multi_post_undo_survives_a_json_round_trip(): void
+    {
+        $original = '<!-- wp:paragraph --><p>old@x.fi</p><!-- /wp:paragraph -->';
+        $a = self::factory()->post->create(['post_content' => $original]);
+        $b = self::factory()->post->create(['post_content' => $original]);
+
+        $result = (new ReplaceContentAbility)->execute(['ids' => [$a, $b], 'search' => 'old@x.fi', 'replace' => 'new@x.fi']);
+        // The snapshot lists every key, so one added since goes on undo.
+        add_post_meta($a, 'added_since', 'x');
+        // As gds-assistant stores it on the audit log.
+        $undo = json_decode((string) wp_json_encode($result['_undo']), true);
+
+        $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
+        $this->assertSame($original, get_post($a)->post_content);
+        $this->assertSame($original, get_post($b)->post_content);
+        $this->assertSame([], get_post_meta($a, 'added_since'));
+    }
+
     public function test_multi_post_dry_run_aggregates_without_writing(): void
     {
         $a = self::factory()->post->create([
