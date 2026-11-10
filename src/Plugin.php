@@ -28,6 +28,10 @@ class Plugin
         // chat-level gate). Must be hooked before wp_abilities_api_init fires.
         Abilities\CapabilityPolicy::register();
 
+        // Put WordPress core's core/* abilities on the default MCP server, so
+        // host projects need no mu-plugin for it.
+        Integrations\Core\AbilitiesBridge::register();
+
         // Undo: handle restore requests from gds-assistant (snapshots captured
         // by mutating abilities and replayed via the gds-mcp/restore_snapshot
         // filter).

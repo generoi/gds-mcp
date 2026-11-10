@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Tests\Integration;
 
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use WP\MCP\Abilities\McpAbilityExposure;
 
 /**
  * Schema round-trip validation: verifies every registered gds/* ability
@@ -186,6 +187,47 @@ class SchemaValidationTest extends AbilityTestCase
                 $meta['mcp']['public'] ?? false,
                 "Ability '{$ability->get_name()}' should set meta.mcp.public=true."
             );
+        }
+    }
+
+    /**
+     * Test that WordPress core's abilities reach MCP without a host mu-plugin.
+     */
+    public function test_core_abilities_are_public_mcp_tools(): void
+    {
+        if (! function_exists('wp_register_core_abilities')) {
+            $this->markTestSkipped('WordPress registers no core/* abilities.');
+        }
+
+        // wp-phpunit unhooks core's abilities, so register them here. Hooks
+        // are restored after each test.
+        $categories = array_filter(['site', 'user'], fn ($slug) => ! wp_has_ability_category($slug));
+        remove_all_actions('wp_abilities_api_categories_init');
+        remove_all_actions('wp_abilities_api_init');
+        add_action('wp_abilities_api_categories_init', 'wp_register_core_ability_categories');
+        add_action('wp_abilities_api_init', 'wp_register_core_abilities');
+        do_action('wp_abilities_api_categories_init');
+        do_action('wp_abilities_api_init');
+
+        $names = ['core/get-site-info', 'core/get-user-info', 'core/get-environment-info'];
+
+        try {
+            foreach ($names as $name) {
+                $ability = wp_get_ability($name);
+                $this->assertNotNull($ability, "{$name} should be registered.");
+                $this->assertTrue($ability->get_meta()['mcp']['public'] ?? false, "{$name} should set meta.mcp.public=true.");
+                if (class_exists(McpAbilityExposure::class)) {
+                    $this->assertTrue(McpAbilityExposure::is_public($ability), "{$name} should be on the default MCP server.");
+                }
+            }
+
+            // Exposure does not widen access: the editor from setUp still
+            // cannot read site or environment details.
+            $this->assertFalse(wp_get_ability('core/get-site-info')->check_permissions());
+            $this->assertFalse(wp_get_ability('core/get-environment-info')->check_permissions());
+        } finally {
+            array_map('wp_unregister_ability', $names);
+            array_map('wp_unregister_ability_category', $categories);
         }
     }
 
