@@ -19,6 +19,14 @@ wp plugin activate gds-mcp
 
 Install the MCP adapter as a WordPress plugin (`wp plugin install mcp-adapter --activate`) or as the `wordpress/mcp-adapter` Composer library. `gds-mcp` does not declare `Requires Plugins: mcp-adapter`, because WordPress would then refuse to activate it on sites that load the adapter as a library. If the adapter's classes are present but it is not booted, `gds-mcp` boots it through `WP\MCP\Plugin`, so host projects do not need a separate adapter MU-plugin. If the adapter is missing, an admin notice says so.
 
+`gds-mcp` also puts every ability it registers (`gds/*`), WooCommerce's (`woocommerce/*`) and WordPress core's (`core/get-site-info`, `core/get-user-info`, `core/get-environment-info`) on the adapter's default MCP server, so host projects need no `wp_register_ability_args` filter to set `meta.mcp.public`. Core abilities keep their own permission checks: site and environment info need `manage_options`, and user info returns only the caller's own profile. To keep a core ability off the server, return false from `gds-mcp/expose_core_ability`:
+
+```php
+add_filter('gds-mcp/expose_core_ability', fn (bool $expose, string $name) => $name !== 'core/get-environment-info' && $expose, 10, 2);
+```
+
+An explicit `meta.mcp.public` set by the ability's registrant always wins.
+
 ## Architecture
 
 CRUD abilities delegate to the WordPress REST API via `rest_do_request()` — a pure PHP call that works in HTTP, STDIO, and CLI contexts. Input/output schemas are pulled dynamically from REST route registrations. Permissions are handled by the REST API itself.
