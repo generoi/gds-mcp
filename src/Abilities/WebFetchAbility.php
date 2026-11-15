@@ -3,7 +3,9 @@
 namespace GeneroWP\MCP\Abilities;
 
 use GeneroWP\MCP\Http\PublicUrlGuard;
+use GeneroWP\MCP\Http\RemoteClient;
 use WP_Error;
+use WpOrg\Requests\Exception as RequestsException;
 
 /**
  * Fetch a URL and return its content as text/markdown for LLM consumption.
@@ -15,6 +17,9 @@ use WP_Error;
  * - Response size capped at 500 KB
  * - 15s timeout
  * - Requires `edit_posts` (subscribers must not get a server-side fetcher)
+ * - Remote clients, which have no approval step, may fetch only from the
+ *   hosts in `gds-mcp/web_fetch_allowed_hosts`, checked on every hop
+ *   ({@see RemoteClient}; exfiltration defense)
  *
  * Content negotiation:
  * - Sends `Accept: text/markdown, text/plain;q=0.9, text/html;q=0.8, * /*;q=0.1`
@@ -26,6 +31,8 @@ final class WebFetchAbility
     private const MAX_BYTES = 500 * 1024;
 
     private const TIMEOUT = 15;
+
+    private const HOST_NOT_ALLOWED = 'Host "%s" is not in the allowlist.';
 
     /**
      * Option key holding the list of hosts an administrator has trusted for
@@ -294,12 +301,28 @@ final class WebFetchAbility
         // allowed hostnames (exact match) or patterns like '*.example.com'.
         // Returning null (the default) means no restriction beyond SSRF.
         $allowlist = apply_filters('gds-mcp/web_fetch_allowed_hosts', null);
-        if (is_array($allowlist) && ! self::hostMatchesAllowlist($host, $allowlist)) {
+
+        // Over MCP nobody approves the URL, so a prompt-injected page could
+        // have the model put data into one: only hosts the site chose.
+        if (! is_array($allowlist) && RemoteClient::isActive()) {
             return new WP_Error(
-                'host_not_allowed',
-                sprintf('Host "%s" is not in the allowlist.', $host)
+                'web_fetch_not_configured',
+                'Fetching web pages from an MCP client is off on this site: no allowed hosts are configured (gds-mcp/web_fetch_allowed_hosts).',
+                ['status' => 403]
             );
         }
+        if (is_array($allowlist) && ! self::hostMatchesAllowlist($host, $allowlist)) {
+            return new WP_Error('host_not_allowed', sprintf(self::HOST_NOT_ALLOWED, $host));
+        }
+
+        // Every redirect hop too: an allowed host may redirect anywhere.
+        $checkHop = static function ($hopUrl) use ($allowlist): void {
+            $hopHost = (string) wp_parse_url((string) $hopUrl, PHP_URL_HOST);
+            if (is_array($allowlist) && ! self::hostMatchesAllowlist($hopHost, $allowlist)) {
+                throw new RequestsException(sprintf(self::HOST_NOT_ALLOWED, $hopHost), 'gds_mcp_host_not_allowed');
+            }
+        };
+        add_action('requests-requests.before_request', $checkHop);
 
         $response = PublicUrlGuard::guard(fn () => wp_safe_remote_get($url, [
             'timeout' => self::TIMEOUT,
@@ -313,7 +336,11 @@ final class WebFetchAbility
             ],
             'limit_response_size' => self::MAX_BYTES,
         ]));
+        remove_action('requests-requests.before_request', $checkHop);
 
+        if (is_wp_error($response) && str_starts_with($response->get_error_message(), 'Host "')) {
+            return new WP_Error('host_not_allowed', $response->get_error_message());
+        }
         if (is_wp_error($response)) {
             return PublicUrlGuard::refusal($response);
         }

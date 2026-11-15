@@ -102,6 +102,32 @@ class TranslationAuditIntegrationTest extends TestCase
         $this->assertLessThanOrEqual(2, $result['summary']['total_posts']);
     }
 
+    public function test_audit_refuses_internal_types_and_statuses(): void
+    {
+        $this->createPost(['post_type' => 'user_request', 'post_title' => 'someone@example.com', 'post_status' => 'request-pending']);
+
+        $byType = (new TranslationAuditAbility)->execute(['post_type' => 'user_request', 'status' => 'any']);
+        $this->assertWPError($byType);
+        $this->assertSame('invalid_post_type', $byType->get_error_code());
+
+        $byStatus = (new TranslationAuditAbility)->execute(['status' => 'request-pending']);
+        $this->assertWPError($byStatus);
+        $this->assertSame('invalid_status', $byStatus->get_error_code());
+    }
+
+    public function test_audit_leaves_out_posts_the_caller_cannot_read(): void
+    {
+        // An editor may audit drafts, but not another user's private post
+        // once read_private_posts is taken away.
+        $editor = wp_get_current_user();
+        $editor->add_cap('read_private_posts', false);
+        $this->createPost(['post_type' => 'post', 'post_status' => 'private', 'post_title' => 'Private plans', 'post_author' => self::factory()->user->create(['role' => 'administrator'])]);
+
+        $result = (new TranslationAuditAbility)->execute(['post_type' => 'post', 'status' => 'private']);
+
+        $this->assertStringNotContainsString('Private plans', (string) wp_json_encode($result));
+    }
+
     public function test_audit_returns_structure(): void
     {
         $result = (new TranslationAuditAbility)->execute([]);

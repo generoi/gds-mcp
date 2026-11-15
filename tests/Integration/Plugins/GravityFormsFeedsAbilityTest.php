@@ -3,6 +3,8 @@
 namespace GeneroWP\MCP\Tests\Integration\Plugins;
 
 use GeneroWP\MCP\Tests\AbilityTestCase;
+use GeneroWP\MCP\Tests\Fixtures\EncryptingFeedAddOn;
+use GeneroWP\MCP\Undo\RestoreSnapshot;
 
 /**
  * Integration tests for gds/feeds-* abilities.
@@ -63,6 +65,42 @@ class GravityFormsFeedsAbilityTest extends AbilityTestCase
         $this->createdFeedIds[] = $id;
 
         return $id;
+    }
+
+    public function test_undo_snapshots_keep_encrypted_settings_encrypted(): void
+    {
+        $encryption = '\\Gravity_Forms\\Gravity_Forms\\Settings\\GF_Settings_Encryption';
+        if (! class_exists($encryption) || ! method_exists('GFAPI', 'set_encryptor')) {
+            $this->markTestSkipped('This Gravity Forms has no settings encryption.');
+        }
+        \GFForms::include_feed_addon_framework();
+        \GFAPI::set_encryptor(new $encryption('test-key'));
+        \GFAddOn::register(EncryptingFeedAddOn::class);
+
+        try {
+            $formId = $this->createForm();
+            $created = $this->assertAbilitySuccess('gds/feeds-create', [
+                'form_id' => $formId,
+                'addon_slug' => EncryptingFeedAddOn::SLUG,
+                'meta' => ['feed_name' => 'Original', 'api_key' => 'sk-secret'],
+            ]);
+            $id = $this->trackFeed((int) $created['id']);
+
+            $updated = $this->assertAbilitySuccess('gds/feeds-update', ['id' => $id, 'meta' => ['feed_name' => 'Renamed']]);
+            // The snapshot ends up in gds-assistant's audit log.
+            $this->assertStringNotContainsString('sk-secret', (string) wp_json_encode($updated['_undo']));
+            $this->assertSame('Original', $updated['_undo']['data']['meta']['feed_name']);
+
+            $this->assertNotWPError(RestoreSnapshot::handle(null, json_decode((string) wp_json_encode($updated['_undo']), true)));
+            $restored = \GFAPI::get_feed($id);
+            $this->assertSame('Original', $restored['meta']['feed_name']);
+            $this->assertSame('sk-secret', $restored['meta']['api_key'], 'The key is restored, still decryptable.');
+
+            $deleted = $this->assertAbilitySuccess('gds/feeds-delete', ['id' => $id]);
+            $this->assertStringNotContainsString('sk-secret', (string) wp_json_encode($deleted['_undo']));
+        } finally {
+            \GFAPI::set_encryptor(null);
+        }
     }
 
     public function test_abilities_registered(): void

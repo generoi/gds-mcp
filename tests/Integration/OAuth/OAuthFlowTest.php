@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Tests\Integration\OAuth;
 
+use GeneroWP\MCP\Http\RemoteClient;
 use GeneroWP\MCP\OAuth\Admin;
 use GeneroWP\MCP\OAuth\Authorize;
 use GeneroWP\MCP\OAuth\BearerAuth;
@@ -57,6 +58,10 @@ class OAuthFlowTest extends TestCase
         $_SERVER['REQUEST_METHOD'] = 'GET';
         $_SERVER['REQUEST_URI'] = '/';
         unset($_SERVER['HTTP_AUTHORIZATION']);
+        // Not only before each test here: later test classes would otherwise
+        // run as an OAuth-authenticated remote client.
+        $audience = new \ReflectionProperty(BearerAuth::class, 'audience');
+        $audience->setValue(null, null);
 
         parent::tearDown();
     }
@@ -85,6 +90,31 @@ class OAuthFlowTest extends TestCase
             $this->authenticate($tokens['access_token']),
             'The bearer token should resolve to the user who consented.'
         );
+    }
+
+    public function test_a_bearer_token_makes_the_request_a_remote_one(): void
+    {
+        $this->assertFalse(RemoteClient::isActive());
+
+        $tokens = $this->connect();
+        $this->authenticate($tokens['access_token']);
+
+        // mail-send and web-fetch refuse or restrict themselves on this.
+        $this->assertTrue(RemoteClient::isActive());
+    }
+
+    public function test_registration_with_a_callback_on_an_unlisted_host_is_refused(): void
+    {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+
+        $response = $this->capture(fn () => Clients::handleRegistration((string) wp_json_encode([
+            'client_name' => 'Microsoft Copilot',
+            'redirect_uris' => ['https://attacker.example/callback'],
+        ])));
+
+        $this->assertSame(400, $response->status);
+        $this->assertSame('invalid_redirect_uri', $response->data()['error']);
+        $this->assertStringContainsString('attacker.example', $response->data()['error_description']);
     }
 
     public function test_refresh_rotates_the_refresh_token(): void
@@ -354,6 +384,8 @@ class OAuthFlowTest extends TestCase
         $response = $this->capture(fn () => Authorize::handle());
 
         $this->assertStringContainsString('Authorize MCP access', $response->body);
+        // The host is what tells a real client from one with a borrowed name.
+        $this->assertStringContainsString('<span class="host">claude.ai</span>', $response->body);
 
         $this->assertSame('DENY', $response->headers['X-Frame-Options']);
         $this->assertSame("frame-ancestors 'none'", $response->headers['Content-Security-Policy']);

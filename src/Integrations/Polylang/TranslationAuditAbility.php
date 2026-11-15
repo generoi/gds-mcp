@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Integrations\Polylang;
 
+use GeneroWP\MCP\Abilities\ContentPostTypes;
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\PolylangAware;
 use WP_Error;
@@ -141,12 +142,22 @@ final class TranslationAuditAbility
         $perPage = max(1, min(500, (int) ($input['per_page'] ?? self::PER_PAGE)));
         $page = max(1, (int) ($input['page'] ?? 1));
 
+        // Only the types and statuses the content-* tools work with: a raw
+        // post_type would list privacy requests (user_request) by title,
+        // which is the requester's email address.
+        if (! is_string($status) || ! ContentPostTypes::allowsStatus($status)) {
+            return new WP_Error('invalid_status', 'This status cannot be audited.');
+        }
+
         // Determine post types to audit.
         if (! empty($input['post_type'])) {
+            if (! is_string($input['post_type']) || ! ContentPostTypes::allows($input['post_type'])) {
+                return new WP_Error('invalid_post_type', 'post_type must be one of the types the content-* tools list.');
+            }
             $postTypes = [$input['post_type']];
         } else {
             $postTypes = get_post_types(['public' => true], 'names');
-            $postTypes = array_values(array_diff($postTypes, ['attachment']));
+            $postTypes = array_values(array_intersect(array_diff($postTypes, ['attachment']), ContentPostTypes::names()));
         }
 
         $totalPosts = 0;
@@ -168,6 +179,11 @@ final class TranslationAuditAbility
 
         $postsByType = [];
         foreach ($query->posts as $postId) {
+            // The status check above is coarse; a private post or another
+            // user's draft may still be one this caller cannot read.
+            if (! current_user_can('read_post', $postId)) {
+                continue;
+            }
             $postsByType[get_post_type($postId)][] = $postId;
         }
 

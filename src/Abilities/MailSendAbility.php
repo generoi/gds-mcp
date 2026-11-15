@@ -2,10 +2,12 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Http\RemoteClient;
 use WP_Error;
 
 /**
- * Send email via wp_mail. ALWAYS requires user approval — the approval
+ * Send email via wp_mail. Refused for remote clients (MCP, OAuth,
+ * application passwords; {@see RemoteClient}). ALWAYS requires user approval — the approval
  * prompt shows the full recipient list, subject, and body preview so the
  * user can spot:
  *   - prompt-injected exfiltration attempts (sensitive data → stranger)
@@ -115,6 +117,17 @@ final class MailSendAbility
     public static function execute(mixed $input = []): array|WP_Error
     {
         $input = (array) ($input ?? []);
+
+        // The approval this relies on exists only in gds-assistant. A remote
+        // client would send whatever its model was talked into, by a form
+        // entry or a fetched page as easily as by the person.
+        if (RemoteClient::isActive()) {
+            return new WP_Error(
+                'not_available_remotely',
+                'Sending email is only available in the gds-assistant chat in wp-admin, where every send is approved first.',
+                ['status' => 403]
+            );
+        }
 
         $to = self::validateAddresses($input['to'] ?? [], 'to');
         if (is_wp_error($to)) {

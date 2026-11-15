@@ -197,6 +197,26 @@ If step 3 says your account is not allowed to connect, ask a site administrator 
 - Pretty permalinks: the authorization, token and registration endpoints are paths under `/mcp-oauth/`, and a site with plain permalinks has no rewrite rules to route them
 - `/.well-known/` must reach WordPress. The common nginx recipe denies every dotted path (`location ~ /\. { deny all; }`) — see `.ddev/nginx/well-known.conf` in the kaskipuu project for the override. Kinsta passes it through as-is.
 
+**Allowed callback hosts**
+
+Client registration is open to anyone, and the consent screen shows whatever name a client gave itself. So a client may only register a callback on a host this site allows (plus loopback, which lands on the person's own machine). Others get `invalid_redirect_uri` naming the refused host. The defaults are the clients known to work:
+
+| Client | Callback host |
+| --- | --- |
+| Claude (claude.ai, Desktop, mobile) | `claude.ai`, `claude.com` |
+| Claude Code, VS Code | loopback; `vscode.dev` |
+| ChatGPT | `chatgpt.com` |
+| Microsoft Copilot Studio | `*.consent.azure-apim.net` |
+| Microsoft 365 Copilot | `teams.microsoft.com` |
+
+To allow only some of them, or another client, define the list (it replaces the defaults; `*.example.com` matches subdomains):
+
+```php
+Config::define('GDS_MCP_OAUTH_REDIRECT_HOSTS', ['*.consent.azure-apim.net']);
+```
+
+or filter `gds-mcp/oauth_redirect_hosts`. A host taken off the list stops working for clients already registered on it. The list only stops callbacks to someone else's server: someone with their own account on an allowed platform can still register a connector there, so the consent screen shows the callback host prominently, and people should still check it.
+
 **Managing access**
 
 - **Users → MCP connections** lists connected applications and revokes them. Revoking kills that grant's access and refresh tokens immediately. Everyone sees their own; anyone who can manage users sees all.
@@ -213,9 +233,24 @@ Define `GDS_MCP_READ_ONLY` as true (or filter `gds-mcp/read_only`) to unregister
 Config::define('GDS_MCP_READ_ONLY', env('GDS_MCP_READ_ONLY') ?? false);
 ```
 
+### Remote clients: mail and web fetch
+
+gds-assistant asks the person before every `gds/mail-send` and before `gds/web-fetch` reaches a host they have not trusted. A remote client has no such step, so a prompt injection in something it reads (a form entry, a fetched page) could have it mail data out, or put data into a URL. For a remote client, meaning an MCP request, an OAuth token or an application password:
+
+- `gds/mail-send` is refused.
+- `gds/web-fetch` is refused unless the site lists the hosts it may fetch from. Every redirect hop has to be on the list too. Read-only mode keeps web-fetch, so this matters there as well.
+
+```php
+add_filter('gds-mcp/web_fetch_allowed_hosts', fn () => ['example.com', '*.example.com']);
+```
+
+The same list, when set, also applies in gds-assistant.
+
 ### HTTP with an application password
 
 Still the simplest option for a shared machine-to-machine credential, or where OAuth cannot be enabled.
+
+An application password is not bound to the MCP endpoint the way an OAuth token is: it works on every REST route the account can reach, core's `/wp-abilities/v1` routes included. Treat it as a full login for that account, and prefer OAuth for anything a third-party service holds.
 
 **1. Create an application password:**
 
@@ -256,6 +291,7 @@ claude mcp add-json -s local my-site \
 
 - **0.8.2:** `gds/posts-bulk-update` `set_meta` values are now run through kses for users without `unfiltered_html`, as post content already was. Besides stripping disallowed HTML, kses encodes a bare `&` as `&amp;`, so meta that relied on a raw `&` (URLs with query strings, for example) is stored encoded for those users.
 - **After 0.8.2:** web-fetch hosts trusted with "Approve & trust" are kept per user (or site-wide when an administrator trusts them). The old shared list (`gds_mcp_trusted_web_hosts`) recorded no owner, so it is deleted on upgrade rather than carried over: each user re-trusts their hosts once.
+- **Unreleased:** OAuth clients may only use callbacks on the allowed hosts ("Allowed callback hosts" above); a connection through any other host has to be allowed and made again. Remote clients can no longer send mail, and fetch only from `gds-mcp/web_fetch_allowed_hosts`. `gds/posts-bulk-update` and `gds/translations-audit` take only the post types the content-* tools list and no internal statuses.
 
 ## Development
 

@@ -272,7 +272,7 @@ final class FeedsAbility
         // Capture the prior state before mutating so the change can be reverted.
         $undo = [
             'feed_id' => $id,
-            'meta' => $existing['meta'],
+            'meta' => self::sealedMeta((array) $existing['meta'], (string) $existing['addon_slug']),
             'form_id' => (int) $existing['form_id'],
             'is_active' => (int) $existing['is_active'],
             'feed_order' => (int) $existing['feed_order'],
@@ -335,6 +335,23 @@ final class FeedsAbility
     }
 
     /**
+     * Feed meta for an undo snapshot, with the fields the add-on encrypts
+     * (API keys and the like) encrypted again. GFAPI::get_feed() decrypts
+     * them, and the snapshot is kept in gds-assistant's audit log. Restoring
+     * goes through GFAPI::update_feed()/add_feed(), which leave a value that
+     * is already encrypted as it is.
+     *
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private static function sealedMeta(array $meta, string $addonSlug): array
+    {
+        return method_exists('GFAPI', 'encrypt_feed_meta')
+            ? (array) \GFAPI::encrypt_feed_meta($meta, $addonSlug)
+            : $meta;
+    }
+
+    /**
      * @return array<string, mixed>|WP_Error
      */
     public function deleteFeed(mixed $input = []): array|WP_Error
@@ -356,7 +373,7 @@ final class FeedsAbility
         $undo = (! is_wp_error($feed) && is_array($feed)) ? [
             'form_id' => (int) $feed['form_id'],
             'addon_slug' => $feed['addon_slug'],
-            'meta' => $feed['meta'],
+            'meta' => self::sealedMeta((array) $feed['meta'], (string) $feed['addon_slug']),
             'is_active' => (int) $feed['is_active'],
             'feed_order' => (int) $feed['feed_order'],
         ] : null;

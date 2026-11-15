@@ -305,6 +305,25 @@ class ReplaceContentAbilityTest extends WP_UnitTestCase
         $this->assertSame('replace_failed', $result->get_error_code());
     }
 
+    public function test_multi_post_does_not_name_a_post_the_caller_cannot_edit(): void
+    {
+        $own = self::factory()->post->create(['post_content' => '<!-- wp:paragraph --><p>old@x.fi</p><!-- /wp:paragraph -->']);
+        $request = self::factory()->post->create(['post_type' => 'user_request', 'post_title' => 'someone@example.com', 'post_status' => 'request-pending']);
+        $draft = self::factory()->post->create(['post_title' => 'Secret draft', 'post_status' => 'draft', 'post_author' => self::factory()->user->create(['role' => 'administrator'])]);
+        wp_set_current_user(self::factory()->user->create(['role' => 'author']));
+        wp_update_post(['ID' => $own, 'post_author' => get_current_user_id()]);
+
+        $result = (new ReplaceContentAbility)->execute(['ids' => [$own, $request, $draft], 'search' => 'old@x.fi', 'replace' => 'new@x.fi', 'dry_run' => true]);
+
+        $forbidden = array_values(array_filter($result['posts'], fn ($row) => ($row['error'] ?? '') === 'forbidden'));
+        $this->assertCount(2, $forbidden);
+        foreach ($forbidden as $row) {
+            $this->assertArrayNotHasKey('title', $row);
+        }
+        $this->assertStringNotContainsString('someone@example.com', (string) wp_json_encode($result));
+        $this->assertStringNotContainsString('Secret draft', (string) wp_json_encode($result));
+    }
+
     public function test_content_that_is_not_valid_utf8_is_an_error(): void
     {
         $id = self::factory()->post->create(['post_content' => '<!-- wp:paragraph --><p>old@x.fi</p><!-- /wp:paragraph -->']);
