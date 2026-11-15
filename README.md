@@ -205,6 +205,14 @@ If step 3 says your account is not allowed to connect, ask a site administrator 
 - Deactivating the plugin revokes every connection, and uninstalling removes the grants, refresh tokens and client registrations. Deactivation is a real revocation, not a pause.
 - Access tokens last an hour, refresh tokens 30 days and rotate on every use. Tokens are stored hashed and are bound to the MCP endpoint they were issued for, so a leaked token is not a general-purpose site credential.
 
+### Read-only mode
+
+Define `GDS_MCP_READ_ONLY` as true (or filter `gds-mcp/read_only`) to unregister every MCP-public ability not annotated `readonly => true`, an ability with no annotation included. The write tools are then gone from the MCP server, core's `/wp-abilities/v1` routes, gds-assistant and `gds/help` alike.
+
+```php
+Config::define('GDS_MCP_READ_ONLY', env('GDS_MCP_READ_ONLY') ?? false);
+```
+
 ### HTTP with an application password
 
 Still the simplest option for a shared machine-to-machine credential, or where OAuth cannot be enabled.

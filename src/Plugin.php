@@ -28,6 +28,9 @@ class Plugin
         // chat-level gate). Must be hooked before wp_abilities_api_init fires.
         Abilities\CapabilityPolicy::register();
 
+        // Read-only mode: drop every write ability when GDS_MCP_READ_ONLY is on.
+        Abilities\ReadOnlyMode::register();
+
         // Undo: handle restore requests from gds-assistant (snapshots captured
         // by mutating abilities and replayed via the gds-mcp/restore_snapshot
         // filter).

@@ -94,6 +94,11 @@ final class HelpAbility
         $total = 0;
 
         foreach (self::$registry as $name => $info) {
+            // Skip abilities unregistered since, e.g. by read-only mode.
+            if (! wp_has_ability($name)) {
+                continue;
+            }
+
             $suffix = explode('/', $name, 2)[1] ?? 'other';
             $group = self::extractGroup($suffix);
 
