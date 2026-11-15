@@ -124,7 +124,9 @@ final class HelpAbility
         return [
             'groups' => array_values($groups),
             'total' => $total,
-            'tip' => 'Read resources first (blocks://catalog, site://pages, theme://json, acf://fields) to understand the site, then use tools to create/update content.',
+            'tip' => ReadOnlyMode::enabled()
+                ? 'This site is read-only: read resources (blocks://catalog, site://pages, theme://json, acf://fields) and use the read tools; content cannot be created or changed.'
+                : 'Read resources first (blocks://catalog, site://pages, theme://json, acf://fields) to understand the site, then use tools to create/update content.',
         ];
     }
 

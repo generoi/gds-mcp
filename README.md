@@ -207,7 +207,7 @@ If step 3 says your account is not allowed to connect, ask a site administrator 
 
 ### Read-only mode
 
-Define `GDS_MCP_READ_ONLY` as true (or filter `gds-mcp/read_only`) to unregister every MCP-public or REST-exposed (`show_in_rest`) ability not annotated `readonly => true`, an ability with no annotation included. The write tools are then gone from the MCP server, core's `/wp-abilities/v1` routes, gds-assistant and `gds/help` alike.
+Define `GDS_MCP_READ_ONLY` as true (or filter `gds-mcp/read_only`) to unregister every ability not annotated `readonly => true`, an ability with no annotation included, whichever plugin registered it. The write tools are then gone from every MCP server, core's `/wp-abilities/v1` routes, gds-assistant and `gds/help` alike; one registered later can't run, and gds-assistant's undo is refused. Only the MCP adapter's own `mcp-adapter/*` dispatchers stay.
 
 ```php
 Config::define('GDS_MCP_READ_ONLY', env('GDS_MCP_READ_ONLY') ?? false);
