@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Undo;
 
 use GeneroWP\MCP\Abilities\NavMenuItemsAbility;
+use GeneroWP\MCP\Abilities\ReadOnlyMode;
 use GeneroWP\MCP\Integrations\Polylang\RegisteredStrings;
 use GeneroWP\MCP\Integrations\Yoast\SeoFields;
 use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
@@ -47,6 +48,11 @@ final class RestoreSnapshot
      */
     public static function handle(mixed $default, array $snapshot): array|WP_Error
     {
+        // An undo writes too.
+        if (ReadOnlyMode::enabled()) {
+            return new WP_Error('gds_mcp_read_only', __('This site is in read-only mode.', 'gds-mcp'), ['status' => 403]);
+        }
+
         $kind = (string) ($snapshot['kind'] ?? '');
         $data = (array) ($snapshot['data'] ?? []);
 

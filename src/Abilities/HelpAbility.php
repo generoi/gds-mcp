@@ -94,6 +94,11 @@ final class HelpAbility
         $total = 0;
 
         foreach (self::$registry as $name => $info) {
+            // Skip abilities unregistered since, e.g. by read-only mode.
+            if (! wp_has_ability($name)) {
+                continue;
+            }
+
             $suffix = explode('/', $name, 2)[1] ?? 'other';
             $group = self::extractGroup($suffix);
 
@@ -119,7 +124,9 @@ final class HelpAbility
         return [
             'groups' => array_values($groups),
             'total' => $total,
-            'tip' => 'Read resources first (blocks://catalog, site://pages, theme://json, acf://fields) to understand the site, then use tools to create/update content.',
+            'tip' => ReadOnlyMode::enabled()
+                ? 'This site is read-only: read resources (blocks://catalog, site://pages, theme://json, acf://fields) and use the read tools; content cannot be created or changed.'
+                : 'Read resources first (blocks://catalog, site://pages, theme://json, acf://fields) to understand the site, then use tools to create/update content.',
         ];
     }
 
