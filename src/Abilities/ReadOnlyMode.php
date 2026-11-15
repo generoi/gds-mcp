@@ -5,7 +5,7 @@ namespace GeneroWP\MCP\Abilities;
 use WP_Ability;
 
 /**
- * Read-only mode: unregister every MCP-public ability that is not annotated
+ * Read-only mode: unregister every MCP-public or REST-exposed ability not annotated
  * `readonly => true`, so write tools are gone from the MCP server, core's
  * /wp-abilities/v1 routes and gds-assistant at once. An ability with no
  * annotation counts as one that writes.
@@ -43,15 +43,17 @@ final class ReadOnlyMode
     }
 
     /**
-     * Whether the ability may stay registered in read-only mode. Abilities
-     * that are not MCP-public are left alone: the adapter's own
-     * mcp-adapter/execute-ability runs only MCP-public ones.
+     * Whether the ability may stay registered in read-only mode. Only
+     * abilities a remote caller can reach are checked: MCP-public ones, and
+     * show_in_rest ones (core's /wp-abilities/v1 run route checks nothing
+     * else; core seeds it from the `public` meta). The adapter's own
+     * mcp-adapter/execute-ability is neither, and runs only MCP-public ones.
      */
     public static function allows(WP_Ability $ability): bool
     {
         $meta = $ability->get_meta();
 
-        if (! ($meta['mcp']['public'] ?? false)) {
+        if (! ($meta['mcp']['public'] ?? false) && ! ($meta['show_in_rest'] ?? false)) {
             return true;
         }
 

@@ -47,7 +47,14 @@ class ReadOnlyModeTest extends WP_UnitTestCase
         ])));
     }
 
-    public function test_leaves_non_public_abilities_alone(): void
+    public function test_drops_rest_exposed_abilities_that_write(): void
+    {
+        $this->assertFalse(ReadOnlyMode::allows($this->ability([
+            'show_in_rest' => true,
+        ])));
+    }
+
+    public function test_leaves_unexposed_abilities_alone(): void
     {
         $this->assertTrue(ReadOnlyMode::allows($this->ability([
             'annotations' => ['readonly' => false],
