@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Blocks\MarkupLint;
 use GeneroWP\MCP\Concerns\ResolvesPostId;
 use GeneroWP\MCP\Undo\Reversible;
 use GeneroWP\MCP\Undo\Snapshot;
@@ -82,7 +83,7 @@ final class PatchBlockAbility
     {
         HelpAbility::registerAbility('gds/blocks-patch', [
             'label' => 'Patch Block',
-            'description' => 'Modify, insert, or delete blocks within a post without resending its content. To find a target id, call gds/content-list first — do not query REST endpoints directly. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Read the post with gds/content-read first: content.raw shows each block as <!-- wp:name {attrs} -->. Examples: fix a stat prefix with {block_name: "gds/count-up-item", occurrence: 1, attrs: {prefix: "jopa ", displayPrefix: true}}; set a block style or custom class with attrs {className: "is-style-stripes"} (the HTML class follows); clear it with remove_attrs: ["className"]. Supports batch operations; a batch is all or nothing — if any operation fails, none is saved. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
+            'description' => 'Modify, insert, or delete blocks within a post without resending its content. To find a target id, call gds/content-list first — do not query REST endpoints directly. Finds blocks by name (+ occurrence) and patches attributes/content, inserts new blocks before/after/inside, or deletes blocks. Read the post with gds/content-read first: content.raw shows each block as <!-- wp:name {attrs} -->. Examples: fix a stat prefix with {block_name: "gds/count-up-item", occurrence: 1, attrs: {prefix: "jopa ", displayPrefix: true}}; set a block style or custom class with attrs {className: "is-style-stripes"} (the HTML class follows); clear it with remove_attrs: ["className"]. Supports batch operations; a batch is all or nothing — if any operation fails, none is saved. When you change attrs that have a source definition in block.json (e.g. url → href), the rendered HTML is auto-synced. For other changes to rendered HTML, use inner_html; when an attr cannot be synced, a warning says so and you must patch inner_html too. Markup in insert markup and inner_blocks must use registered block names. A core/block is a synced pattern: it takes no inner blocks or inner_html (they are discarded on save), so edit the wp_block post its ref attribute points to instead. Unknown attributes, invalid values and raw values equal to a theme preset come back in `warnings`. Templates and template parts can be addressed by their composite REST id ("{theme}//{slug}", e.g. "gds//footer", "gds//footer___sv") in addition to a numeric post id.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -115,6 +116,7 @@ final class PatchBlockAbility
                     'id' => ['type' => 'integer'],
                     'results' => ['type' => 'array'],
                     'total_modified' => ['type' => 'integer'],
+                    'warnings' => ['type' => 'array', 'items' => ['type' => 'string']],
                     'content' => ['type' => 'string'],
                     'modified' => ['type' => 'string'],
                 ],
@@ -166,20 +168,27 @@ final class PatchBlockAbility
 
         $results = [];
         $totalModified = 0;
+        $warnings = [];
 
-        foreach ($operations as $op) {
+        foreach ($operations as $i => $op) {
             $action = $op['action'] ?? 'patch';
             $blockName = $op['block_name'];
             $occurrence = (int) ($op['occurrence'] ?? 1);
             $searchDepth = min((int) ($op['search_depth'] ?? 10), 50);
 
             $modifiedCount = 0;
-            $error = match ($action) {
-                'patch' => self::applyPatch($blocks, $blockName, $occurrence, $searchDepth, $op, $modifiedCount),
+            $opWarnings = self::lintOperation($op, $action, $blockName);
+            $error = is_wp_error($opWarnings) ? $opWarnings : match ($action) {
+                'patch' => self::applyPatch($blocks, $blockName, $occurrence, $searchDepth, $op, $modifiedCount, $opWarnings),
                 'insert' => self::applyInsert($blocks, $blockName, $occurrence, $searchDepth, $op, $modifiedCount),
                 'delete' => self::applyDelete($blocks, $blockName, $occurrence, $searchDepth, $modifiedCount),
                 default => new WP_Error('invalid_action', "Unknown action: {$action}"),
             };
+            if (! is_wp_error($opWarnings)) {
+                foreach (array_unique($opWarnings) as $warning) {
+                    $warnings[] = "operations[{$i}]: {$warning}";
+                }
+            }
 
             $results[] = [
                 'action' => $action,
@@ -230,6 +239,9 @@ final class PatchBlockAbility
             'results' => $results,
             'total_modified' => $totalModified,
         ];
+        if ($warnings) {
+            $result['warnings'] = $warnings;
+        }
         if (! ($input['quiet'] ?? true)) {
             $result['content'] = $updated->post_content;
         }
@@ -341,11 +353,40 @@ final class PatchBlockAbility
         return null;
     }
 
+    /**
+     * Check the markup and attributes an operation writes, before it is
+     * applied. Markup that cannot render is refused; the rest is warned about.
+     *
+     * @param  array<string, mixed>  $op
+     * @return list<string>|WP_Error
+     */
+    private static function lintOperation(array $op, string $action, string $blockName): array|WP_Error
+    {
+        $markup = match ($action) {
+            'insert' => $op['markup'] ?? null,
+            'patch' => $op['inner_blocks'] ?? null,
+            default => null,
+        };
+        $warnings = is_string($markup) ? MarkupLint::markup($markup) : [];
+        if (is_wp_error($warnings) || $action !== 'patch') {
+            return $warnings;
+        }
+
+        foreach (['attrs', 'set_attrs'] as $field) {
+            if (isset($op[$field])) {
+                array_push($warnings, ...MarkupLint::attrs($blockName, (array) $op[$field]));
+            }
+        }
+
+        return $warnings;
+    }
+
     // ── Patch ───────────────────────────────────────────────────────────────
 
     /**
      * @param  array<int, array<string, mixed>>  $blocks
      * @param  array<string, mixed>  $op
+     * @param  list<string>  $warnings
      */
     private static function applyPatch(
         array &$blocks,
@@ -354,11 +395,17 @@ final class PatchBlockAbility
         int $searchDepth,
         array $op,
         int &$modifiedCount,
+        array &$warnings,
     ): ?WP_Error {
         $matchCount = 0;
         $error = null;
 
-        self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($op, $blockName) {
+        self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($op, $blockName, &$warnings) {
+            // A synced pattern renders its wp_block post; content here is dropped.
+            if ($blockName === 'core/block' && (isset($op['inner_html']) || isset($op['inner_blocks']))) {
+                return MarkupLint::syncedPatternError($block['attrs']['ref'] ?? null);
+            }
+
             $oldAttrs = $block['attrs'] ?? [];
 
             if (isset($op['attrs'])) {
@@ -376,7 +423,7 @@ final class PatchBlockAbility
             // Auto-sync: when attrs change, update innerHTML using the block type's
             // attribute source definitions (selector + attribute from block.json).
             if (isset($op['attrs']) || isset($op['set_attrs'])) {
-                self::syncAttrsToInnerHtml($block, $oldAttrs, $blockName);
+                array_push($warnings, ...self::syncAttrsToInnerHtml($block, $oldAttrs, $blockName));
             }
             if (isset($op['attrs']) || isset($op['set_attrs']) || isset($op['remove_attrs'])) {
                 self::syncClassNameToInnerHtml($block, $oldAttrs);
@@ -449,7 +496,10 @@ final class PatchBlockAbility
 
         if ($position === 'prepend' || $position === 'append') {
             // Insert inside the target block's innerBlocks
-            self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($newBlocks, $position) {
+            self::walkBlocks($blocks, $blockName, $occurrence, $searchDepth, 0, $matchCount, $modifiedCount, $error, function (&$block) use ($newBlocks, $position, $blockName) {
+                if ($blockName === 'core/block') {
+                    return MarkupLint::syncedPatternError($block['attrs']['ref'] ?? null);
+                }
                 $existing = $block['innerBlocks'] ?? [];
                 $at = $position === 'prepend' ? 0 : count($existing);
                 if ($spliceError = self::spliceInnerContent($block, $at, 0, count($newBlocks))) {
@@ -668,12 +718,13 @@ final class PatchBlockAbility
      *
      * @param  array<string, mixed>  $block
      * @param  array<string, mixed>  $oldAttrs
+     * @return list<string> A warning for each changed attribute whose HTML could not be updated.
      */
-    private static function syncAttrsToInnerHtml(array &$block, array $oldAttrs, string $blockName): void
+    private static function syncAttrsToInnerHtml(array &$block, array $oldAttrs, string $blockName): array
     {
         $blockType = WP_Block_Type_Registry::get_instance()->get_registered($blockName);
         if (! $blockType) {
-            return;
+            return [];
         }
 
         // Dynamic (server-rendered) blocks have no saved HTML — nothing to
@@ -681,7 +732,7 @@ final class PatchBlockAbility
         // unregistered static blocks have it null at runtime; is_callable
         // is the runtime-honest check the stubs don't let PHPStan model.
         if (is_callable($blockType->render_callback)) {
-            return;
+            return [];
         }
 
         $attrDefs = $blockType->attributes ?? [];
@@ -689,10 +740,15 @@ final class PatchBlockAbility
         $html = $block['innerHTML'] ?? '';
 
         if (! $html || ! trim($html)) {
-            return;
+            return [];
         }
 
         $modified = false;
+        $warnings = [];
+        $unsynced = fn (string $key, string $selector, string $htmlAttr, string $why) => sprintf(
+            '%s attribute "%s" is saved in the HTML (%s on "%s"), but %s, so the attribute and the saved HTML now disagree and the editor will flag the block invalid. Patch inner_html too, with the new value in the HTML.',
+            $blockName, $key, $htmlAttr, $selector, $why,
+        );
 
         foreach ($newAttrs as $key => $newValue) {
             $def = $attrDefs[$key] ?? null;
@@ -724,25 +780,31 @@ final class PatchBlockAbility
             // WP_HTML_Tag_Processor::next_tag() accepts tag name or class queries
             $query = self::selectorToQuery($selector);
             if (! $query) {
+                $warnings[] = $unsynced($key, $selector, $htmlAttr, 'that selector is too complex to update automatically');
+
                 continue;
             }
 
+            $synced = false;
             while ($processor->next_tag($query)) {
                 $current = $processor->get_attribute($htmlAttr);
                 // Only update if it matches the old value (or old was null/unset)
                 if ($current === $oldValue || ($oldValue === null && $current !== null)) {
                     $processor->set_attribute($htmlAttr, $newValue);
-                    $modified = true;
+                    $synced = true;
                 }
             }
 
-            if ($modified) {
+            if ($synced) {
+                $modified = true;
                 $html = $processor->get_updated_html();
+            } else {
+                $warnings[] = $unsynced($key, $selector, $htmlAttr, 'no element in the saved HTML matched it with the previous value');
             }
         }
 
         if (! $modified) {
-            return;
+            return $warnings;
         }
 
         $oldHtml = $block['innerHTML'];
@@ -754,6 +816,8 @@ final class PatchBlockAbility
                 $content = $html;
             }
         }
+
+        return $warnings;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Abilities;
 
+use GeneroWP\MCP\Blocks\MarkupLint;
 use GeneroWP\MCP\Concerns\AcfAware;
 use GeneroWP\MCP\Concerns\RestDelegation;
 use GeneroWP\MCP\Undo\Reversible;
@@ -91,7 +92,7 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-create', [
             'label' => 'Create Content',
-            'description' => "Create a new post/page/CPT. Available types: {$typeDesc}. Fields are plain strings: title=\"My Title\", content=\"<p>Body</p>\", status=\"draft\"|\"publish\". Both title and content are required (non-empty)."
+            'description' => "Create a new post/page/CPT. Available types: {$typeDesc}. Fields are plain strings: title=\"My Title\", content=\"<p>Body</p>\", status=\"draft\"|\"publish\". Both title and content are required (non-empty). Block markup in content is checked first: block names not registered on the site, and inner blocks or HTML inside a synced pattern (core/block), are refused; unknown attributes, invalid attribute values and raw values that equal a theme preset come back in `warnings`."
                 ."\n\nMultilingual note: pass `lang` to assign a Polylang language to the new post. This creates a STANDALONE post in that language — it is NOT linked to other languages. "
                 .'To create multiple linked translations of the same page: either use gds/translations-create (source post + target lang, links automatically), or create each with this tool then call gds/translations-link to connect them.'
                 ."\n\nFor menu items, use gds/nav-menu-items-* instead — they have a dedicated schema that handles the post/term/url linkage and menu_order positioning.",
@@ -121,7 +122,7 @@ final class GenericPostTypeAbility
 
         HelpAbility::registerAbility('gds/content-update', [
             'label' => 'Update Content',
-            'description' => "Update an existing post/page/CPT. Available types: {$typeDesc}. Requires type and id. Fields are plain strings. Only include fields you want to change. Sending content replaces the whole body: to change text use gds/content-replace, and to change one block's settings or markup use gds/blocks-patch, so you never resend the post. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
+            'description' => "Update an existing post/page/CPT. Available types: {$typeDesc}. Requires type and id. Fields are plain strings. Only include fields you want to change. Sending content replaces the whole body: to change text use gds/content-replace, and to change one block's settings or markup use gds/blocks-patch, so you never resend the post. Block markup in content is checked as in gds/content-create: unregistered blocks and content inside core/block are refused, other problems come back in `warnings`. For wp_template / wp_template_part, the id is a composite \"{theme}//{slug}\" string (as returned by content-list).",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -348,6 +349,11 @@ final class GenericPostTypeAbility
             unset($input['lang']);
         }
 
+        $warnings = self::lintContent($input);
+        if (is_wp_error($warnings)) {
+            return $warnings;
+        }
+
         $response = self::restPost($route, $input);
 
         if (self::isRestError($response)) {
@@ -376,6 +382,9 @@ final class GenericPostTypeAbility
         $data = self::enrichPostUrls($data);
         if ($quiet) {
             $data = self::summary($data);
+        }
+        if ($warnings) {
+            $data['warnings'] = $warnings;
         }
 
         // Undo a create by trashing the new post (recoverable).
@@ -415,6 +424,11 @@ final class GenericPostTypeAbility
             unset($input['lang']);
         }
 
+        $warnings = self::lintContent($input);
+        if (is_wp_error($warnings)) {
+            return $warnings;
+        }
+
         // Capture the full prior state (fields + meta + terms) BEFORE writing,
         // so the edit can be undone. Numeric ids only — composite template ids
         // are an edge case we don't snapshot.
@@ -443,6 +457,9 @@ final class GenericPostTypeAbility
         if ($quiet) {
             $data = self::summary($data);
         }
+        if ($warnings) {
+            $data['warnings'] = $warnings;
+        }
 
         if ($undo) {
             $title = get_the_title($id) ?: "#{$id}";
@@ -450,6 +467,20 @@ final class GenericPostTypeAbility
         }
 
         return $data;
+    }
+
+    /**
+     * Check the block markup in `content` before it goes to REST, which saves
+     * whatever it is given.
+     *
+     * @param  array<string, mixed>  $input  Normalized input.
+     * @return list<string>|WP_Error
+     */
+    private static function lintContent(array $input): array|WP_Error
+    {
+        $markup = $input['content']['raw'] ?? null;
+
+        return is_string($markup) ? MarkupLint::markup($markup) : [];
     }
 
     /**
