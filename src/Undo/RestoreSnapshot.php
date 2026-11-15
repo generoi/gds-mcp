@@ -4,6 +4,7 @@ namespace GeneroWP\MCP\Undo;
 
 use GeneroWP\MCP\Abilities\NavMenuItemsAbility;
 use GeneroWP\MCP\Abilities\ReadOnlyMode;
+use GeneroWP\MCP\Integrations\GravityForms\GravityFormsAbility;
 use GeneroWP\MCP\Integrations\Polylang\RegisteredStrings;
 use GeneroWP\MCP\Integrations\Yoast\SeoFields;
 use GeneroWP\MCP\Undo\Snapshots\PartialPostSnapshot;
@@ -56,12 +57,32 @@ final class RestoreSnapshot
         $kind = (string) ($snapshot['kind'] ?? '');
         $data = (array) ($snapshot['data'] ?? []);
 
+        // Nothing is undone over changes made since.
+        if ($changed = UndoGuard::check($kind, $data)) {
+            return $changed;
+        }
+
+        return self::dispatch($kind, $data);
+    }
+
+    /**
+     * Run the restore for a kind, once its guard has passed.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
+    private static function dispatch(string $kind, array $data): array|WP_Error
+    {
         return match ($kind) {
             'restore-post' => self::restorePost($data),
+            'restore-post-content' => self::restorePostContent($data),
             'restore-post-partial' => self::restorePostPartial($data),
+            'restore-menu-order' => self::restoreMenuOrder($data),
             'untrash' => self::untrash($data),
             'trash' => self::trash($data),
+            'trash-translation' => self::trashTranslation($data),
             'recreate-menu-item' => self::recreateMenuItem($data),
+            'delete-menu-item' => self::deleteMenuItem($data),
             'restore-term' => self::restoreTerm($data),
             'delete-term' => self::deleteTerm($data),
             'delete-attachment' => self::deleteAttachment($data),
@@ -90,8 +111,18 @@ final class RestoreSnapshot
         if (! $snapshot) {
             return new WP_Error('restore_failed', 'Snapshot was missing the post id.');
         }
-        if (! get_post($snapshot->id)) {
+        $current = get_post($snapshot->id);
+        if (! $current) {
             return new WP_Error('restore_failed', "Post {$snapshot->id} no longer exists.");
+        }
+        // WordPress would quietly give the old slug a -2 suffix if another
+        // post took it since; refuse instead of restoring a different URL.
+        $slug = $snapshot->post['post_name'];
+        if ($slug !== '' && $slug !== $current->post_name) {
+            $unique = wp_unique_post_slug($slug, $snapshot->id, $snapshot->post['post_status'], $current->post_type, $snapshot->post['post_parent']);
+            if ($unique !== $slug) {
+                return new WP_Error('restore_failed', sprintf('Nothing was undone: the address "%s" this post had is now used by another post, so it would come back as "%s". Rename the other post first.', $slug, $unique));
+            }
         }
 
         // wp_update_post()/add_post_meta() unslash their input; the snapshot
@@ -99,6 +130,9 @@ final class RestoreSnapshot
         $result = wp_update_post(wp_slash(['ID' => $snapshot->id] + $snapshot->post), true);
         if (is_wp_error($result)) {
             return $result;
+        }
+        if ($snapshot->sticky !== null && $snapshot->sticky !== is_sticky($snapshot->id)) {
+            $snapshot->sticky ? stick_post($snapshot->id) : unstick_post($snapshot->id);
         }
 
         // Only touch keys whose values differ, so meta written by others
@@ -158,6 +192,56 @@ final class RestoreSnapshot
     }
 
     /**
+     * Put back only a post's content, for writes that change nothing else
+     * (blocks-patch, content-replace): a title or status changed since stays.
+     *
+     * data: { id, content }
+     *
+     * @param  array<string, mixed>  $data
+     * @return RestoreSummary|WP_Error
+     */
+    private static function restorePostContent(array $data): array|WP_Error
+    {
+        $id = (int) ($data['id'] ?? 0);
+        if (! $id || ! get_post($id) || ! array_key_exists('content', $data)) {
+            return new WP_Error('restore_failed', "Post {$id} no longer exists.");
+        }
+        $content = (string) $data['content'];
+
+        $result = wp_update_post(wp_slash(['ID' => $id, 'post_content' => $content]), true);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $summary = ['restored' => 'post', 'id' => $id];
+        if (get_post_field('post_content', $id, 'raw') !== $content) {
+            $summary['caveats'] = ['The content was changed on save, e.g. by HTML filtering, so it differs from the snapshot. Check the post.'];
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Put back a menu item's order, all a menu move or reorder changed on the
+     * items around the one it moved.
+     *
+     * data: { id, menu_order }
+     *
+     * @param  array<string, mixed>  $data
+     * @return RestoreSummary|WP_Error
+     */
+    private static function restoreMenuOrder(array $data): array|WP_Error
+    {
+        $id = (int) ($data['id'] ?? 0);
+        if (get_post_type($id) !== 'nav_menu_item') {
+            return new WP_Error('restore_failed', "Menu item {$id} no longer exists.");
+        }
+        $result = wp_update_post(['ID' => $id, 'menu_order' => (int) ($data['menu_order'] ?? 0)], true);
+
+        return is_wp_error($result) ? $result : ['restored' => 'menu-order', 'id' => $id];
+    }
+
+    /**
      * Merge-restore: only the post_status and the specific meta keys that were
      * changed are reverted — untouched meta is left alone. Used by bulk-update,
      * which may touch hundreds of posts (so we never snapshot full content/meta)
@@ -191,9 +275,18 @@ final class RestoreSnapshot
             }
         }
 
-        $updated = $snapshot->status !== ''
-            ? wp_update_post(['ID' => $snapshot->id, 'post_status' => $snapshot->status], true)
-            : null;
+        // With the status go the slug and dates publishing gave a draft.
+        $postarr = ['ID' => $snapshot->id, 'post_status' => $snapshot->status];
+        if (isset($snapshot->fields['post_name'])) {
+            $postarr['post_name'] = $snapshot->fields['post_name'];
+        }
+        if (isset($snapshot->fields['post_date'])) {
+            $postarr['post_date'] = $snapshot->fields['post_date'];
+        }
+        if (isset($snapshot->fields['post_date_gmt'])) {
+            $postarr['post_date_gmt'] = $snapshot->fields['post_date_gmt'];
+        }
+        $updated = $snapshot->status !== '' ? wp_update_post(wp_slash($postarr), true) : null;
         if (is_wp_error($updated)) {
             return new WP_Error('restore_failed', "The meta of post {$snapshot->id} was restored, but not its status: ".$updated->get_error_message());
         }
@@ -215,10 +308,32 @@ final class RestoreSnapshot
             return ['restored' => 'post', 'id' => $id, 'note' => 'Already not in trash.'];
         }
 
+        // Trashing pointed the homepage settings away from the page; put
+        // them back only if nobody chose other ones since.
+        $options = array_map('strval', (array) ($data['options'] ?? []));
+        $reset = ['show_on_front' => 'posts', 'page_on_front' => '0', 'page_for_posts' => '0'];
+        foreach (array_intersect_key($options, $reset) as $option => $value) {
+            if ((string) get_option($option) !== $reset[$option]) {
+                return new WP_Error('changed_since', sprintf('Nothing was undone: this page was the site\'s %s, and the homepage settings were changed after it was trashed. Restore it from the trash in wp-admin and set it in Settings → Reading if it should be again.', $option === 'page_for_posts' ? 'posts page' : 'homepage'));
+            }
+        }
+
         // Since WP 5.6 untrashing gives a draft. Put back the status the post
         // had when it was trashed: the one the undo row recorded, or for rows
         // without it the one core kept in _wp_trash_meta_status.
         $status = (string) ($data['status'] ?? '');
+
+        // Untrashing gives back the slug trashing freed; if another post took
+        // it since, WordPress would quietly add a suffix to this one's URL.
+        $post = get_post($id);
+        $slug = (string) get_post_meta($id, '_wp_desired_post_slug', true);
+        $target = $status !== '' ? $status : (string) get_post_meta($id, '_wp_trash_meta_status', true);
+        if ($slug !== '' && $target !== '') {
+            $unique = wp_unique_post_slug($slug, $id, $target, $post->post_type, (int) $post->post_parent);
+            if ($unique !== $slug) {
+                return new WP_Error('restore_failed', sprintf('Nothing was undone: the address "%s" this post had is now used by another post, so it would come back as "%s". Rename the other post first.', $slug, $unique));
+            }
+        }
         $priorStatus = static fn ($newStatus, $postId, $previousStatus) => (int) $postId === $id
             ? ($status !== '' ? $status : ((string) $previousStatus ?: $newStatus))
             : $newStatus;
@@ -230,7 +345,76 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', "Failed to untrash post {$id}.");
         }
 
+        foreach (array_intersect_key($options, $reset) as $option => $value) {
+            update_option($option, $value);
+        }
+        if (isset($data['sticky_posts']) && ! is_sticky($id)) {
+            // The whole list when only this post left it, so its place in
+            // the order comes back too.
+            $before = array_values(array_map('intval', (array) $data['sticky_posts']));
+            $now = array_values(array_map('intval', (array) get_option('sticky_posts', [])));
+            $now === array_values(array_diff($before, [$id])) ? update_option('sticky_posts', $before) : stick_post($id);
+        }
+
         return ['restored' => 'untrash', 'id' => $id];
+    }
+
+    /**
+     * Undo a created translation: take it out of its translation group, so
+     * the language can be translated again, and move it to the trash.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
+    private static function trashTranslation(array $data): array|WP_Error
+    {
+        $id = (int) ($data['id'] ?? 0);
+        // Whatever would stop the trash stops the unlinking too.
+        if ($id && get_post($id) && ($refused = self::trashRefusal($id))) {
+            return $refused;
+        }
+        if ($id && get_post($id) && function_exists('PLL') && isset(PLL()->model)) {
+            $group = pll_get_post_translations($id);
+            PLL()->model->post->delete_translation($id);
+            // A source left with no other translation keeps no group of
+            // one, as before the create.
+            $rest = array_values(array_diff(array_map('intval', $group), [$id]));
+            if (count($rest) === 1 && count(pll_get_post_translations($rest[0])) <= 1) {
+                PLL()->model->post->delete_translation($rest[0]);
+            }
+        }
+
+        return self::trash($data);
+    }
+
+    /**
+     * Undo a created menu item: delete it (menu items have no trash) and
+     * close the gap its insert opened, against the menu as it is now.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
+    private static function deleteMenuItem(array $data): array|WP_Error
+    {
+        $id = (int) ($data['id'] ?? 0);
+        $item = get_post($id);
+        if (! $item || $item->post_type !== 'nav_menu_item') {
+            return ['restored' => 'delete-menu-item', 'id' => $id, 'note' => 'Already removed.'];
+        }
+        $children = get_posts(['post_type' => 'nav_menu_item', 'post_status' => 'any', 'numberposts' => 1, 'fields' => 'ids', 'meta_key' => '_menu_item_menu_item_parent', 'meta_value' => (string) $id]);
+        if ($children) {
+            return new WP_Error('changed_since', 'Nothing was undone: menu items were added under this one since, and removing it would leave them without a parent. Move or remove them first.');
+        }
+        $menuIds = wp_get_object_terms($id, 'nav_menu', ['fields' => 'ids']);
+        $order = (int) $item->menu_order;
+        if (! wp_delete_post($id, true)) {
+            return new WP_Error('restore_failed', "Failed to remove menu item {$id}.");
+        }
+        if (! is_wp_error($menuIds) && $menuIds) {
+            NavMenuItemsAbility::shiftOrder((int) $menuIds[0], $order + 1, -1);
+        }
+
+        return ['restored' => 'delete-menu-item', 'id' => $id];
     }
 
     /**
@@ -243,15 +427,32 @@ final class RestoreSnapshot
         if (! $id || ! get_post($id)) {
             return ['restored' => 'trash', 'id' => $id, 'note' => 'Already removed.'];
         }
-        // With EMPTY_TRASH_DAYS at 0, wp_trash_post() deletes for good.
-        if (! EMPTY_TRASH_DAYS) {
-            return new WP_Error('trash_not_supported', "The trash is disabled on this site (EMPTY_TRASH_DAYS is 0), so undoing would delete post {$id} permanently. Delete it in wp-admin if it should be removed for good.");
+        if ($refused = self::trashRefusal($id)) {
+            return $refused;
         }
         if (! wp_trash_post($id)) {
             return new WP_Error('restore_failed', "Failed to remove post {$id}.");
         }
 
         return ['restored' => 'trash', 'id' => $id];
+    }
+
+    /**
+     * Why undoing a create by trashing the post cannot go ahead, if it can't.
+     */
+    private static function trashRefusal(int $id): ?WP_Error
+    {
+        // With EMPTY_TRASH_DAYS at 0, wp_trash_post() deletes for good.
+        if (! EMPTY_TRASH_DAYS) {
+            return new WP_Error('trash_not_supported', "The trash is disabled on this site (EMPTY_TRASH_DAYS is 0), so undoing would delete post {$id} permanently. Delete it in wp-admin if it should be removed for good.");
+        }
+        // Made the homepage or posts page since it was created: trashing it
+        // would reset those settings too, which this undo could not give back.
+        if (! empty(Snapshot::trashSideEffects($id)['options'])) {
+            return new WP_Error('changed_since', 'Nothing was undone: this page has been made the site\'s homepage or posts page since it was created. Choose another one in Settings → Reading first.');
+        }
+
+        return null;
     }
 
     /**
@@ -286,22 +487,12 @@ final class RestoreSnapshot
         $order = $after ? (int) $after->menu_order : ($before ? (int) $before->menu_order + 1 : (int) $snapshot->post['menu_order']);
         NavMenuItemsAbility::shiftOrder($menuId, $order, +1);
 
-        // wp_insert_post() keeps import_id only when no post has that id.
-        $fields = ['menu_order' => $order] + $snapshot->post;
-        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $fields), true);
+        $newId = self::recreatePost(new PostFieldsSnapshot($snapshot->id, ['menu_order' => $order] + $snapshot->post, $snapshot->meta, $snapshot->terms, true), 'nav_menu_item');
         if (is_wp_error($newId)) {
+            // All or nothing: no half-restored item left in the menu.
             NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
 
             return $newId;
-        }
-
-        $restored = self::restorePost((new PostFieldsSnapshot($newId, $fields, $snapshot->meta, $snapshot->terms, true))->toArray());
-        if (is_wp_error($restored)) {
-            // All or nothing: no half-restored item left in the menu.
-            wp_delete_post($newId, true);
-            NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
-
-            return $restored;
         }
 
         foreach ((array) ($data['children'] ?? []) as $childId) {
@@ -345,20 +536,127 @@ final class RestoreSnapshot
                 add_term_meta($snapshot->termId, $key, wp_slash(maybe_unserialize($value)));
             }
         }
+        if ($snapshot->menu !== null) {
+            self::restoreMenuSettings($snapshot->termId, $snapshot->menu);
+        }
 
         return ['restored' => 'term', 'term_id' => $snapshot->termId];
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     * @return array<string, mixed>
+     * Put back the theme locations a menu was in or took from another menu,
+     * and its auto-add setting, which the menus endpoint writes with it.
+     *
+     * @param  array{locations: array<string, int>, auto_add: bool}  $menu
      */
-    private static function deleteTerm(array $data): array
+    private static function restoreMenuSettings(int $menuId, array $menu): void
     {
+        $locations = (array) get_theme_mod('nav_menu_locations', []);
+        foreach (array_unique(array_merge(array_keys($locations), array_keys($menu['locations']))) as $location) {
+            if ((int) ($locations[$location] ?? 0) !== $menuId && (int) ($menu['locations'][$location] ?? 0) !== $menuId) {
+                continue;
+            }
+            if (array_key_exists($location, $menu['locations'])) {
+                $locations[$location] = $menu['locations'][$location];
+            } else {
+                unset($locations[$location]);
+            }
+        }
+        if ($locations !== (array) get_theme_mod('nav_menu_locations', [])) {
+            set_theme_mod('nav_menu_locations', $locations);
+        }
+
+        $options = (array) get_option('nav_menu_options', []);
+        $autoAdd = array_map('intval', (array) ($options['auto_add'] ?? []));
+        if ($menu['auto_add'] !== in_array($menuId, $autoAdd, true)) {
+            $options['auto_add'] = $menu['auto_add'] ? [...$autoAdd, $menuId] : array_values(array_diff($autoAdd, [$menuId]));
+            // Nothing left in it: as before any menu used it.
+            $options === ['auto_add' => []] ? delete_option('nav_menu_options') : update_option('nav_menu_options', $options);
+        }
+    }
+
+    /**
+     * Undo a created term by deleting it, unless something uses it now:
+     * deleting would also take it off those posts, re-parent its children
+     * and drop the menu items linking to it, none of which this undo
+     * could give back.
+     *
+     * data: { term_id, taxonomy, locations?: theme location → menu id before a menu was created }
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
+    private static function deleteTerm(array $data): array|WP_Error
+    {
+        global $wpdb;
         $termId = (int) ($data['term_id'] ?? 0);
         $taxonomy = (string) ($data['taxonomy'] ?? '');
-        if ($termId && term_exists($termId, $taxonomy)) {
-            wp_delete_term($termId, $taxonomy);
+        if (! $termId || ! term_exists($termId, $taxonomy)) {
+            return ['restored' => 'delete-term', 'term_id' => $termId, 'note' => 'Already removed.'];
+        }
+
+        $used = [];
+        $objects = get_objects_in_term($termId, $taxonomy);
+        if (! is_wp_error($objects) && $objects) {
+            $used[] = $taxonomy === 'nav_menu' ? sprintf('%d menu item(s)', count($objects)) : sprintf('%d post(s)', count($objects));
+        }
+        $children = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->term_taxonomy} WHERE parent = %d AND taxonomy = %s", $termId, $taxonomy));
+        if ($children) {
+            $used[] = sprintf('%d sub-term(s)', $children);
+        }
+        if ($taxonomy !== 'nav_menu' && wp_get_associated_nav_menu_items($termId, 'taxonomy', $taxonomy)) {
+            $used[] = 'a menu item';
+        }
+        if ($used) {
+            return new WP_Error('changed_since', sprintf('Nothing was undone: the term is now used by %s, and deleting it would take it off them too. Delete it in wp-admin if it should go.', implode(', ', $used)));
+        }
+        // wp_delete_term() refuses the default term (and returns 0).
+        if ($termId === (int) get_option($taxonomy === 'category' ? 'default_category' : 'default_term_'.$taxonomy)) {
+            return new WP_Error('restore_failed', 'Nothing was undone: the term has been made the default one since, which WordPress does not delete. Choose another default first.');
+        }
+
+        // The theme locations the new menu was put in.
+        $locationsBefore = isset($data['locations']) && is_array($data['locations']) ? $data['locations'] : null;
+        $taken = array_keys(array_filter((array) get_nav_menu_locations(), fn ($menuId) => (int) $menuId === $termId));
+
+        // What Polylang does on pre_delete_term, which it only hooks when it
+        // had languages at load: take the term out of its translation group
+        // and drop its language, so the language can be translated again.
+        // Inside that action, as Polylang then keeps no group for it.
+        $unlink = static function ($deleting) use ($termId): void {
+            if ((int) $deleting === $termId) {
+                PLL()->model->term->delete_translation($termId);
+                PLL()->model->term->delete_language($termId);
+            }
+        };
+        $translated = function_exists('pll_get_term_language') && pll_get_term_language($termId);
+        if ($translated) {
+            add_action('pre_delete_term', $unlink);
+        }
+        $deleted = $taxonomy === 'nav_menu' ? wp_delete_nav_menu($termId) : wp_delete_term($termId, $taxonomy);
+        if ($translated) {
+            remove_action('pre_delete_term', $unlink);
+        }
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+        if (! $deleted) {
+            // 0 for the default category, false when it was not found.
+            return new WP_Error('restore_failed', "Term {$termId} could not be deleted (it may be the default term).");
+        }
+
+        // Deleting a menu empties its locations; give them back the menus
+        // they had before it was created.
+        if ($taken && $locationsBefore !== null) {
+            $locations = (array) get_theme_mod('nav_menu_locations', []);
+            foreach ($taken as $location) {
+                if (array_key_exists($location, $locationsBefore)) {
+                    $locations[$location] = (int) $locationsBefore[$location];
+                } else {
+                    unset($locations[$location]);
+                }
+            }
+            set_theme_mod('nav_menu_locations', $locations);
         }
 
         return ['restored' => 'delete-term', 'term_id' => $termId];
@@ -484,16 +782,21 @@ final class RestoreSnapshot
         $idReused = $oldId && (bool) $wpdb->get_var($wpdb->prepare("SELECT term_id FROM {$wpdb->terms} WHERE term_id = %d", $oldId));
         $ttReused = $ttId && (bool) $wpdb->get_var($wpdb->prepare("SELECT term_taxonomy_id FROM {$wpdb->term_taxonomy} WHERE term_taxonomy_id = %d", $ttId));
 
+        // The menu items the delete removed come back as posts of their own,
+        // so they are not re-attached as objects.
+        $itemIds = array_map(fn (array $item) => (int) ($item['id'] ?? 0), $snapshot->menuItems);
+        $objectIds = array_values(array_filter($snapshot->objectIds, fn (int $id) => ! in_array($id, $itemIds, true) && get_post($id)));
+
         // Preferred path: re-insert with the original ids.
         if ($oldId && $ttId && ! $idReused && ! $ttReused) {
             // phpcs:disable WordPress.DB.DirectDatabaseQuery
-            $wpdb->insert($wpdb->terms, [
+            $inserted = $wpdb->insert($wpdb->terms, [
                 'term_id' => $oldId,
                 'name' => $snapshot->fields['name'],
                 'slug' => $snapshot->fields['slug'] !== '' ? $snapshot->fields['slug'] : sanitize_title($snapshot->fields['name']),
                 'term_group' => $snapshot->termGroup,
             ]);
-            $wpdb->insert($wpdb->term_taxonomy, [
+            $inserted = $inserted && $wpdb->insert($wpdb->term_taxonomy, [
                 'term_taxonomy_id' => $ttId,
                 'term_id' => $oldId,
                 'taxonomy' => $snapshot->taxonomy,
@@ -501,18 +804,31 @@ final class RestoreSnapshot
                 'parent' => $snapshot->fields['parent'],
                 'count' => 0,
             ]);
+            // phpcs:enable
             clean_term_cache([$oldId], $snapshot->taxonomy);
+            if (! $inserted) {
+                $wpdb->delete($wpdb->terms, ['term_id' => $oldId]);
+                clean_term_cache([$oldId], $snapshot->taxonomy);
+
+                return new WP_Error('restore_failed', 'Nothing was undone: the term could not be put back. '.$wpdb->last_error);
+            }
 
             self::restoreTermMeta($oldId, $snapshot->meta);
-            self::reattachObjects($ttId, $snapshot->objectIds);
+            self::reattachObjects($ttId, $objectIds);
+            $caveats = self::restoreTermSideEffects($oldId, $oldId, $snapshot);
             wp_update_term_count_now([$ttId], $snapshot->taxonomy);
             self::restoreTermTranslation($oldId, $snapshot);
 
-            return [
+            $summary = [
                 'restored' => 'recreate-term',
                 'term_id' => $oldId,
                 'note' => 'Term restored under its original id; existing references remain valid.',
             ];
+            if ($caveats) {
+                $summary['caveats'] = $caveats;
+            }
+
+            return $summary;
         }
 
         // Fallback: the id was reused, so we must create a new one. Don't
@@ -528,9 +844,10 @@ final class RestoreSnapshot
         $newId = (int) $created['term_id'];
 
         self::restoreTermMeta($newId, $snapshot->meta);
-        foreach ($snapshot->objectIds as $objectId) {
+        foreach ($objectIds as $objectId) {
             wp_set_object_terms($objectId, [$newId], $snapshot->taxonomy, true);
         }
+        $caveats = self::restoreTermSideEffects($oldId, $newId, $snapshot);
         self::restoreTermTranslation($newId, $snapshot);
 
         // Yoast keeps a deleted term's SEO entry under its id; move it to the
@@ -549,8 +866,114 @@ final class RestoreSnapshot
             'restored' => 'recreate-term',
             'term_id' => $newId,
             'old_term_id' => $oldId,
-            'caveats' => self::staleTermReferences($oldId, $newId),
+            'caveats' => [...self::staleTermReferences($oldId, $newId), ...$caveats],
         ];
+    }
+
+    /**
+     * Reverse what deleting the term did to others: point its former
+     * children back at it, take the default term back off the posts that
+     * got it, recreate the menu items the delete removed, and for a menu put
+     * it back in its theme locations.
+     *
+     * @return list<string> What could not be put back as it was.
+     */
+    private static function restoreTermSideEffects(int $oldId, int $termId, TermForRecreateSnapshot $snapshot): array
+    {
+        global $wpdb;
+        $caveats = [];
+
+        // Core moved them up to the term's own parent; only those still there.
+        $children = array_filter($snapshot->children, fn (int $child) => (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->term_taxonomy} WHERE term_id = %d AND taxonomy = %s AND parent = %d",
+            $child,
+            $snapshot->taxonomy,
+            $snapshot->fields['parent'],
+        )) > 0);
+        foreach ($children as $child) {
+            $wpdb->update($wpdb->term_taxonomy, ['parent' => $termId], ['term_id' => $child, 'taxonomy' => $snapshot->taxonomy]);
+        }
+        if ($children) {
+            clean_term_cache(array_values($children), $snapshot->taxonomy);
+        }
+
+        if ($snapshot->defaultTerm) {
+            foreach ($snapshot->gainedDefault as $objectId) {
+                if (get_post($objectId) && has_term($snapshot->defaultTerm, $snapshot->taxonomy, $objectId)) {
+                    wp_remove_object_terms($objectId, $snapshot->defaultTerm, $snapshot->taxonomy);
+                }
+            }
+        }
+
+        $isMenu = $snapshot->taxonomy === 'nav_menu';
+        $menuTtId = $isMenu ? (int) $wpdb->get_var($wpdb->prepare("SELECT term_taxonomy_id FROM {$wpdb->term_taxonomy} WHERE term_id = %d AND taxonomy = 'nav_menu'", $termId)) : 0;
+        $remap = [];
+        $recreated = [];
+        foreach ($snapshot->menuItems as $payload) {
+            $item = PostFieldsSnapshot::fromArray($payload);
+            if (! $item) {
+                continue;
+            }
+            $terms = $isMenu ? ['nav_menu' => [$termId]] + $item->terms : $item->terms;
+            $meta = $item->meta;
+            if (! $isMenu && $termId !== $oldId && ($meta['_menu_item_object_id'] ?? null) === [(string) $oldId]) {
+                $meta['_menu_item_object_id'] = [(string) $termId];
+            }
+            $newId = self::recreatePost(new PostFieldsSnapshot($item->id, $item->post, $meta, $terms, true), 'nav_menu_item');
+            if (is_wp_error($newId)) {
+                $caveats[] = sprintf('Menu item "%s" (%d) could not be put back: %s', $item->post['post_title'], $item->id, $newId->get_error_message());
+
+                continue;
+            }
+            if ($isMenu) {
+                // wp_set_object_terms() may not resolve a term inserted raw.
+                self::reattachObjects($menuTtId, [$newId]);
+            }
+            $recreated[] = $newId;
+            if ($newId !== $item->id) {
+                $remap[$item->id] = $newId;
+            }
+        }
+        // Sub-items point at their parent by id: re-point every recreated one
+        // whose parent came back under a new id, whatever id it got itself.
+        foreach ($recreated as $itemId) {
+            $parent = (int) get_post_meta($itemId, '_menu_item_menu_item_parent', true);
+            if (isset($remap[$parent])) {
+                update_post_meta($itemId, '_menu_item_menu_item_parent', (string) $remap[$parent]);
+            }
+        }
+        foreach ($remap as $old => $new) {
+            $caveats[] = "Menu item {$old} came back under a new id ({$new}) because the old id had been reused.";
+        }
+
+        if ($isMenu && $snapshot->menu !== null) {
+            $menu = $snapshot->menu;
+            $menu['locations'] = array_map(fn (int $id) => $id === $oldId ? $termId : $id, $menu['locations']);
+            self::restoreMenuSettings($termId, $menu);
+        }
+
+        return $caveats;
+    }
+
+    /**
+     * Insert a deleted post again from its snapshot, under its original id
+     * when that is free.
+     */
+    private static function recreatePost(PostFieldsSnapshot $snapshot, string $postType): int|WP_Error
+    {
+        // wp_insert_post() keeps import_id only when no post has that id.
+        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => $postType] + $snapshot->post), true);
+        if (is_wp_error($newId)) {
+            return $newId;
+        }
+        $restored = self::restorePost((new PostFieldsSnapshot($newId, $snapshot->post, $snapshot->meta, $snapshot->terms, true))->toArray());
+        if (is_wp_error($restored)) {
+            wp_delete_post($newId, true);
+
+            return $restored;
+        }
+
+        return $newId;
     }
 
     /**
@@ -666,6 +1089,23 @@ final class RestoreSnapshot
         if (! $id || ! $form) {
             return new WP_Error('restore_failed', 'Missing form snapshot.');
         }
+        $current = \GFAPI::get_form($id);
+        if (! $current) {
+            return new WP_Error('restore_failed', "Form {$id} no longer exists.");
+        }
+
+        // Fields the restore removes or retypes lose the values entries
+        // submitted since hold for them; GF has no form revisions to undo that.
+        $lost = isset($form['fields']) ? self::fieldsWithEntryValues($id, GravityFormsAbility::destructiveFieldChanges(json_decode((string) wp_json_encode($current['fields'] ?? []), true) ?: [], (array) $form['fields'])) : [];
+        if ($lost) {
+            return new WP_Error('changed_since', sprintf('Nothing was undone: entries submitted since hold values for %s, which undoing this change would remove or change the type of, so those values would be lost. Edit the form by hand if it should change back.', implode(', ', $lost)));
+        }
+
+        $stored = is_array($data['stored'] ?? null) ? $data['stored'] : null;
+        if ($stored) {
+            return self::restoreStoredForm($id, $stored);
+        }
+
         // GFAPI::update_form returns false on validation/save failure without
         // raising a WP_Error — checking only is_wp_error() lets a silent
         // failure flow through as "Undone", which is what surfaced the bug
@@ -686,17 +1126,90 @@ final class RestoreSnapshot
     }
 
     /**
+     * Write back a form's rows as {@see Snapshot::gravityForm()} read them,
+     * the way GFFormsModel::update_form_meta() stores them.
+     *
+     * @param  array<string, mixed>  $stored
+     * @return array<string, mixed>|WP_Error
+     */
+    private static function restoreStoredForm(int $id, array $stored): array|WP_Error
+    {
+        global $wpdb;
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery
+        $meta = array_intersect_key($stored, array_flip(['display_meta', 'confirmations', 'notifications']));
+        // As GFFormsModel::update_form_meta() does before a save: record a
+        // revision when consent wording changes, so entries submitted from
+        // now on point at the wording they agreed to.
+        $displayMeta = is_string($meta['display_meta'] ?? null) ? json_decode($meta['display_meta'], true) : null;
+        if (is_array($displayMeta) && method_exists('GFFormsModel', 'maybe_create_form_revision')) {
+            \GFFormsModel::maybe_create_form_revision($displayMeta, $id);
+        }
+        $ok = $wpdb->update(\GFFormsModel::get_meta_table_name(), $meta, ['form_id' => $id]) !== false;
+        $ok = $ok && $wpdb->update(\GFFormsModel::get_form_table_name(), ['title' => (string) ($stored['title'] ?? ''), 'is_active' => (string) ($stored['is_active'] ?? '1')], ['id' => $id]) !== false;
+        // phpcs:enable
+        \GFFormsModel::flush_current_forms();
+        if (! $ok) {
+            return new WP_Error('restore_failed', "Failed to restore form {$id}: ".$wpdb->last_error);
+        }
+        // As GF fires them after a save.
+        foreach ($meta as $name => $value) {
+            do_action('gform_post_update_form_meta', $value, $id, $name);
+            do_action("gform_post_update_form_meta_{$id}", $value, $id, $name);
+        }
+
+        return ['restored' => 'form', 'id' => $id];
+    }
+
+    /**
+     * The labels of the given fields that entries hold a value for.
+     *
+     * @param  array<int, array{id: int, label: string, reason: string}>  $fields
+     * @return list<string>
+     */
+    private static function fieldsWithEntryValues(int $formId, array $fields): array
+    {
+        global $wpdb;
+        $lost = [];
+        foreach ($fields as $field) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $count = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.\GFFormsModel::get_entry_meta_table_name()." WHERE form_id = %d AND (meta_key = %s OR meta_key LIKE %s) AND meta_value != ''", $formId, (string) $field['id'], $wpdb->esc_like($field['id'].'.').'%'));
+            if ($count) {
+                $lost[] = sprintf('"%s" (%d entries)', $field['label'], $count);
+            }
+        }
+
+        return $lost;
+    }
+
+    /**
+     * Undo a created form by deleting it, unless it has entries now:
+     * deleting the form would delete them with it, for good.
+     *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>|WP_Error
      */
     private static function deleteForm(array $data): array|WP_Error
     {
+        global $wpdb;
         if (! class_exists('GFAPI')) {
             return new WP_Error('gf_not_available', 'Gravity Forms is not active.');
         }
         $id = (int) ($data['id'] ?? 0);
-        if ($id && \GFAPI::get_form($id)) {
-            \GFAPI::delete_form($id);
+        if (! $id || ! \GFAPI::get_form($id)) {
+            return ['restored' => 'delete-form', 'id' => $id, 'note' => 'Already removed.'];
+        }
+        // Every status, spam and trash included.
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $entries = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.\GFFormsModel::get_entry_table_name().' WHERE form_id = %d', $id));
+        if ($entries) {
+            return new WP_Error('changed_since', sprintf('Nothing was undone: the form has %d entries now, and deleting it would delete them for good. Export them first, then delete the form in wp-admin, or move it to the trash there.', $entries));
+        }
+        $deleted = \GFAPI::delete_form($id);
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+        if (\GFAPI::get_form($id)) {
+            return new WP_Error('restore_failed', "Failed to delete form {$id}.");
         }
 
         return ['restored' => 'delete-form', 'id' => $id];
@@ -716,20 +1229,30 @@ final class RestoreSnapshot
         if (! $feedId || ! $meta) {
             return new WP_Error('restore_failed', 'Missing feed snapshot.');
         }
-        $result = \GFAPI::update_feed($feedId, $meta);
-        if (is_wp_error($result)) {
-            return $result;
+        $feed = \GFAPI::get_feed($feedId);
+        if (is_wp_error($feed) || ! $feed) {
+            return new WP_Error('restore_failed', "Feed {$feedId} no longer exists.");
         }
-        if ($result === false) {
-            return new WP_Error(
-                'restore_failed',
-                "Failed to restore feed {$feedId}: GFAPI::update_feed returned false.",
-            );
+        // update_feed() only finds active feeds, so an edit that turned the
+        // feed off could never be undone; switch it on for the write, the
+        // properties below put the snapshot's state back.
+        if (! (int) $feed['is_active'] && is_wp_error(\GFAPI::update_feed_property($feedId, 'is_active', 1))) {
+            return new WP_Error('restore_failed', "Failed to restore feed {$feedId}.");
+        }
+        $result = \GFAPI::update_feed($feedId, $meta);
+        if (is_wp_error($result) || $result === false) {
+            if (! (int) $feed['is_active']) {
+                \GFAPI::update_feed_property($feedId, 'is_active', 0);
+            }
+
+            return new WP_Error('restore_failed', "Failed to restore feed {$feedId}: ".(is_wp_error($result) ? $result->get_error_message() : 'GFAPI::update_feed returned false.'));
         }
 
         // update_feed only restores meta; the form binding / active state /
         // order are separate properties that the edit could also have changed.
-        self::restoreFeedProperties($feedId, $data);
+        if ($failed = self::restoreFeedProperties($feedId, $data)) {
+            return $failed;
+        }
 
         return ['restored' => 'feed', 'feed_id' => $feedId];
     }
@@ -756,33 +1279,63 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', 'Missing feed snapshot.');
         }
 
+        global $wpdb;
         $newId = \GFAPI::add_feed($formId, $meta, $addon);
         if (is_wp_error($newId)) {
             return $newId;
         }
-        self::restoreFeedProperties((int) $newId, $data);
+        $newId = (int) $newId;
 
-        return [
-            'restored' => 'recreate-feed',
-            'feed_id' => (int) $newId,
-            'note' => 'Feed restored under a new id; any reference to the old feed id (uncommon) will not reconnect.',
-        ];
+        // Back under its old id when that is free, so entries that record
+        // which feeds processed them still match. GF encrypted the meta on
+        // the insert; only the id changes.
+        $oldId = (int) ($data['feed_id'] ?? 0);
+        $table = $wpdb->prefix.'gf_addon_feed';
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        if ($oldId && ! $wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE id = %d", $oldId))
+            && $wpdb->update($table, ['id' => $oldId], ['id' => $newId])) {
+            $newId = $oldId;
+        }
+        // phpcs:enable
+
+        if ($failed = self::restoreFeedProperties($newId, $data)) {
+            \GFAPI::delete_feed($newId);
+
+            return $failed;
+        }
+
+        $summary = ['restored' => 'recreate-feed', 'feed_id' => $newId];
+        if ($newId !== $oldId) {
+            $summary['caveats'] = ["The feed came back under a new id ({$newId}), so entries already processed by the old one may be sent again if they are resent."];
+        }
+
+        return $summary;
     }
 
     /**
      * @param  array<string, mixed>  $data
      */
-    private static function restoreFeedProperties(int $feedId, array $data): void
+    private static function restoreFeedProperties(int $feedId, array $data): ?WP_Error
     {
-        if (array_key_exists('form_id', $data)) {
-            \GFAPI::update_feed_property($feedId, 'form_id', (int) $data['form_id']);
+        foreach (['form_id', 'is_active', 'feed_order'] as $property) {
+            if (! array_key_exists($property, $data)) {
+                continue;
+            }
+            $result = \GFAPI::update_feed_property($feedId, $property, (int) $data[$property]);
+            if (is_wp_error($result)) {
+                return new WP_Error('restore_failed', sprintf('The %s of feed %d could not be restored: %s', $property, $feedId, $result->get_error_message()));
+            }
         }
-        if (array_key_exists('is_active', $data)) {
-            \GFAPI::update_feed_property($feedId, 'is_active', (int) $data['is_active']);
+        // False from update_feed_property() also means "unchanged" since
+        // GF 3.0, so check what was stored.
+        $feed = \GFAPI::get_feed($feedId);
+        foreach (['form_id', 'is_active', 'feed_order'] as $property) {
+            if (array_key_exists($property, $data) && (is_wp_error($feed) || ! $feed || (int) $feed[$property] !== (int) $data[$property])) {
+                return new WP_Error('restore_failed', sprintf('The %s of feed %d could not be restored.', $property, $feedId));
+            }
         }
-        if (array_key_exists('feed_order', $data)) {
-            \GFAPI::update_feed_property($feedId, 'feed_order', (int) $data['feed_order']);
-        }
+
+        return null;
     }
 
     /**
@@ -841,8 +1394,12 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', 'Redirection item not found.');
         }
         $item = \Red_Item::get_by_id($itemId);
-        if ($item) {
-            $item->delete();
+        if (! $item) {
+            return ['restored' => 'delete-redirect', 'item_id' => $itemId, 'note' => 'Already removed.'];
+        }
+        $item->delete();
+        if (\Red_Item::get_by_id($itemId)) {
+            return new WP_Error('restore_failed', "Failed to delete redirect {$itemId}.");
         }
 
         return ['restored' => 'delete-redirect', 'item_id' => $itemId];
@@ -879,8 +1436,17 @@ final class RestoreSnapshot
             return new WP_Error('gf_not_available', 'Gravity Forms is not active.');
         }
         $feedId = (int) ($data['feed_id'] ?? 0);
-        if ($feedId) {
-            \GFAPI::delete_feed($feedId);
+        $feed = $feedId ? \GFAPI::get_feed($feedId) : null;
+        if (! $feed || is_wp_error($feed)) {
+            return ['restored' => 'delete-feed', 'feed_id' => $feedId, 'note' => 'Already removed.'];
+        }
+        $deleted = \GFAPI::delete_feed($feedId);
+        if (is_wp_error($deleted)) {
+            return $deleted;
+        }
+        $left = \GFAPI::get_feed($feedId);
+        if ($left && ! is_wp_error($left)) {
+            return new WP_Error('restore_failed', "Failed to delete feed {$feedId}.");
         }
 
         return ['restored' => 'delete-feed', 'feed_id' => $feedId];
@@ -918,6 +1484,25 @@ final class RestoreSnapshot
             pll_save_post_translations($group);
         }
 
+        // Polylang's setters return nothing useful; check what it stored.
+        $wrong = [];
+        foreach ($snapshot->before as $row) {
+            if (! $row->id) {
+                continue;
+            }
+            $group = count($row->group) > 1 ? $row->group : [];
+            $now = pll_get_post_translations($row->id);
+            $now = count($now) > 1 ? $now : [];
+            ksort($group);
+            ksort($now);
+            if (($row->lang !== '' && pll_get_post_language($row->id) !== $row->lang) || array_map('intval', $now) !== $group) {
+                $wrong[] = $row->id;
+            }
+        }
+        if ($wrong) {
+            return new WP_Error('restore_failed', 'The translation links were only partly put back; check posts '.implode(', ', $wrong).'.');
+        }
+
         return ['restored' => 'translation-link', 'count' => count($snapshot->before)];
     }
 
@@ -940,9 +1525,19 @@ final class RestoreSnapshot
 
         $mo = new \PLL_MO;
         $mo->import_from_db($langObject);
-        $translation = RegisteredStrings::sanitizeTranslation($string, $translation, $mo->translate_if_any($string));
-        $mo->add_entry($mo->make_entry($string, $translation));
+        if ($translation === '') {
+            // It had no translation: remove the entry rather than store an
+            // empty one.
+            unset($mo->entries[$mo->make_entry($string, '')->key()]);
+        } else {
+            $translation = RegisteredStrings::sanitizeTranslation($string, $translation, $mo->translate_if_any($string));
+            $mo->add_entry($mo->make_entry($string, $translation));
+        }
         $mo->export_to_db($langObject);
+        if (! $mo->entries) {
+            // Nothing left: as before any string was translated.
+            delete_term_meta($langObject->term_id, '_pll_strings_translations');
+        }
 
         return ['restored' => 'string', 'string' => $string, 'lang' => $lang];
     }
@@ -959,17 +1554,34 @@ final class RestoreSnapshot
      */
     private static function bulk(array $data): array|WP_Error
     {
+        $items = array_values(array_filter((array) ($data['items'] ?? []), fn ($item) => is_array($item) && ! empty($item['kind'])));
+
+        // All or nothing for later changes: if any item was changed since,
+        // undo none of them rather than leave half the batch reverted.
+        $changed = [];
+        foreach ($items as $item) {
+            $error = UndoGuard::check((string) $item['kind'], (array) ($item['data'] ?? []));
+            if ($error) {
+                $changed[] = $error->get_error_message();
+            }
+        }
+        if ($changed) {
+            return new WP_Error('changed_since', 'Nothing was undone: '.implode(' ', array_unique($changed)));
+        }
+
+        // Newest first, the reverse of the order they were written in, so
+        // each item sees the state it left behind.
         $restored = 0;
         $errors = [];
-        foreach ((array) ($data['items'] ?? []) as $item) {
-            if (! is_array($item) || empty($item['kind'])) {
-                continue;
-            }
-            $result = self::handle(null, $item);
+        $caveats = [];
+        foreach (array_reverse($items) as $item) {
+            // Guards were checked above, for all of them.
+            $result = self::dispatch((string) $item['kind'], (array) ($item['data'] ?? []));
             if (is_wp_error($result)) {
                 $errors[] = $result->get_error_message();
             } else {
                 $restored++;
+                array_push($caveats, ...(array) ($result['caveats'] ?? []));
             }
         }
 
@@ -977,6 +1589,17 @@ final class RestoreSnapshot
             return new WP_Error('restore_failed', 'Nothing was restored: '.implode(' ', $errors));
         }
 
-        return ['restored' => 'bulk', 'count' => $restored, 'errors' => $errors];
+        $summary = ['restored' => 'bulk', 'count' => $restored, 'errors' => $errors];
+        if ($errors) {
+            // gds-assistant shows caveats with the undo; the first says
+            // plainly that this was not a full undo.
+            $summary['partial'] = true;
+            $caveats = [sprintf('Only partly undone: %d of %d changes were reverted. Not reverted: %s', $restored, count($items), implode(' ', $errors)), ...$caveats];
+        }
+        if ($caveats) {
+            $summary['caveats'] = $caveats;
+        }
+
+        return $summary;
     }
 }

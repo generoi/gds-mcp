@@ -506,6 +506,46 @@ class RestoreSnapshotTest extends TestCase
         $this->assertStringContainsString('999999', $result->get_error_message());
     }
 
+    public function test_bulk_says_plainly_when_it_was_only_partly_undone(): void
+    {
+        $a = self::factory()->post->create(['post_status' => 'publish']);
+        $before = Snapshot::partialPost($a, []);
+        wp_update_post(['ID' => $a, 'post_status' => 'draft']);
+
+        $result = $this->restore('bulk', ['items' => [
+            ['kind' => 'restore-post-partial', 'data' => $before->toArray()],
+            ['kind' => 'restore-post', 'data' => ['id' => 999999]],
+        ]]);
+
+        $this->assertNotWPError($result);
+        $this->assertTrue($result['partial']);
+        // gds-assistant shows the caveats with the undo.
+        $this->assertStringContainsString('Only partly undone: 1 of 2', $result['caveats'][0]);
+        $this->assertStringContainsString('999999', $result['caveats'][0]);
+    }
+
+    public function test_deleting_a_created_term_that_became_the_default_is_refused(): void
+    {
+        $term = self::factory()->category->create();
+        update_option('default_category', $term);
+
+        $result = $this->restore('delete-term', ['term_id' => $term, 'taxonomy' => 'category']);
+
+        $this->assertWPError($result);
+        $this->assertNotNull(term_exists($term, 'category'));
+    }
+
+    public function test_a_restore_from_an_older_row_without_a_fingerprint_still_runs(): void
+    {
+        $id = self::factory()->post->create(['post_title' => 'Before']);
+        $before = Snapshot::postFields($id)->toArray();
+        wp_update_post(['ID' => $id, 'post_title' => 'After']);
+        wp_update_post(['ID' => $id, 'post_content' => 'Edited since']);
+
+        $this->assertNotWPError($this->restore('restore-post', $before));
+        $this->assertSame('Before', get_post($id)->post_title);
+    }
+
     public function test_unknown_kind_errors(): void
     {
         $result = $this->restore('nonsense-kind', []);

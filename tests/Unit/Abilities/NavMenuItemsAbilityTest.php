@@ -323,9 +323,10 @@ class NavMenuItemsAbilityTest extends TestCase
         // As gds-assistant stores them on the audit log; undone newest first.
         foreach ([$reorder, $move] as $result) {
             $undo = json_decode((string) wp_json_encode($result['_undo']), true);
-            $this->assertTrue($undo['data']['items'][0]['data']['meta_complete']);
             $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
         }
+        // The moved item is restored in full, from a nested snapshot object.
+        $this->assertTrue(json_decode((string) wp_json_encode($move['_undo']), true)['data']['items'][0]['data']['meta_complete']);
 
         $this->assertSame((string) $parentA, get_post_meta($child, '_menu_item_menu_item_parent', true));
         $this->assertSame(['Parent A', 'Parent B'], $this->orderedTitles());

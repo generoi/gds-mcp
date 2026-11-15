@@ -36,7 +36,9 @@ trait Reversible
             return $result;
         }
 
-        $result['_undo'] = ['kind' => $kind, 'data' => self::undoPayload($data), 'label' => $label];
+        // Sealed now, after the write, so the undo can tell if anything
+        // changed since.
+        $result['_undo'] = ['kind' => $kind, 'data' => UndoGuard::seal($kind, (array) self::undoPayload($data)), 'label' => $label];
 
         return $result;
     }

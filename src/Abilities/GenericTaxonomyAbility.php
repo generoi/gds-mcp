@@ -232,6 +232,8 @@ final class GenericTaxonomyAbility
         }
         $taxonomy = self::resolveTaxonomy((string) ($input['taxonomy'] ?? ''));
         unset($input['taxonomy']);
+        // A new menu can take theme locations from other menus.
+        $locations = $taxonomy === 'nav_menu' ? array_map('intval', (array) get_nav_menu_locations()) : null;
 
         $response = self::restPost($route, $input);
         $result = self::restResponseOrError($response);
@@ -241,7 +243,7 @@ final class GenericTaxonomyAbility
             $result = $this->reversible($result, 'delete-term', [
                 'term_id' => (int) $result['id'],
                 'taxonomy' => $taxonomy,
-            ], "Delete the created term \"{$result['name']}\"");
+            ] + ($locations !== null ? ['locations' => $locations] : []), "Delete the created term \"{$result['name']}\"");
         }
 
         return $result;

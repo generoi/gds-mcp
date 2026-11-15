@@ -217,8 +217,8 @@ final class PatchBlockAbility
 
         $newContent = serialize_blocks($blocks);
 
-        // Capture the post's full state before overwriting its content.
-        $before = Snapshot::postFields($postId);
+        // Capture the content before overwriting it; nothing else changes.
+        $before = Snapshot::postContent($postId);
 
         // wp_update_post() runs its data through wp_unslash(), so serialized
         // block content with backslashes is corrupted unless slashed first.
@@ -248,7 +248,7 @@ final class PatchBlockAbility
         $result['modified'] = $updated->post_modified_gmt;
 
         if ($before) {
-            $result = $this->reversible($result, 'restore-post', $before, "Revert block changes to \"{$post->post_title}\"");
+            $result = $this->reversible($result, 'restore-post-content', $before, "Revert block changes to \"{$post->post_title}\"");
         }
 
         return $result;

@@ -272,12 +272,17 @@ final class SeoFields
             $all[$term->taxonomy][$term->term_id] = $entry;
         }
 
-        // Values were validated when Yoast first saved them. The flag is
-        // stripped again by Yoast's sanitize_option filter.
-        if (class_exists(WPSEO_Taxonomy_Meta::class)) {
-            $all['wpseo_already_validated'] = true;
+        if ($all === []) {
+            // No term has SEO fields left: as before any was set.
+            delete_option('wpseo_taxonomy_meta');
+        } else {
+            // Values were validated when Yoast first saved them. The flag is
+            // stripped again by Yoast's sanitize_option filter.
+            if (class_exists(WPSEO_Taxonomy_Meta::class)) {
+                $all['wpseo_already_validated'] = true;
+            }
+            update_option('wpseo_taxonomy_meta', $all);
         }
-        update_option('wpseo_taxonomy_meta', $all);
 
         self::touchTerm($term);
     }
