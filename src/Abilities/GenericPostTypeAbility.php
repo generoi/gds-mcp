@@ -109,6 +109,7 @@ final class GenericPostTypeAbility
                     'lang' => ['type' => 'string', 'description' => 'Language code'],
                     'author' => ['type' => 'integer', 'description' => 'Author user ID'],
                     'seo' => ['type' => 'object', 'description' => 'Yoast SEO fields to set on the new post, same shape as gds/seo-update `fields` (title, description, …). Ignored when Yoast is not active.'],
+                    'fields' => self::acfFieldsSchema(),
                     'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link, edit_url and preview_url. Default: true. Pass false to get the whole post back; read it with gds/content-read instead when you need its content.', 'default' => true],
                 ],
                 'required' => ['type', 'title'],
@@ -133,10 +134,11 @@ final class GenericPostTypeAbility
                     'title' => ['type' => ['string', 'object']],
                     'content' => ['type' => ['string', 'object']],
                     'excerpt' => ['type' => ['string', 'object']],
-                    'status' => ['type' => 'string', 'enum' => ['draft', 'publish', 'private', 'pending', 'trash']],
+                    'status' => ['type' => 'string', 'enum' => ['draft', 'publish', 'private', 'pending'], 'description' => 'To trash a post, use gds/content-delete.'],
                     'slug' => ['type' => 'string'],
                     'featured_media' => ['type' => 'integer'],
                     'lang' => ['type' => 'string', 'description' => 'Language code (re-assigns Polylang language if set).'],
+                    'fields' => self::acfFieldsSchema(),
                     'quiet' => ['type' => 'boolean', 'description' => 'Return only id, status, modified, link, edit_url and preview_url. Default: true. Pass false to get the whole post back; read it with gds/content-read instead when you need its content.', 'default' => true],
                 ],
                 'required' => ['type', 'id'],
@@ -508,6 +510,20 @@ final class GenericPostTypeAbility
     public static function summary(array $data): array
     {
         return array_intersect_key($data, array_flip(['id', 'wp_id', 'status', 'modified', 'link', 'edit_url', 'preview_url', 'seo_error', 'fields_errors']));
+    }
+
+    /**
+     * The `fields` input of content-create and content-update.
+     *
+     * @return array<string, mixed>
+     */
+    private static function acfFieldsSchema(): array
+    {
+        return [
+            'type' => 'object',
+            'description' => 'ACF field values to set, keyed by field name or key (see gds/acf-fields), written with update_field(). Unregistered keys and values ACF refused come back in fields_errors, as does every key when ACF is not active.',
+            'additionalProperties' => true,
+        ];
     }
 
     /**

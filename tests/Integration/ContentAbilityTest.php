@@ -200,6 +200,21 @@ class ContentAbilityTest extends AbilityTestCase
         $this->assertSame('After Update', get_the_title($id));
     }
 
+    public function test_update_does_not_offer_trash_as_a_status(): void
+    {
+        $id = $this->createPost(['post_type' => 'page', 'post_status' => 'draft']);
+
+        $this->assertAbilityError('gds/content-update', ['type' => 'pages', 'id' => $id, 'status' => 'trash'], 'ability_invalid_input');
+        $this->assertSame('draft', get_post_status($id));
+    }
+
+    public function test_create_and_update_document_the_acf_fields_input(): void
+    {
+        foreach (['gds/content-create', 'gds/content-update'] as $name) {
+            $this->assertSame('object', wp_get_ability($name)->get_input_schema()['properties']['fields']['type'] ?? null, $name);
+        }
+    }
+
     // ── Delete ────────────────────────────────────────────────────
 
     public function test_delete_trashes_by_default(): void

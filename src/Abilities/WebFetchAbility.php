@@ -22,9 +22,11 @@ use WpOrg\Requests\Exception as RequestsException;
  *   ({@see RemoteClient}; exfiltration defense)
  *
  * Content negotiation:
- * - Sends `Accept: text/markdown, text/plain;q=0.9, text/html;q=0.8, * /*;q=0.1`
- *   so servers that support markdown output (e.g. Roots' SEO plugin) return
- *   markdown directly. Falls back to HTML → text conversion otherwise.
+ * - For format=markdown without xpath, sends `Accept: text/markdown,
+ *   text/plain;q=0.9, text/html;q=0.8, * /*;q=0.1` so servers that support
+ *   markdown output (e.g. Roots' SEO plugin) return markdown directly. Falls
+ *   back to HTML → text conversion otherwise.
+ * - Every other format, and any xpath, sends `Accept: text/html`.
  */
 final class WebFetchAbility
 {
@@ -69,7 +71,7 @@ final class WebFetchAbility
 
         HelpAbility::registerAbility('gds/web-fetch', [
             'label' => 'Fetch Web Page',
-            'description' => 'Fetch a URL and return its text content. Requests markdown via Accept header; falls back to HTML stripped to text. Blocks private IPs (SSRF-safe). Use for reading external pages, blog posts, competitor sites, docs, etc.',
+            'description' => 'Fetch a URL and return its text content. The default markdown format requests markdown via Accept header and falls back to HTML converted to markdown; the other formats and xpath request the HTML. Blocks private IPs (SSRF-safe). Use for reading external pages, blog posts, competitor sites, docs, etc.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -85,7 +87,7 @@ final class WebFetchAbility
                     ],
                     'xpath' => [
                         'type' => 'string',
-                        'description' => 'Optional XPath to narrow output to specific element(s). Concatenates outerHTML of all matches. Examples: "//footer//a" (all footer links), "//nav[@class=\'primary\']//li" (primary nav items), "//head/meta", "//main//h2", "//article//a[contains(@href, \'case/\')]".',
+                        'description' => 'Optional XPath to narrow output to specific element(s). Concatenates outerHTML of all matches. Errors when the URL does not return HTML. Examples: "//footer//a" (all footer links), "//nav[@class=\'primary\']//li" (primary nav items), "//head/meta", "//main//h2", "//article//a[contains(@href, \'case/\')]".',
                     ],
                     'max_length' => [
                         'type' => 'integer',
@@ -324,12 +326,16 @@ final class WebFetchAbility
         };
         add_action('requests-requests.before_request', $checkHop);
 
+        // Markdown is only wanted for format=markdown. The other formats and
+        // an XPath work on the HTML, which a site that serves markdown to
+        // agents would otherwise not send.
+        $wantsHtml = $format !== 'markdown' || $xpathExpr !== '';
+
         $response = PublicUrlGuard::guard(fn () => wp_safe_remote_get($url, [
             'timeout' => self::TIMEOUT,
             'redirection' => 3,
             'headers' => [
-                // Sites that serve markdown to agents would hide the <head>.
-                'Accept' => $format === 'meta'
+                'Accept' => $wantsHtml
                     ? 'text/html'
                     : 'text/markdown, text/plain;q=0.9, text/html;q=0.8, */*;q=0.1',
                 'User-Agent' => self::userAgent(),
@@ -370,6 +376,10 @@ final class WebFetchAbility
                 'final_url' => self::finalUrl($response, $url),
                 'status' => $status,
             ] + self::headMeta($body);
+        }
+
+        if ($xpathExpr !== '' && ! $isHtml) {
+            return new WP_Error('not_html', sprintf('xpath needs an HTML page, got %s. Fetch it without xpath.', $contentType ?: 'no content type'));
         }
 
         $title = '';

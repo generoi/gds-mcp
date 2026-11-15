@@ -27,32 +27,15 @@ Custom abilities (duplication, block patching, translations, etc.) handle operat
 
 ## Abilities
 
-### REST-Delegated CRUD (auto-registered for all post types and taxonomies)
+### REST-Delegated CRUD (all `show_in_rest` post types and taxonomies)
 
-Post types: `gds/{rest_base}-list`, `gds/{rest_base}-read`, `gds/{rest_base}-create`, `gds/{rest_base}-update`, `gds/{rest_base}-delete`
+| Abilities | Description |
+|-----------|-------------|
+| `gds/content-list`, `-read`, `-create`, `-update`, `-delete` | Any post type, picked with `type` (its REST base: `pages`, `posts`, `media`, `blocks`, `templates`, …). The list returns `{posts, total, pages}`; create and update take ACF values in `fields` |
+| `gds/terms-list`, `-read`, `-create`, `-update`, `-delete` | Any taxonomy, picked with `taxonomy` (its REST base: `categories`, `tags`, `menus`, …). The list returns `{terms, total, pages}` |
+| `gds/nav-menu-items-list`, `-read`, `-create`, `-update`, `-delete`, `-move`, `-reorder` | Menu items, with sibling positions handled server-side. Menus themselves are `gds/terms-list` with `taxonomy: menus` |
 
-| Post Type | Abilities |
-|-----------|-----------|
-| Pages | `gds/pages-list`, `gds/pages-read`, `gds/pages-create`, `gds/pages-update`, `gds/pages-delete` |
-| Posts | `gds/posts-list`, `gds/posts-read`, `gds/posts-create`, `gds/posts-update`, `gds/posts-delete` |
-| Media | `gds/media-list`, `gds/media-read`, `gds/media-create`, `gds/media-update`, `gds/media-delete` |
-| Patterns | `gds/blocks-list`, `gds/blocks-read`, `gds/blocks-create`, `gds/blocks-update`, `gds/blocks-delete` |
-| Templates | `gds/templates-list`, etc. |
-| Template Parts | `gds/template-parts-list`, etc. |
-| Menu Items | `gds/menu-items-list`, etc. |
-| Navigation | `gds/navigation-list`, etc. |
-| Custom types | Auto-registered for any `show_in_rest` post type |
-
-Taxonomies: `gds/{rest_base}-list`, `gds/{rest_base}-read`, `gds/{rest_base}-create`, `gds/{rest_base}-update`, `gds/{rest_base}-delete`
-
-| Taxonomy | Abilities |
-|----------|-----------|
-| Categories | `gds/categories-list`, `gds/categories-read`, etc. |
-| Tags | `gds/tags-list`, `gds/tags-read`, etc. |
-| Menus | `gds/menus-list`, `gds/menus-read`, etc. |
-| Custom taxonomies | Auto-registered for any `show_in_rest` taxonomy |
-
-All REST parameters pass through — use `_fields`, `search`, `per_page`, `page`, `slug`, `include`, `orderby`, `lang`, etc.
+Other REST parameters pass through — use `_fields`, `search`, `per_page`, `page`, `slug`, `include`, `orderby`, `lang`, etc.
 
 ### Custom Abilities (always available)
 
@@ -81,7 +64,7 @@ All REST parameters pass through — use `_fields`, `search`, `per_page`, `page`
 |---------|-----|-------------|
 | `gds/acf-fields` | `acf://fields` | ACF field groups with fields, types, and post type assignments |
 
-ACF fields are also included in REST responses for post types via the `acf` field.
+ACF fields are also included in REST responses for post types via the `acf` field, so `gds/content-read` returns them. Write them with the `fields` input of `gds/content-create` / `gds/content-update`.
 
 ### Polylang (when active)
 

@@ -33,13 +33,14 @@ final class GenericTaxonomyAbility
 
         HelpAbility::registerAbility('gds/terms-list', [
             'label' => 'List Terms',
-            'description' => "List taxonomy terms. Available taxonomies: {$taxDesc}.",
+            'description' => "List taxonomy terms. Returns {terms, total, pages}; results are paged (10 per page by default), so check pages and pass page to get the rest. Available taxonomies: {$taxDesc}.",
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
                     'taxonomy' => ['type' => 'string', 'enum' => $taxEnum, 'description' => 'Taxonomy to list'],
-                    'per_page' => ['type' => 'integer'],
+                    'per_page' => ['type' => 'integer', 'description' => 'Results per page (default 10, max 100)'],
+                    'page' => ['type' => 'integer', 'description' => 'Page number, from 1'],
                     'search' => ['type' => 'string'],
                     'orderby' => ['type' => 'string'],
                     'order' => ['type' => 'string', 'enum' => ['asc', 'desc']],
@@ -188,7 +189,17 @@ final class GenericTaxonomyAbility
 
         $response = self::restGet($route, $input);
 
-        return self::restResponseOrError($response);
+        if (self::isRestError($response)) {
+            return self::restErrorToWpError($response);
+        }
+
+        $headers = $response->get_headers();
+
+        return [
+            'terms' => self::restResponseData($response),
+            'total' => (int) ($headers['X-WP-Total'] ?? 0),
+            'pages' => (int) ($headers['X-WP-TotalPages'] ?? 0),
+        ];
     }
 
     /**

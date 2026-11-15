@@ -54,12 +54,12 @@ final class NavMenuItemsAbility
     {
         HelpAbility::registerAbility('gds/nav-menu-items-list', [
             'label' => 'List Menu Items',
-            'description' => 'List items in a nav menu, as a tree or flat list. Filter by parent_item_id to get direct children of a specific dropdown. Each item includes its `linked` info (the page/term/url it points to) and `position` (1-indexed rank among its siblings).',
+            'description' => 'List items in a nav menu, as a tree or flat list, drafts included (see each item\'s `status`). Filter by parent_item_id to get direct children of a specific dropdown. Each item includes its `linked` info (the page/term/url it points to) and `position` (1-indexed rank among its siblings, what -create and -move take). `menu_order` is the menu-wide sort key, not a position.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'properties' => [
-                    'menu_id' => ['type' => 'integer', 'description' => 'The nav_menu term ID. Use gds/terms-list?taxonomy=nav_menu to discover menus.'],
+                    'menu_id' => ['type' => 'integer', 'description' => 'The nav_menu term ID. Use gds/terms-list with taxonomy "menus" to discover menus.'],
                     'parent_item_id' => ['type' => 'integer', 'description' => 'Optional: filter to direct children of this menu item. 0 = only top-level items.'],
                     'tree' => ['type' => 'boolean', 'description' => 'Return nested tree (default true) vs flat list.', 'default' => true],
                 ],
@@ -102,7 +102,7 @@ final class NavMenuItemsAbility
                 ."\nUse `position` (1-indexed within the parent\'s children) to insert at a specific spot; "
                 .'siblings are shifted down automatically. Omit for append.'
                 ."\n\nMultilingual note: menu items have NO `lang` field — they inherit language from the menu they belong to. "
-                .'Each language has its own menu (discover them via gds/terms-list taxonomy=nav_menu). To add the same link to several languages, call this tool once per language menu with that language\'s translated page as `linked.post_id`.',
+                .'Each language has its own menu (discover them via gds/terms-list with taxonomy "menus"). To add the same link to several languages, call this tool once per language menu with that language\'s translated page as `linked.post_id`.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -115,7 +115,7 @@ final class NavMenuItemsAbility
                     'description' => ['type' => 'string'],
                     'target' => ['type' => 'string', 'enum' => ['', '_blank'], 'description' => 'Link target. Use "_blank" to open in a new tab.'],
                     'css_classes' => ['type' => 'array', 'items' => ['type' => 'string']],
-                    'status' => ['type' => 'string', 'enum' => ['publish', 'draft'], 'default' => 'publish'],
+                    'status' => ['type' => 'string', 'enum' => ['publish', 'draft'], 'default' => 'publish', 'description' => 'A draft item keeps its place in the menu but is not shown on the site until published.'],
                 ],
                 'required' => ['menu_id', 'title', 'linked'],
             ],
@@ -254,12 +254,22 @@ final class NavMenuItemsAbility
         $tree = $input['tree'] ?? true;
         $parentFilter = array_key_exists('parent_item_id', $input) ? (int) $input['parent_item_id'] : null;
 
-        $items = wp_get_nav_menu_items($menuId);
+        // Stored orders (see shiftOrder), drafts included.
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT, 'post_status' => 'any']);
         if ($items === false) {
             return new WP_Error('menu_not_found', "No menu found with ID {$menuId}.");
         }
 
-        $transformed = array_map([self::class, 'transformItem'], $items);
+        usort($items, fn ($a, $b) => $a->menu_order <=> $b->menu_order);
+        $positions = [];
+        $siblingCounts = [];
+        foreach ($items as $item) {
+            $parent = (int) $item->menu_item_parent;
+            $siblingCounts[$parent] = ($siblingCounts[$parent] ?? 0) + 1;
+            $positions[(int) $item->ID] = $siblingCounts[$parent];
+        }
+
+        $transformed = array_map(fn ($item) => self::transformItem($item, $positions[(int) $item->ID]), $items);
 
         if ($parentFilter !== null) {
             $transformed = array_values(array_filter($transformed, fn ($i) => $i['parent_item_id'] === $parentFilter));
@@ -320,6 +330,9 @@ final class NavMenuItemsAbility
         $restFields = self::linkedToRestFields($input['linked']);
         if ($restFields instanceof WP_Error) {
             return $restFields;
+        }
+        if ($error = self::destinationError($menuId, $parentItemId)) {
+            return $error;
         }
 
         $targetOrder = self::computeTargetOrder($menuId, $parentItemId, $position);
@@ -437,7 +450,7 @@ final class NavMenuItemsAbility
 
         // Its neighbours in the menu, so an undo can put it back between them
         // even after other items have moved.
-        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT]) ?: [];
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT, 'post_status' => 'any']) ?: [];
         usort($items, fn ($a, $b) => $a->menu_order <=> $b->menu_order);
         $ids = array_map(fn ($item) => (int) $item->ID, $items);
         $index = array_search($id, $ids, true);
@@ -502,12 +515,16 @@ final class NavMenuItemsAbility
             ? (int) $input['parent_item_id']
             : ($newMenuId === $currentMenuId ? $currentParentId : 0);
 
+        if ($error = self::destinationError($newMenuId, $newParentId, $id)) {
+            return $error;
+        }
+
         // Capture, BEFORE any mutation, the moved item plus every item in the
         // source and destination menus — shiftOrder re-numbers all of them and
         // the move also changes the item's menu term, parent meta and order.
         $affectedIds = [$id];
         foreach ([$currentMenuId, $newMenuId] as $menuToCapture) {
-            foreach ((array) (wp_get_nav_menu_items($menuToCapture) ?: []) as $sibling) {
+            foreach ((array) (wp_get_nav_menu_items($menuToCapture, ['post_status' => 'any']) ?: []) as $sibling) {
                 $affectedIds[] = (int) $sibling->ID;
             }
         }
@@ -730,9 +747,10 @@ final class NavMenuItemsAbility
     /**
      * Convert REST item / setup'd menu item object to our `linked` + flat response format.
      *
+     * @param  int|null  $position  The item's 1-indexed rank among its siblings; looked up when null.
      * @return array<string, mixed>
      */
-    private static function transformItem(mixed $item): array
+    private static function transformItem(mixed $item, ?int $position = null): array
     {
         $item = is_array($item) ? $item : json_decode(json_encode($item), true);
 
@@ -773,11 +791,19 @@ final class NavMenuItemsAbility
             ],
         };
 
+        if ($position === null) {
+            $siblingIds = array_map(fn ($s) => (int) $s->ID, self::getSiblings($menuId, $parentId));
+            $index = array_search($id, $siblingIds, true);
+            $position = $index === false ? 0 : $index + 1;
+        }
+
         return [
             'id' => $id,
             'title' => $title,
+            'status' => (string) ($item['status'] ?? $item['post_status'] ?? ''),
             'menu_id' => $menuId,
             'parent_item_id' => $parentId,
+            'position' => $position,
             'menu_order' => (int) ($item['menu_order'] ?? 0),
             'linked' => $linked,
             'url' => $item['url'] ?? '',
@@ -849,7 +875,7 @@ final class NavMenuItemsAbility
     private static function getSiblings(int $menuId, int $parentItemId, int $excludeId = 0): array
     {
         // Stored menu_order, as shiftOrder() works with (see there).
-        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT]);
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT, 'post_status' => 'any']);
         if (! $items) {
             return [];
         }
@@ -876,8 +902,10 @@ final class NavMenuItemsAbility
 
         // OBJECT output: the default (ARRAY_A) renumbers menu_order to each
         // item's position, which differs from the stored order as soon as a
-        // delete leaves a gap, and the shift would then skip items.
-        $items = wp_get_nav_menu_items($menuId, ['update_post_term_cache' => false, 'output' => OBJECT]);
+        // delete leaves a gap, and the shift would then skip items. Drafts
+        // hold a place in the order too (wp_get_nav_menu_items() defaults to
+        // published items only).
+        $items = wp_get_nav_menu_items($menuId, ['update_post_term_cache' => false, 'output' => OBJECT, 'post_status' => 'any']);
         if (! $items) {
             return;
         }
@@ -894,12 +922,42 @@ final class NavMenuItemsAbility
 
     private static function maxMenuOrder(int $menuId): int
     {
-        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT]);
+        $items = wp_get_nav_menu_items($menuId, ['output' => OBJECT, 'post_status' => 'any']);
         if (! $items) {
             return 0;
         }
 
         return (int) max(array_map(fn ($i) => (int) $i->menu_order, $items));
+    }
+
+    /**
+     * Why an item cannot go under $parentId in $menuId, if it can't: the menu
+     * must exist, and the parent must be an item of that menu other than the
+     * moved item and its own sub-items.
+     */
+    private static function destinationError(int $menuId, int $parentId, int $itemId = 0): ?WP_Error
+    {
+        if (! wp_get_nav_menu_object($menuId)) {
+            return new WP_Error('menu_not_found', "No menu found with ID {$menuId}. Use gds/terms-list with taxonomy \"menus\" to find menus.");
+        }
+        if ($parentId === 0) {
+            return null;
+        }
+
+        $parent = get_post($parentId);
+        if (! $parent || $parent->post_type !== 'nav_menu_item' || self::getMenuIdForItem($parentId) !== $menuId) {
+            return new WP_Error('invalid_parent_item', "Menu item {$parentId} is not an item of menu {$menuId}. Use gds/nav-menu-items-list to find its items, or 0 for the top level.");
+        }
+
+        // Walk up from the new parent: reaching the item would make it its own ancestor.
+        for ($ancestor = $parentId, $depth = 0; $itemId && $ancestor && $depth < 100; $depth++) {
+            if ($ancestor === $itemId) {
+                return new WP_Error('invalid_parent_item', "Menu item {$itemId} cannot go under itself or one of its own sub-items.");
+            }
+            $ancestor = (int) get_post_meta($ancestor, '_menu_item_menu_item_parent', true);
+        }
+
+        return null;
     }
 
     private static function getMenuIdForItem(int $itemId): int

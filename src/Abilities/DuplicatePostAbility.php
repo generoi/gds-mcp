@@ -93,6 +93,10 @@ final class DuplicatePostAbility
             return new WP_Error('forbidden', 'You do not have permission to publish posts of this type.', ['status' => 403]);
         }
 
+        if (! empty($input['lang']) && self::polylangAvailable() && ($langError = self::validateLanguage((string) $input['lang']))) {
+            return $langError;
+        }
+
         // wp_insert_post() unslashes its input; slash so serialized block
         // attributes keep their backslashes.
         $newId = wp_insert_post(wp_slash([

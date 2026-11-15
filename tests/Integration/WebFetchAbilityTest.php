@@ -91,6 +91,48 @@ HTML;
     }
 
     /**
+     * @return array<string, array{array<string, string>}>
+     */
+    public static function htmlInputs(): array
+    {
+        return [
+            'html' => [['format' => 'html']],
+            'text' => [['format' => 'text']],
+            'markdown with xpath' => [['xpath' => '//p']],
+        ];
+    }
+
+    /**
+     * @dataProvider htmlInputs
+     *
+     * @param  array<string, string>  $input
+     */
+    public function test_html_formats_and_xpath_ask_for_html(array $input): void
+    {
+        $this->assertAbilitySuccess('gds/web-fetch', ['url' => 'https://example.com/'] + $input);
+
+        $this->assertSame('text/html', $this->requestArgs['headers']['Accept']);
+    }
+
+    public function test_markdown_format_asks_for_markdown_first(): void
+    {
+        $this->assertAbilitySuccess('gds/web-fetch', ['url' => 'https://example.com/']);
+
+        $this->assertStringStartsWith('text/markdown', $this->requestArgs['headers']['Accept']);
+    }
+
+    public function test_xpath_on_a_page_that_is_not_html_is_an_error(): void
+    {
+        $markdown = fn () => ['headers' => ['content-type' => 'text/markdown'], 'body' => "# Title\n\nBody", 'response' => ['code' => 200, 'message' => 'OK'], 'cookies' => [], 'filename' => null];
+        add_filter('pre_http_request', $markdown, 20);
+
+        $error = $this->assertAbilityError('gds/web-fetch', ['url' => 'https://example.com/', 'xpath' => '//p']);
+
+        remove_filter('pre_http_request', $markdown, 20);
+        $this->assertSame('not_html', $error->get_error_code());
+    }
+
+    /**
      * @return array<string, array{string}>
      */
     public static function nonPublicLiteralUrls(): array
