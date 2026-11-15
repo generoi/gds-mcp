@@ -684,6 +684,16 @@ class UndoRoundTripTest extends AbilityTestCase
         }
     }
 
+    /** strings-update takes only strings a theme or plugin registered. */
+    private function requireReadMoreString(): void
+    {
+        $this->requirePolylang();
+        if (! function_exists('pll_register_string') || ! class_exists('PLL_Admin_Strings')) {
+            $this->markTestSkipped('Polylang string registration is not available.');
+        }
+        pll_register_string('gds_undo_read_more', 'Read more', 'GDS MCP Tests');
+    }
+
     public function test_translations_create_round_trip(): void
     {
         $this->requirePolylang();
@@ -727,14 +737,14 @@ class UndoRoundTripTest extends AbilityTestCase
 
     public function test_strings_update_round_trip(): void
     {
-        $this->requirePolylang();
-        // The string table lives on a polylang_mo post per language.
+        $this->requireReadMoreString();
+        // The string table lives on the language term's meta.
         $this->assertRoundTrip('gds/strings-update', ['string' => 'Read more', 'lang' => 'fi', 'translation' => 'Lue lisää']);
     }
 
     public function test_strings_update_round_trip_over_an_existing_translation(): void
     {
-        $this->requirePolylang();
+        $this->requireReadMoreString();
         $this->assertAbilitySuccess('gds/strings-update', ['string' => 'Read more', 'lang' => 'fi', 'translation' => 'Lue lisää']);
 
         $this->assertRoundTrip('gds/strings-update', ['string' => 'Read more', 'lang' => 'fi', 'translation' => 'Lisää']);
@@ -742,7 +752,7 @@ class UndoRoundTripTest extends AbilityTestCase
 
     public function test_strings_update_undo_is_refused_once_the_translation_changed_again(): void
     {
-        $this->requirePolylang();
+        $this->requireReadMoreString();
         $first = $this->assertAbilitySuccess('gds/strings-update', ['string' => 'Read more', 'lang' => 'fi', 'translation' => 'Lue lisää']);
         $this->assertAbilitySuccess('gds/strings-update', ['string' => 'Read more', 'lang' => 'fi', 'translation' => 'Lisää']);
 
