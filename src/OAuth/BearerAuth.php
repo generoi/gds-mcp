@@ -37,6 +37,14 @@ final class BearerAuth
     }
 
     /**
+     * Whether a bearer token authenticated the current request.
+     */
+    public static function authenticated(): bool
+    {
+        return self::$audience !== null;
+    }
+
+    /**
      * @param  int|false  $user  User id resolved so far.
      * @return int|false
      */

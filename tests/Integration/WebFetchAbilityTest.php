@@ -38,6 +38,7 @@ HTML;
     protected function tearDown(): void
     {
         remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        unset($GLOBALS['wp_rest_application_password_uuid']);
         if (is_resource($this->listener)) {
             proc_terminate($this->listener);
             proc_close($this->listener);
@@ -352,6 +353,41 @@ HTML;
         } finally {
             RedirectingTransport::uninstall();
             self::setResolver(null);
+        }
+
+        $this->assertSame(['https://93.184.216.34/'], RedirectingTransport::$requested, 'The redirect target is never requested.');
+    }
+
+    public function test_a_remote_client_needs_allowed_hosts(): void
+    {
+        $GLOBALS['wp_rest_application_password_uuid'] = wp_generate_uuid4();
+
+        // Nothing to approve the URL over MCP, so no allowlist means no fetch.
+        $this->assertAbilityError('gds/web-fetch', ['url' => 'https://example.com/'], 'web_fetch_not_configured');
+        $this->assertSame([], $this->requestArgs, 'No request is made.');
+
+        add_filter('gds-mcp/web_fetch_allowed_hosts', fn () => ['example.com']);
+        $this->assertAbilityError('gds/web-fetch', ['url' => 'https://example.org/?d=secret'], 'host_not_allowed');
+        $this->assertSame([], $this->requestArgs, 'No request is made.');
+
+        $this->assertAbilitySuccess('gds/web-fetch', ['url' => 'https://example.com/', 'format' => 'meta']);
+    }
+
+    public function test_gds_assistant_needs_no_allowed_hosts(): void
+    {
+        $this->assertAbilitySuccess('gds/web-fetch', ['url' => 'https://example.com/', 'format' => 'meta']);
+    }
+
+    public function test_a_redirect_off_the_allowed_hosts_is_refused(): void
+    {
+        remove_filter('pre_http_request', [$this, 'fakeResponse'], 10);
+        add_filter('gds-mcp/web_fetch_allowed_hosts', fn () => ['93.184.216.34']);
+        RedirectingTransport::install('https://93.184.216.35/?d=secret');
+
+        try {
+            $this->assertAbilityError('gds/web-fetch', ['url' => 'https://93.184.216.34/'], 'host_not_allowed');
+        } finally {
+            RedirectingTransport::uninstall();
         }
 
         $this->assertSame(['https://93.184.216.34/'], RedirectingTransport::$requested, 'The redirect target is never requested.');

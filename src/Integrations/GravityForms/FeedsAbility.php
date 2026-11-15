@@ -17,6 +17,18 @@ final class FeedsAbility
 {
     use Reversible;
 
+    /**
+     * What a secret feed setting reads as. Sent back unchanged to
+     * feeds-create/update, it keeps the stored value.
+     */
+    public const MASK = '********';
+
+    private const MASKED_SCHEMA = [
+        'type' => 'array',
+        'items' => ['type' => 'string'],
+        'description' => 'Meta keys whose value is a secret (an API key or the like) and reads as "'.self::MASK.'". Send that mask back unchanged to keep the stored value.',
+    ];
+
     public static function register(): void
     {
         $instance = new self;
@@ -34,7 +46,7 @@ final class FeedsAbility
                 ],
                 'additionalProperties' => true,
             ],
-            'output_schema' => ['type' => 'array', 'items' => ['type' => 'object', 'additionalProperties' => true]],
+            'output_schema' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['masked' => self::MASKED_SCHEMA], 'additionalProperties' => true]],
             'permission_callback' => '__return_true',
             'execute_callback' => [$instance, 'listFeeds'],
             'meta' => ['annotations' => ['readonly' => true, 'destructive' => false, 'idempotent' => true]],
@@ -50,7 +62,7 @@ final class FeedsAbility
                 'required' => ['id'],
                 'additionalProperties' => true,
             ],
-            'output_schema' => ['type' => 'object', 'additionalProperties' => true],
+            'output_schema' => ['type' => 'object', 'properties' => ['masked' => self::MASKED_SCHEMA], 'additionalProperties' => true],
             'permission_callback' => '__return_true',
             'execute_callback' => [$instance, 'readFeed'],
             'meta' => ['annotations' => ['readonly' => true, 'destructive' => false, 'idempotent' => true]],
@@ -65,7 +77,7 @@ final class FeedsAbility
                 'properties' => [
                     'form_id' => ['type' => 'integer', 'description' => 'The form this feed belongs to.'],
                     'addon_slug' => ['type' => 'string', 'description' => 'The addon slug (e.g. gravityformsactivecampaign, gravityformswebhooks).'],
-                    'meta' => ['type' => 'object', 'description' => 'Addon-specific feed configuration.', 'additionalProperties' => true],
+                    'meta' => ['type' => 'object', 'description' => 'Addon-specific feed configuration. A secret setting given as "'.self::MASK.'" is left unset.', 'additionalProperties' => true],
                     'is_active' => ['type' => 'boolean', 'description' => 'Whether the feed is active. Defaults to true.'],
                     'feed_order' => ['type' => 'integer', 'description' => 'Execution order among feeds for the same form.'],
                 ],
@@ -86,7 +98,7 @@ final class FeedsAbility
                 'type' => 'object',
                 'properties' => [
                     'id' => ['type' => 'integer', 'description' => 'The feed ID to update.'],
-                    'meta' => ['type' => 'object', 'description' => 'Meta keys to change, merged into the existing meta by top-level key.', 'additionalProperties' => true],
+                    'meta' => ['type' => 'object', 'description' => 'Meta keys to change, merged into the existing meta by top-level key. A secret setting sent back as "'.self::MASK.'" keeps its stored value.', 'additionalProperties' => true],
                     'is_active' => ['type' => 'boolean'],
                     'feed_order' => ['type' => 'integer'],
                     'form_id' => ['type' => 'integer', 'description' => 'Move the feed to a different form.'],
@@ -166,7 +178,7 @@ final class FeedsAbility
             return $feeds;
         }
 
-        return json_decode(json_encode($feeds), true) ?: [];
+        return array_map([self::class, 'masked'], json_decode(json_encode($feeds), true) ?: []);
     }
 
     /**
@@ -193,7 +205,7 @@ final class FeedsAbility
             return new WP_Error('feed_not_found', "Feed {$id} not found.");
         }
 
-        return json_decode(json_encode($feed), true) ?: [];
+        return self::masked(json_decode(json_encode($feed), true) ?: []);
     }
 
     /**
@@ -220,7 +232,7 @@ final class FeedsAbility
             return new WP_Error('invalid_meta', 'meta must be an object/array.');
         }
 
-        $result = \GFAPI::add_feed($formId, $meta, $addonSlug);
+        $result = \GFAPI::add_feed($formId, self::withoutMask($meta), $addonSlug);
         if (is_wp_error($result)) {
             return $result;
         }
@@ -240,7 +252,7 @@ final class FeedsAbility
             return $saved;
         }
 
-        $result = json_decode(json_encode($saved), true) ?: [];
+        $result = self::masked(json_decode(json_encode($saved), true) ?: []);
 
         return $this->reversible($result, 'delete-feed', ['feed_id' => $feedId], 'Delete the created feed');
     }
@@ -272,7 +284,7 @@ final class FeedsAbility
         // Capture the prior state before mutating so the change can be reverted.
         $undo = [
             'feed_id' => $id,
-            'meta' => $existing['meta'],
+            'meta' => self::sealedMeta((array) $existing['meta'], (string) $existing['addon_slug']),
             'form_id' => (int) $existing['form_id'],
             'is_active' => (int) $existing['is_active'],
             'feed_order' => (int) $existing['feed_order'],
@@ -288,7 +300,8 @@ final class FeedsAbility
             // passing the target form id to move a feed just makes the lookup
             // fail. Always update meta without form_id, then move separately.
             // update_feed() replaces the whole meta, so merge in what is kept.
-            $result = \GFAPI::update_feed($id, array_merge((array) $existing['meta'], $meta));
+            // A secret sent back as the mask keeps what is stored.
+            $result = \GFAPI::update_feed($id, array_merge((array) $existing['meta'], self::withoutMask($meta)));
             if (is_wp_error($result)) {
                 return $result;
             }
@@ -329,9 +342,90 @@ final class FeedsAbility
             }
         }
 
-        $result = json_decode(json_encode($saved), true) ?: [];
+        $result = self::masked(json_decode(json_encode($saved), true) ?: []);
 
         return $this->reversible($result, 'restore-feed', $undo, 'Revert the feed changes');
+    }
+
+    /**
+     * Feed meta for an undo snapshot, with the fields the add-on encrypts
+     * (API keys and the like) encrypted again. GFAPI::get_feed() decrypts
+     * them, and the snapshot is kept in gds-assistant's audit log. Restoring
+     * goes through GFAPI::update_feed()/add_feed(), which leave a value that
+     * is already encrypted as it is.
+     *
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private static function sealedMeta(array $meta, string $addonSlug): array
+    {
+        return method_exists('GFAPI', 'encrypt_feed_meta')
+            ? (array) \GFAPI::encrypt_feed_meta($meta, $addonSlug)
+            : $meta;
+    }
+
+    /**
+     * Meta keys of an add-on's secret settings: those Gravity Forms encrypts,
+     * plus any the `gds-mcp/feed_secret_fields` filter adds.
+     *
+     * @return list<string>
+     */
+    private static function secretFields(string $addonSlug): array
+    {
+        $fields = [];
+        if (! class_exists('GFAddOn') && class_exists('GFCommon')) {
+            require_once \GFCommon::get_base_path().'/includes/addon/class-gf-addon.php';
+        }
+        if (class_exists('GFAddOn')) {
+            $addon = \GFAddOn::get_addon_by_slug($addonSlug);
+            if (is_object($addon) && method_exists($addon, 'get_fields_to_encrypt')) {
+                $fields = (array) $addon->get_fields_to_encrypt();
+            }
+        }
+
+        /**
+         * @param  string[]  $fields
+         * @param  string  $addonSlug
+         */
+        $fields = (array) apply_filters('gds-mcp/feed_secret_fields', $fields, $addonSlug);
+
+        return array_values(array_unique(array_map('strval', $fields)));
+    }
+
+    /**
+     * A feed as returned to the caller: secret settings that have a value
+     * read as {@see self::MASK}, and `masked` lists their keys. The caller
+     * may be a remote client; it has no use for an API key.
+     *
+     * @param  array<string, mixed>  $feed
+     * @return array<string, mixed>
+     */
+    private static function masked(array $feed): array
+    {
+        $masked = [];
+        if (isset($feed['meta']) && is_array($feed['meta'])) {
+            foreach (self::secretFields((string) ($feed['addon_slug'] ?? '')) as $key) {
+                if (isset($feed['meta'][$key]) && $feed['meta'][$key] !== '') {
+                    $feed['meta'][$key] = self::MASK;
+                    $masked[] = $key;
+                }
+            }
+        }
+        $feed['masked'] = $masked;
+
+        return $feed;
+    }
+
+    /**
+     * Incoming meta without values that are the mask, so a secret read back
+     * from feeds-read and sent unchanged is never written over.
+     *
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private static function withoutMask(array $meta): array
+    {
+        return array_filter($meta, static fn ($value): bool => $value !== self::MASK);
     }
 
     /**
@@ -356,7 +450,7 @@ final class FeedsAbility
         $undo = (! is_wp_error($feed) && is_array($feed)) ? [
             'form_id' => (int) $feed['form_id'],
             'addon_slug' => $feed['addon_slug'],
-            'meta' => $feed['meta'],
+            'meta' => self::sealedMeta((array) $feed['meta'], (string) $feed['addon_slug']),
             'is_active' => (int) $feed['is_active'],
             'feed_order' => (int) $feed['feed_order'],
         ] : null;
@@ -427,7 +521,7 @@ final class FeedsAbility
             }
 
             $saved = \GFAPI::get_feed((int) $newId);
-            $created[] = is_wp_error($saved) ? ['id' => (int) $newId, 'form_id' => $targetFormId] : json_decode(json_encode($saved), true);
+            $created[] = is_wp_error($saved) ? ['id' => (int) $newId, 'form_id' => $targetFormId] : self::masked(json_decode(json_encode($saved), true));
         }
 
         $result = ['source_id' => $sourceId, 'created' => $created];

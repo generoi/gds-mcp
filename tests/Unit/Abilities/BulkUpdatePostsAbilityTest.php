@@ -290,4 +290,32 @@ class BulkUpdatePostsAbilityTest extends WP_UnitTestCase
             $this->assertSame(1, $result['matched'], "limit {$limit}");
         }
     }
+
+    public function test_privacy_requests_cannot_be_listed_or_changed(): void
+    {
+        wp_set_current_user(self::factory()->user->create(['role' => 'editor']));
+        $request = self::factory()->post->create(['post_type' => 'user_request', 'post_title' => 'someone@example.com', 'post_status' => 'request-pending']);
+
+        $byType = (new BulkUpdatePostsAbility)->execute(['post_type' => 'user_request', 'status' => 'request-pending', 'set_meta' => ['x' => '1'], 'dry_run' => true]);
+        $this->assertWPError($byType);
+        $this->assertSame('invalid_post_type', $byType->get_error_code());
+
+        $byStatus = (new BulkUpdatePostsAbility)->execute(['post_type' => 'post', 'status' => 'publish,request-pending', 'set_meta' => ['x' => '1'], 'dry_run' => true]);
+        $this->assertWPError($byStatus);
+        $this->assertSame('invalid_status', $byStatus->get_error_code());
+
+        $byId = (new BulkUpdatePostsAbility)->execute(['post_ids' => [$request], 'set_status' => 'draft']);
+        $this->assertWPError($byId);
+        $this->assertSame('no_posts_found', $byId->get_error_code());
+        $this->assertSame('request-pending', get_post_status($request));
+    }
+
+    public function test_drafts_can_still_be_queried(): void
+    {
+        $draft = self::factory()->post->create(['post_status' => 'draft']);
+
+        $result = (new BulkUpdatePostsAbility)->execute(['post_type' => 'post', 'status' => 'draft', 'set_meta' => ['x' => '1'], 'dry_run' => true]);
+
+        $this->assertSame([$draft], array_column($result['posts'], 'id'));
+    }
 }

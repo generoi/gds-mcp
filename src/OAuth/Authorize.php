@@ -279,7 +279,9 @@ final class Authorize
             .esc_html__('Anything your account can do, until you revoke it under Users → MCP connections.', 'gds-mcp')
             .'</dd>'
             .'<dt>'.esc_html__('Sends you back to', 'gds-mcp').'</dt>'
-            .'<dd><span class="uri">'.esc_html($redirectUri).'</span></dd>'
+            // The host first and large: it, not the name, says who gets access.
+            .'<dd><span class="host">'.esc_html((string) wp_parse_url($redirectUri, PHP_URL_HOST)).'</span>'
+            .'<br><span class="uri">'.esc_html($redirectUri).'</span></dd>'
             .'</dl>'
             .'<form method="post" action="'.esc_url(Server::endpoint('authorize')).'">'
             .$hidden
@@ -312,6 +314,7 @@ final class Authorize
             .'h1{font-size:1.3rem;margin:0 0 1rem}.lead{margin:0 0 1.25rem}'
             .'dl{margin:0 0 1.5rem;font-size:.875rem}dt{color:#646970;margin-top:.75rem}'
             .'dd{margin:.15rem 0 0;font-weight:600}'
+            .'.host{font-size:1.25rem;overflow-wrap:anywhere}'
             .'.uri{overflow-wrap:anywhere;font-weight:400;font-family:ui-monospace,monospace}'
             .'button{font:inherit;padding:.5rem 1rem;border-radius:3px;border:1px solid #2271b1;'
             .'background:#f6f7f7;color:#2271b1;cursor:pointer}'

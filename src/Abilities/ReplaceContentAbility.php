@@ -269,7 +269,8 @@ final class ReplaceContentAbility
                 continue;
             }
             if (! current_user_can('edit_post', $postId)) {
-                $perPost[] = ['id' => $postId, 'title' => $post->post_title, 'error' => 'forbidden'];
+                // No title: the caller may not even read this post.
+                $perPost[] = ['id' => $postId, 'error' => 'forbidden'];
 
                 continue;
             }

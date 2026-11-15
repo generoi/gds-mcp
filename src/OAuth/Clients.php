@@ -79,15 +79,21 @@ final class Clients
             throw Server::error('invalid_client_metadata', 'Request body must be a JSON object.');
         }
 
-        $redirectUris = array_values(array_filter(
-            array_map('strval', (array) ($body['redirect_uris'] ?? [])),
-            [self::class, 'isAllowedRedirectUri']
-        ));
+        $requested = array_map('strval', (array) ($body['redirect_uris'] ?? []));
+        $redirectUris = array_values(array_filter($requested, [self::class, 'isAllowedRedirectUri']));
 
         if ($redirectUris === []) {
+            // Name the refused hosts, so whoever sets up a new client can see
+            // what to add to GDS_MCP_OAUTH_REDIRECT_HOSTS.
+            $hosts = array_unique(array_filter(array_map(
+                static fn (string $uri): string => strtolower((string) wp_parse_url($uri, PHP_URL_HOST)),
+                $requested
+            )));
+
             throw Server::error(
                 'invalid_redirect_uri',
-                'At least one https:// or loopback redirect_uri is required.'
+                'At least one redirect_uri must be loopback or https on a host this site allows'
+                .($hosts ? ' (refused: '.implode(', ', $hosts).')' : '').'.'
             );
         }
 
@@ -139,6 +145,12 @@ final class Clients
      */
     public static function matchRedirectUri(array $client, string $redirectUri): bool
     {
+        // Checked again here, so a client registered before its host was
+        // taken off the list cannot be authorized any more.
+        if (! self::isAllowedRedirectUri($redirectUri)) {
+            return false;
+        }
+
         foreach ($client['redirect_uris'] as $registered) {
             if (hash_equals($registered, $redirectUri)) {
                 return true;
@@ -170,7 +182,77 @@ final class Clients
             return false;
         }
 
-        return $parts['scheme'] === 'https' || self::isLoopback($uri);
+        // A loopback callback lands on the person's own machine, so it cannot
+        // carry a code to anyone else.
+        if (self::isLoopback($uri)) {
+            return true;
+        }
+
+        return $parts['scheme'] === 'https' && self::isAllowedRedirectHost($parts['host']);
+    }
+
+    /**
+     * Callback hosts of the MCP clients known to work with this server.
+     * Registration is open to anyone, and the consent screen shows whatever
+     * name a client picked, so without this list anyone could register as
+     * "Microsoft Copilot" with their own callback and collect a token from
+     * one consent click.
+     */
+    public const DEFAULT_REDIRECT_HOSTS = [
+        // Claude: claude.ai, Desktop and mobile. Claude Code uses loopback.
+        'claude.ai',
+        'claude.com',
+        // ChatGPT connectors.
+        'chatgpt.com',
+        // Microsoft Copilot Studio (global.consent.azure-apim.net and the
+        // regional hosts).
+        '*.consent.azure-apim.net',
+        // Microsoft 365 Copilot agents.
+        'teams.microsoft.com',
+        // VS Code, GitHub Copilot's MCP client, when not on loopback.
+        'vscode.dev',
+    ];
+
+    /**
+     * The https hosts a client may register a callback on: the
+     * GDS_MCP_OAUTH_REDIRECT_HOSTS constant (an array or a comma-separated
+     * string) in place of the defaults, then the
+     * `gds-mcp/oauth_redirect_hosts` filter. An entry is a host, or
+     * `*.example.com` for its subdomains.
+     *
+     * @return list<string>
+     */
+    public static function redirectHosts(): array
+    {
+        $hosts = defined('GDS_MCP_OAUTH_REDIRECT_HOSTS') ? constant('GDS_MCP_OAUTH_REDIRECT_HOSTS') : self::DEFAULT_REDIRECT_HOSTS;
+        if (is_string($hosts)) {
+            $hosts = explode(',', $hosts);
+        }
+
+        /**
+         * @param  string[]  $hosts
+         */
+        $hosts = (array) apply_filters('gds-mcp/oauth_redirect_hosts', (array) $hosts);
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($host): string => strtolower(trim((string) $host)),
+            $hosts
+        ))));
+    }
+
+    private static function isAllowedRedirectHost(string $host): bool
+    {
+        $host = strtolower($host);
+        foreach (self::redirectHosts() as $allowed) {
+            if ($allowed === $host) {
+                return true;
+            }
+            if (str_starts_with($allowed, '*.') && str_ends_with($host, substr($allowed, 1))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function isLoopback(string $uri): bool

@@ -3,6 +3,7 @@
 namespace GeneroWP\MCP\Tests\Unit\Abilities;
 
 use GeneroWP\MCP\Abilities\MailSendAbility;
+use WP\MCP\Core\McpAdapter;
 use WP_UnitTestCase;
 
 class MailSendAbilityTest extends WP_UnitTestCase
@@ -33,6 +34,39 @@ class MailSendAbilityTest extends WP_UnitTestCase
         $third = MailSendAbility::execute(['to' => ['last@example.com'], 'subject' => 'Hi', 'body' => 'Hello']);
         $this->assertWPError($third);
         $this->assertSame('daily_limit_reached', $third->get_error_code());
+    }
+
+    protected function tearDown(): void
+    {
+        unset($GLOBALS['wp']->query_vars['rest_route'], $GLOBALS['wp_rest_application_password_uuid']);
+        parent::tearDown();
+    }
+
+    public function test_an_mcp_client_cannot_send(): void
+    {
+        $servers = class_exists(McpAdapter::class) ? McpAdapter::instance()->get_servers() : [];
+        if (! $servers) {
+            $this->markTestSkipped('No MCP servers registered.');
+        }
+        $server = reset($servers);
+        $GLOBALS['wp']->query_vars['rest_route'] = '/'.$server->get_server_route_namespace().'/'.$server->get_server_route();
+
+        $result = MailSendAbility::execute(['to' => ['someone@example.com'], 'subject' => 'Hi', 'body' => 'Hello']);
+
+        $this->assertWPError($result);
+        $this->assertSame('not_available_remotely', $result->get_error_code());
+        $this->assertFalse(tests_retrieve_phpmailer_instance()->get_sent(), 'Nothing is sent.');
+    }
+
+    public function test_an_application_password_cannot_send(): void
+    {
+        // Core's /wp-abilities/v1 routes are reachable with one too.
+        $GLOBALS['wp_rest_application_password_uuid'] = wp_generate_uuid4();
+
+        $result = MailSendAbility::execute(['to' => ['someone@example.com'], 'subject' => 'Hi', 'body' => 'Hello']);
+
+        $this->assertWPError($result);
+        $this->assertSame('not_available_remotely', $result->get_error_code());
     }
 
     public function test_one_email_may_not_have_more_than_ten_recipients(): void

@@ -291,7 +291,12 @@ final class BulkUpdatePostsAbility
             $ids = array_map('intval', $input['post_ids']);
             $ids = array_slice($ids, 0, $limit);
 
-            $posts = array_filter(array_map('get_post', $ids));
+            // Only the types the content-* tools expose: a privacy request
+            // (user_request) is a post an editor may otherwise edit.
+            $posts = array_filter(
+                array_map('get_post', $ids),
+                fn ($post) => $post && ContentPostTypes::allows($post->post_type)
+            );
             if (empty($posts)) {
                 return new WP_Error('no_posts_found', 'None of the specified post IDs exist.');
             }
@@ -303,10 +308,17 @@ final class BulkUpdatePostsAbility
         if (empty($input['post_type'])) {
             return new WP_Error('missing_filter', 'Provide post_ids or post_type to identify target posts.');
         }
+        if (! is_string($input['post_type']) || ! ContentPostTypes::allows($input['post_type'])) {
+            return new WP_Error('invalid_post_type', 'post_type must be one of the types the content-* tools list.');
+        }
+        $status = (string) ($input['status'] ?? 'publish');
+        if (! ContentPostTypes::allowsStatus($status)) {
+            return new WP_Error('invalid_status', sprintf('Status "%s" cannot be queried.', $status));
+        }
 
         $queryArgs = [
             'post_type' => $input['post_type'],
-            'post_status' => $input['status'] ?? 'publish',
+            'post_status' => $status,
             'posts_per_page' => $limit,
             'orderby' => 'ID',
             'order' => 'ASC',
