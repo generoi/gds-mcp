@@ -361,9 +361,9 @@ final class NavMenuItemsAbility
 
         $result = self::transformItem(self::restResponseData($response));
 
-        // Undo a create by trashing the new menu item.
+        // Undo a create by deleting the new menu item and closing its gap.
         if (! empty($result['id'])) {
-            $result = $this->reversible($result, 'trash', ['id' => (int) $result['id']], 'Remove the added menu item');
+            $result = $this->reversible($result, 'delete-menu-item', ['id' => (int) $result['id']], 'Remove the added menu item');
         }
 
         return $result;
@@ -519,18 +519,20 @@ final class NavMenuItemsAbility
             return $error;
         }
 
-        // Capture, BEFORE any mutation, the moved item plus every item in the
-        // source and destination menus — shiftOrder re-numbers all of them and
-        // the move also changes the item's menu term, parent meta and order.
-        $affectedIds = [$id];
+        // Capture, BEFORE any mutation, the moved item in full (the move
+        // changes its menu term, parent meta and order) and the order of
+        // every other item in the source and destination menus, which is all
+        // shiftOrder changes on them, so an undo leaves their other fields
+        // as they are by then.
+        $undoItems = [['kind' => 'restore-post', 'data' => Snapshot::postFields($id)]];
+        $seen = [$id => true];
         foreach ([$currentMenuId, $newMenuId] as $menuToCapture) {
-            foreach ((array) (wp_get_nav_menu_items($menuToCapture, ['post_status' => 'any']) ?: []) as $sibling) {
-                $affectedIds[] = (int) $sibling->ID;
+            foreach ((array) (wp_get_nav_menu_items($menuToCapture, ['post_status' => 'any', 'output' => OBJECT]) ?: []) as $sibling) {
+                if (! isset($seen[(int) $sibling->ID])) {
+                    $seen[(int) $sibling->ID] = true;
+                    $undoItems[] = ['kind' => 'restore-menu-order', 'data' => ['id' => (int) $sibling->ID, 'menu_order' => (int) $sibling->menu_order]];
+                }
             }
-        }
-        $undoItems = [];
-        foreach (array_unique($affectedIds) as $affectedId) {
-            $undoItems[] = ['kind' => 'restore-post', 'data' => Snapshot::postFields($affectedId)];
         }
 
         // Step 1: close the gap at the old location (move item out of the way first).
@@ -591,10 +593,10 @@ final class NavMenuItemsAbility
             );
         }
 
-        // Capture each affected item's full state before re-assigning menu_order.
+        // Capture each affected item's order, all a reorder changes.
         $undoItems = [];
-        foreach ($itemIds as $itemId) {
-            $undoItems[] = ['kind' => 'restore-post', 'data' => Snapshot::postFields($itemId)];
+        foreach ($siblings as $sibling) {
+            $undoItems[] = ['kind' => 'restore-menu-order', 'data' => ['id' => (int) $sibling->ID, 'menu_order' => (int) $sibling->menu_order]];
         }
 
         // Preserve existing menu_order values (they may be sparse); re-assign by provided order.

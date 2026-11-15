@@ -24,7 +24,8 @@ final class GenericPostTypeAbility
 
     /**
      * Post types whose REST controller never trashes, whatever the site's
-     * trash settings. (Templates and template parts are trashed by core.)
+     * trash settings, so content-delete refuses them. (Templates and
+     * template parts are trashed by core.)
      */
     private const TRASHLESS_TYPES = ['wp_font_family', 'wp_font_face'];
 
@@ -610,32 +611,33 @@ final class GenericPostTypeAbility
         $id = self::normalizeId($input['id'] ?? null);
         $priorStatus = is_int($id) ? (string) get_post_status($id) : '';
 
-        // Always trash (recoverable) — permanent deletion is intentionally not
-        // exposed to the assistant. Font families have no trash at all, so
-        // deleting one is unavoidably permanent and we fall back to force.
-        // Core also answers rest_trash_not_supported for attachments without
-        // MEDIA_TRASH and for every type when EMPTY_TRASH_DAYS is 0; those are
-        // site settings, not a missing trash, so they are refused instead.
+        // Always trash (recoverable): permanent deletion is not exposed to
+        // the assistant. Font families and font faces have no trash, so they
+        // are refused, as are attachments without MEDIA_TRASH and every type
+        // when EMPTY_TRASH_DAYS is 0 (core answers rest_trash_not_supported).
+        if (is_int($id) && in_array(get_post_type($id), self::TRASHLESS_TYPES, true)) {
+            return new WP_Error(
+                'trash_not_supported',
+                'Fonts have no trash, so deleting one would be permanent, and gds/content-delete never deletes permanently. Remove it in the Site Editor\'s font library.',
+            );
+        }
+        // What trashing resets (the homepage settings, stickiness), so the
+        // undo can put it back.
+        $sideEffects = is_int($id) ? Snapshot::trashSideEffects($id) : [];
         $response = self::dispatchDelete($route, $id, false);
-        $forced = false;
         if (self::isRestError($response)
             && self::restErrorToWpError($response)->get_error_code() === 'rest_trash_not_supported') {
-            if (! is_int($id) || ! in_array(get_post_type($id), self::TRASHLESS_TYPES, true)) {
-                return new WP_Error(
-                    'trash_not_supported',
-                    'This item cannot be moved to trash on this site (trash is disabled for it), and gds/content-delete never deletes permanently. Delete it in wp-admin if it should be removed for good.',
-                );
-            }
-            $response = self::dispatchDelete($route, $id, true);
-            $forced = true;
+            return new WP_Error(
+                'trash_not_supported',
+                'This item cannot be moved to trash on this site (trash is disabled for it), and gds/content-delete never deletes permanently. Delete it in wp-admin if it should be removed for good.',
+            );
         }
 
         $result = self::restResponseOrError($response);
 
-        // Undo a trash by untrashing. (Force-deleted trashless types can't be
-        // restored, so no undo is offered there.)
-        if (! is_wp_error($result) && ! $forced && is_int($id) && $id) {
-            $result = $this->reversible($result, 'untrash', ['id' => $id, 'status' => $priorStatus], 'Restore the trashed item from trash');
+        // Undo a trash by untrashing.
+        if (! is_wp_error($result) && is_int($id) && $id) {
+            $result = $this->reversible($result, 'untrash', ['id' => $id, 'status' => $priorStatus] + $sideEffects, 'Restore the trashed item from trash');
         }
 
         return $result;

@@ -448,6 +448,7 @@ final class FeedsAbility
         // fails the delete still proceeds, but we won't attach an undo envelope.
         $feed = \GFAPI::get_feed($id);
         $undo = (! is_wp_error($feed) && is_array($feed)) ? [
+            'feed_id' => $id,
             'form_id' => (int) $feed['form_id'],
             'addon_slug' => $feed['addon_slug'],
             'meta' => self::sealedMeta((array) $feed['meta'], (string) $feed['addon_slug']),

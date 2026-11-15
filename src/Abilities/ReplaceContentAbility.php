@@ -5,7 +5,6 @@ namespace GeneroWP\MCP\Abilities;
 use GeneroWP\MCP\Concerns\ResolvesPostId;
 use GeneroWP\MCP\Undo\Reversible;
 use GeneroWP\MCP\Undo\Snapshot;
-use GeneroWP\MCP\Undo\Snapshots\PostFieldsSnapshot;
 use WP_Error;
 
 /**
@@ -207,7 +206,7 @@ final class ReplaceContentAbility
         if ($write['before']) {
             $result = $this->reversible(
                 $result,
-                'restore-post',
+                'restore-post-content',
                 $write['before'],
                 "Revert replacing \"{$o['search']}\" with \"{$o['replace']}\" in \"{$post->post_title}\"",
             );
@@ -334,7 +333,7 @@ final class ReplaceContentAbility
             }
 
             if ($write['before']) {
-                $undoItems[] = ['kind' => 'restore-post', 'data' => $write['before']];
+                $undoItems[] = ['kind' => 'restore-post-content', 'data' => $write['before']];
             }
             $written++;
             $replaced += $plan['count'];
@@ -450,11 +449,12 @@ final class ReplaceContentAbility
      * through wp_unslash(), so content with backslashes (code blocks, paths,
      * escapes) is corrupted unless slashed first.
      *
-     * @return array{before: PostFieldsSnapshot|null, updated: \WP_Post}|WP_Error
+     * @return array{before: array{id: int, content: string}|null, updated: \WP_Post}|WP_Error
      */
     private static function writePost(int $postId, string $content): array|WP_Error
     {
-        $before = Snapshot::postFields($postId);
+        // Only the content changes, so only the content is put back.
+        $before = Snapshot::postContent($postId);
 
         $updateResult = wp_update_post(['ID' => $postId, 'post_content' => wp_slash($content)], true);
         if (is_wp_error($updateResult)) {

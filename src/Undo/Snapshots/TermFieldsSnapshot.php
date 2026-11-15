@@ -19,6 +19,7 @@ class TermFieldsSnapshot
     /**
      * @param  TermCoreFields  $fields
      * @param  array<string, list<string>>  $meta
+     * @param  array{locations: array<string, int>, auto_add: bool}|null  $menu  For a nav menu: every theme location's menu and whether the menu adds new pages, which the menus endpoint also writes. Null otherwise and in older rows.
      *
      * @phpstan-param  array{
      *     name: string,
@@ -32,7 +33,39 @@ class TermFieldsSnapshot
         public readonly string $taxonomy,
         public readonly array $fields,
         public readonly array $meta,
+        public readonly ?array $menu = null,
     ) {}
+
+    /**
+     * @return array{locations: array<string, int>, auto_add: bool}|null
+     */
+    public static function captureMenu(int $termId, string $taxonomy): ?array
+    {
+        if ($taxonomy !== 'nav_menu') {
+            return null;
+        }
+        $options = (array) get_option('nav_menu_options', []);
+
+        return [
+            'locations' => array_map('intval', (array) get_nav_menu_locations()),
+            'auto_add' => in_array($termId, (array) ($options['auto_add'] ?? []), true),
+        ];
+    }
+
+    /**
+     * @return array{locations: array<string, int>, auto_add: bool}|null
+     */
+    protected static function menuFromArray(mixed $raw): ?array
+    {
+        if (! is_array($raw)) {
+            return null;
+        }
+
+        return [
+            'locations' => array_map('intval', (array) ($raw['locations'] ?? [])),
+            'auto_add' => ! empty($raw['auto_add']),
+        ];
+    }
 
     public static function capture(int $termId, string $taxonomy): ?self
     {
@@ -56,6 +89,7 @@ class TermFieldsSnapshot
                 'parent' => (int) $term->parent,
             ],
             meta: $meta,
+            menu: self::captureMenu($termId, $taxonomy),
         );
     }
 
@@ -85,17 +119,23 @@ class TermFieldsSnapshot
                 'parent' => (int) ($fields['parent'] ?? 0),
             ],
             meta: $meta,
+            menu: self::menuFromArray($raw['menu'] ?? null),
         );
     }
 
-    /** @return array{term_id: int, taxonomy: string, fields: array<string, mixed>, meta: array<string, list<string>>} */
+    /** @return array{term_id: int, taxonomy: string, fields: array<string, mixed>, meta: array<string, list<string>>, menu?: array{locations: array<string, int>, auto_add: bool}} */
     public function toArray(): array
     {
-        return [
+        $out = [
             'term_id' => $this->termId,
             'taxonomy' => $this->taxonomy,
             'fields' => $this->fields,
             'meta' => $this->meta,
         ];
+        if ($this->menu !== null) {
+            $out['menu'] = $this->menu;
+        }
+
+        return $out;
     }
 }

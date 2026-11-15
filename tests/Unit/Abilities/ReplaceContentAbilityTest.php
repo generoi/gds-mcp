@@ -251,7 +251,8 @@ class ReplaceContentAbilityTest extends WP_UnitTestCase
         ]);
 
         $this->assertArrayHasKey('_undo', $result);
-        $this->assertSame('restore-post', $result['_undo']['kind']);
+        // Only the content changed, so only the content is put back.
+        $this->assertSame('restore-post-content', $result['_undo']['kind']);
     }
 
     public function test_multi_post_replaces_across_posts(): void
@@ -347,7 +348,7 @@ class ReplaceContentAbilityTest extends WP_UnitTestCase
         $b = self::factory()->post->create(['post_content' => $original]);
 
         $result = (new ReplaceContentAbility)->execute(['ids' => [$a, $b], 'search' => 'old@x.fi', 'replace' => 'new@x.fi']);
-        // The snapshot lists every key, so one added since goes on undo.
+        // The undo puts back only the content, so meta added since stays.
         add_post_meta($a, 'added_since', 'x');
         // As gds-assistant stores it on the audit log.
         $undo = json_decode((string) wp_json_encode($result['_undo']), true);
@@ -355,7 +356,7 @@ class ReplaceContentAbilityTest extends WP_UnitTestCase
         $this->assertNotWPError(apply_filters('gds-mcp/restore_snapshot', null, $undo));
         $this->assertSame($original, get_post($a)->post_content);
         $this->assertSame($original, get_post($b)->post_content);
-        $this->assertSame([], get_post_meta($a, 'added_since'));
+        $this->assertSame(['x'], get_post_meta($a, 'added_since'));
     }
 
     public function test_multi_post_dry_run_aggregates_without_writing(): void

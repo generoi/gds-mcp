@@ -17,6 +17,9 @@ final class CreateTranslationAbility
     use RestDelegation;
     use Reversible;
 
+    /** The undo unlinks the copy and trashes it, so it can be got back. */
+    public const UNDO_LABEL = 'Remove the created translation (unlinked and moved to the trash)';
+
     public static function register(): void
     {
         HelpAbility::registerAbility('gds/translations-create', [
@@ -220,12 +223,12 @@ final class CreateTranslationAbility
                     $result = GenericPostTypeAbility::summary(GenericPostTypeAbility::enrichPostUrls($result));
                 }
 
-                return $this->reversible($result, 'trash', ['id' => $newId], 'Delete the created translation');
+                return $this->reversible($result, 'trash-translation', ['id' => $newId], self::UNDO_LABEL);
             }
         }
 
         $result = ['id' => $newId, 'source_id' => $sourceId];
 
-        return $this->reversible($result, 'trash', ['id' => $newId], 'Delete the created translation');
+        return $this->reversible($result, 'trash-translation', ['id' => $newId], self::UNDO_LABEL);
     }
 }

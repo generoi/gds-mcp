@@ -5,6 +5,7 @@ namespace GeneroWP\MCP\Integrations\GravityForms;
 use GeneroWP\MCP\Abilities\HelpAbility;
 use GeneroWP\MCP\Concerns\RestDelegation;
 use GeneroWP\MCP\Undo\Reversible;
+use GeneroWP\MCP\Undo\Snapshot;
 use Gravity_Forms\Gravity_Forms\Abilities\GF_Abilities_Handler_Confirmations;
 use Gravity_Forms\Gravity_Forms\Abilities\GF_Abilities_Handler_Notifications;
 use WP_Error;
@@ -552,6 +553,8 @@ final class GravityFormsAbility
         $merged = array_merge($current, self::sanitizeSuppliedForm($input));
         $merged = self::normalizeFormPayload($merged);
 
+        $stored = Snapshot::gravityForm($id);
+
         // Use GFAPI directly — REST PUT requires GF_Field objects to already be
         // instantiated, but after the json_decode round-trip they're plain arrays.
         $result = \GFAPI::update_form($merged, $id);
@@ -576,7 +579,7 @@ final class GravityFormsAbility
             $label .= " ({$deltaSummary})";
         }
 
-        return $this->reversible($saved, 'restore-form', ['id' => $id, 'form' => $current], $label);
+        return $this->reversible($saved, 'restore-form', ['id' => $id, 'form' => $current] + ($stored ? ['stored' => $stored] : []), $label);
     }
 
     /**
@@ -631,7 +634,7 @@ final class GravityFormsAbility
      * @param  array<string, mixed>  $oldFields
      * @return array<int, array{id: int, label: string, reason: string}> Keyed by old field id.
      */
-    private static function destructiveFieldChanges(array $oldFields, array $newFields): array
+    public static function destructiveFieldChanges(array $oldFields, array $newFields): array
     {
         $newById = [];
         foreach ($newFields as $field) {

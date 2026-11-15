@@ -24,15 +24,20 @@ final class PartialPostSnapshot
     /** `meta_format` of a row whose values are stored serialized. */
     private const SERIALIZED = 'serialized';
 
+    /** Fields a status change can rewrite: publishing a draft gives it a slug and a GMT date. */
+    public const STATUS_FIELDS = ['post_name', 'post_date', 'post_date_gmt'];
+
     /**
      * @param  array<string, list<string>|null>  $metaPrev  Meta key → prior values; null = key was absent.
      * @param  bool  $serialized  Whether the values are serialized, as stored; older rows hold them as plain strings.
+     * @param  array<string, string>  $fields  The {@see self::STATUS_FIELDS} as they were, put back with the status; empty in older rows.
      */
     public function __construct(
         public readonly int $id,
         public readonly string $status,
         public readonly array $metaPrev,
         public readonly bool $serialized = false,
+        public readonly array $fields = [],
     ) {}
 
     /**
@@ -59,6 +64,7 @@ final class PartialPostSnapshot
             status: (string) $post->post_status,
             metaPrev: $metaPrev,
             serialized: true,
+            fields: array_map('strval', array_intersect_key(get_object_vars($post), array_flip(self::STATUS_FIELDS))),
         );
     }
 
@@ -88,10 +94,11 @@ final class PartialPostSnapshot
             status: (string) ($raw['status'] ?? ''),
             metaPrev: $metaPrev,
             serialized: ($raw['meta_format'] ?? '') === self::SERIALIZED,
+            fields: is_array($raw['fields'] ?? null) ? array_map('strval', array_intersect_key($raw['fields'], array_flip(self::STATUS_FIELDS))) : [],
         );
     }
 
-    /** @return array{id: int, status: string, meta_prev: array<string, list<string>|null>, meta_format?: string} */
+    /** @return array{id: int, status: string, meta_prev: array<string, list<string>|null>, meta_format?: string, fields?: array<string, string>} */
     public function toArray(): array
     {
         $out = [
@@ -101,6 +108,9 @@ final class PartialPostSnapshot
         ];
         if ($this->serialized) {
             $out['meta_format'] = self::SERIALIZED;
+        }
+        if ($this->status !== '' && $this->fields) {
+            $out['fields'] = $this->fields;
         }
 
         return $out;

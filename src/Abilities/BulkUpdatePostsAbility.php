@@ -184,6 +184,7 @@ final class BulkUpdatePostsAbility
             if (! $dryRun) {
                 // Capture this post's prior status + touched meta before mutating.
                 $before = Snapshot::partialPost($post->ID, $touchedMetaKeys);
+                $sideEffects = $setStatus === 'trash' ? Snapshot::trashSideEffects($post->ID) : [];
                 $written = false;
 
                 if ($setStatus && $setStatus !== $post->post_status) {
@@ -231,7 +232,7 @@ final class BulkUpdatePostsAbility
                     if (get_post_status($post->ID) === 'trash' && $post->post_status !== 'trash') {
                         // Untrash rather than set the status back, so the slug
                         // wp_trash_post() suffixed is restored too.
-                        $undoItems[] = ['kind' => 'untrash', 'data' => ['id' => $post->ID, 'status' => $before->status]];
+                        $undoItems[] = ['kind' => 'untrash', 'data' => ['id' => $post->ID, 'status' => $before->status] + $sideEffects];
                         $before = new PartialPostSnapshot($before->id, '', $before->metaPrev, $before->serialized);
                     }
                     $undoItems[] = ['kind' => 'restore-post-partial', 'data' => $before];

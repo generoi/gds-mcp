@@ -230,12 +230,13 @@ final class MachineTranslateAbility
             );
         }
 
-        // A new translation post was created — undo by trashing it.
+        // A new translation post was created — undo by unlinking and
+        // trashing it, so the language can be translated again.
         return $this->reversible(
             $response,
-            'trash',
+            'trash-translation',
             ['id' => (int) $translationId],
-            'Delete the machine-created translation',
+            CreateTranslationAbility::UNDO_LABEL,
         );
     }
 

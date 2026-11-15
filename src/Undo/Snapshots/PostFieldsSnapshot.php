@@ -28,7 +28,7 @@ final class PostFieldsSnapshot
      * Fields added after the first release. Absent from older audit rows, so
      * they are only restored when the snapshot actually holds them.
      */
-    private const OPTIONAL_FIELDS = ['post_author', 'post_date', 'post_date_gmt', 'post_password', 'comment_status'];
+    private const OPTIONAL_FIELDS = ['post_author', 'post_date', 'post_date_gmt', 'post_password', 'comment_status', 'ping_status'];
 
     /**
      * Polylang's translation groups. Restoring one, even an empty one, would
@@ -43,6 +43,7 @@ final class PostFieldsSnapshot
      * @param  array<string, list<string>>  $meta  Raw `get_post_meta($id)` shape: key → list of stored values.
      * @param  array<string, list<int>>  $terms  Taxonomy slug → list of term ids.
      * @param  bool  $metaComplete  Whether $meta lists every key the post had, so a key missing from it did not exist. Older snapshots don't say.
+     * @param  bool|null  $sticky  Whether the post was sticky; null in older snapshots, which leave it as it is.
      *
      * @phpstan-param  array{
      *     post_title: string,
@@ -57,6 +58,7 @@ final class PostFieldsSnapshot
      *     post_date_gmt?: string,
      *     post_password?: string,
      *     comment_status?: string,
+     *     ping_status?: string,
      * }  $post
      */
     public function __construct(
@@ -65,6 +67,7 @@ final class PostFieldsSnapshot
         public readonly array $meta,
         public readonly array $terms,
         public readonly bool $metaComplete = false,
+        public readonly ?bool $sticky = null,
     ) {}
 
     /**
@@ -109,10 +112,12 @@ final class PostFieldsSnapshot
                 'post_date_gmt' => (string) $post->post_date_gmt,
                 'post_password' => (string) $post->post_password,
                 'comment_status' => (string) $post->comment_status,
+                'ping_status' => (string) $post->ping_status,
             ],
             meta: $meta,
             terms: $terms,
             metaComplete: true,
+            sticky: is_sticky($id),
         );
     }
 
@@ -155,19 +160,25 @@ final class PostFieldsSnapshot
             terms: self::normaliseTerms($raw['terms'] ?? null),
             // `metaComplete`: a row from 0.8.1 or before, nested in a bulk undo.
             metaComplete: ! empty($raw['meta_complete'] ?? $raw['metaComplete'] ?? false),
+            sticky: isset($raw['sticky']) ? (bool) $raw['sticky'] : null,
         );
     }
 
-    /** @return array{id: int, post: array<string, mixed>, meta: array<string, list<string>>, terms: array<string, list<int>>, meta_complete: bool} */
+    /** @return array{id: int, post: array<string, mixed>, meta: array<string, list<string>>, terms: array<string, list<int>>, meta_complete: bool, sticky?: bool} */
     public function toArray(): array
     {
-        return [
+        $out = [
             'id' => $this->id,
             'post' => $this->post,
             'meta' => $this->meta,
             'terms' => $this->terms,
             'meta_complete' => $this->metaComplete,
         ];
+        if ($this->sticky !== null) {
+            $out['sticky'] = $this->sticky;
+        }
+
+        return $out;
     }
 
     /** @return array<string, list<string>> */
