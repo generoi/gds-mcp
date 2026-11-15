@@ -50,6 +50,22 @@ Other REST parameters pass through — use `_fields`, `search`, `per_page`, `pag
 | `gds/blocks-get` | Block details with attributes, supports, and real-world usage examples from published posts |
 | `gds/blocks-patch` | Update specific blocks within a post without replacing full content |
 
+### Block markup checks
+
+`gds/content-create`, `gds/content-update` and `gds/blocks-patch` check the block markup they write, so markup that saves but renders nothing does not pass as a success.
+
+Refused (the call returns an error and nothing is saved):
+
+- Block names missing from the PHP block registry, with the closest registered name. A name that already appears in saved content passes, since blocks registered only in JavaScript and blocks of inactive plugins are not in the registry.
+- `core/missing`, the editor's placeholder for an unregistered block.
+- Inner blocks or HTML inside `core/block` (a synced pattern renders its `wp_block` post and discards them), including a `blocks-patch` of `inner_blocks`, `inner_html` or a prepend/append on a `core/block`. Edit the `wp_block` post its `ref` points to instead.
+
+Warned about, in a `warnings` array in the result (present only when there are warnings):
+
+- Attribute keys the block type does not define (block-supports attributes count), and values that fail its type or enum.
+- Raw `style` values equal to a theme.json preset: colors, gradients, border color, font size and spacing. They are reported, never rewritten, because the preset attributes also change a static block's saved classes.
+- A `blocks-patch` attribute that is saved in the block's HTML but could not be synced there (unsupported selector, or no matching element). Patch `inner_html` too.
+
 ### Resources (always available)
 
 | Ability | URI | Description |
