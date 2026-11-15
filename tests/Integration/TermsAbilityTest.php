@@ -30,9 +30,36 @@ class TermsAbilityTest extends AbilityTestCase
             'hide_empty' => false,
         ]);
 
-        $this->assertIsArray($result);
+        $this->assertIsArray($result['terms']);
         // At least the 2 we created + default "Uncategorized"
-        $this->assertGreaterThanOrEqual(2, count($result));
+        $this->assertGreaterThanOrEqual(2, count($result['terms']));
+    }
+
+    public function test_list_reports_total_and_pages_and_takes_page(): void
+    {
+        foreach (range(1, 12) as $i) {
+            self::factory()->tag->create(['name' => "paged-tag-{$i}"]);
+        }
+
+        $first = $this->assertAbilitySuccess('gds/terms-list', [
+            'taxonomy' => 'tags',
+            'hide_empty' => false,
+            'search' => 'paged-tag',
+        ]);
+
+        // The REST default is 10 per page; the rest is no longer silently cut.
+        $this->assertCount(10, $first['terms']);
+        $this->assertSame(12, $first['total']);
+        $this->assertSame(2, $first['pages']);
+
+        $second = $this->assertAbilitySuccess('gds/terms-list', [
+            'taxonomy' => 'tags',
+            'hide_empty' => false,
+            'search' => 'paged-tag',
+            'page' => 2,
+        ]);
+
+        $this->assertCount(2, $second['terms']);
     }
 
     public function test_list_tags(): void
@@ -44,8 +71,8 @@ class TermsAbilityTest extends AbilityTestCase
             'hide_empty' => false,
         ]);
 
-        $this->assertIsArray($result);
-        $this->assertGreaterThanOrEqual(1, count($result));
+        $this->assertIsArray($result['terms']);
+        $this->assertGreaterThanOrEqual(1, count($result['terms']));
     }
 
     public function test_list_rejects_invalid_taxonomy(): void
@@ -71,8 +98,8 @@ class TermsAbilityTest extends AbilityTestCase
             'hide_empty' => false,
         ]);
 
-        $this->assertCount(1, $result);
-        $this->assertSame('Unique Search Term Zeta', $result[0]['name']);
+        $this->assertCount(1, $result['terms']);
+        $this->assertSame('Unique Search Term Zeta', $result['terms'][0]['name']);
     }
 
     // ── Read ──────────────────────────────────────────────────────

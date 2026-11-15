@@ -22,7 +22,7 @@ final class BulkUpdatePostsAbility
     {
         HelpAbility::registerAbility('gds/posts-bulk-update', [
             'label' => 'Bulk Update Posts',
-            'description' => 'Update status or meta across multiple posts matching a query. Use post_ids for explicit targets, or filter by post_type/status/meta_query to match dynamically. Returns the count of updated posts.',
+            'description' => 'Update status or meta across multiple posts matching a query. Use post_ids for explicit targets, or filter by post_type, status and lang to match dynamically (status defaults to publish, so drafts are only matched with status "draft" or "any"). Returns the count of updated posts.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -38,7 +38,7 @@ final class BulkUpdatePostsAbility
                     ],
                     'status' => [
                         'type' => 'string',
-                        'description' => 'Filter posts by current status (used when post_ids is not set).',
+                        'description' => 'Filter posts by current status (used when post_ids is not set). Default: publish. Pass "any" for every status except trash.',
                     ],
                     'lang' => [
                         'type' => 'string',

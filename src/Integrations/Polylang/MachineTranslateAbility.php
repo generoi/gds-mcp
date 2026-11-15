@@ -115,7 +115,7 @@ final class MachineTranslateAbility
 
         $postId = (int) ($input['id'] ?? 0);
         if (! $postId) {
-            return new WP_Error('missing_input', 'Provide post_id or string_group. For terms, use gds/translations-create-term instead.');
+            return new WP_Error('missing_input', 'Provide id (the source post ID) or string_group. For terms, use gds/translations-create-term instead.');
         }
 
         if (! current_user_can('edit_post', $postId)) {
@@ -310,7 +310,7 @@ final class MachineTranslateAbility
     private static function buildDescription(): string
     {
         $desc = 'Machine-translate content using Polylang Pro\'s configured translation service (e.g. DeepL). '
-            .'Supports posts (provide post_id) and registered string translations (provide string_group). '
+            .'Supports posts (provide id, the source post ID) and registered string translations (provide string_group). '
             .'For posts: translates title, content, excerpt, and meta. For strings: translates all strings in the group.';
 
         if (class_exists(Factory::class)) {

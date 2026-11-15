@@ -17,7 +17,7 @@ final class UpdateStringTranslationAbility
     {
         HelpAbility::registerAbility('gds/strings-update', [
             'label' => 'Update String Translation',
-            'description' => 'Update the translation of a registered Polylang string for a specific language. Use gds/strings-list first to find the exact string value to translate.',
+            'description' => 'Update the translation of a registered Polylang string for a specific language. Use gds/strings-list first to find the exact string value to translate; a string that is not registered is refused.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
@@ -86,6 +86,14 @@ final class UpdateStringTranslationAbility
                 'Invalid language "%s". Valid languages: %s',
                 $language,
                 implode(', ', $validLanguages)
+            ));
+        }
+
+        // Polylang shows and uses translations only of registered strings.
+        if (! isset(RegisteredStrings::all()[md5($string)])) {
+            return new WP_Error('string_not_registered', sprintf(
+                '"%s" is not a registered Polylang string. Use gds/strings-list to find the exact source string. A string the theme registered recently is picked up the next time someone opens wp-admin.',
+                $string
             ));
         }
 

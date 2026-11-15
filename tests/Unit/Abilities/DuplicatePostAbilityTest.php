@@ -188,6 +188,20 @@ class DuplicatePostAbilityTest extends WP_UnitTestCase
         $this->assertSame('fi', $languageWhenTagged);
     }
 
+    public function test_unknown_language_is_refused_before_anything_is_created(): void
+    {
+        if (! function_exists('pll_set_post_language')) {
+            $this->markTestSkipped('Polylang is not active.');
+        }
+        $sourceId = self::factory()->post->create(['post_title' => 'Source']);
+
+        $result = (new DuplicatePostAbility)->execute(['id' => $sourceId, 'lang' => 'xx']);
+
+        $this->assertWPError($result);
+        $this->assertSame('invalid_language', $result->get_error_code());
+        $this->assertSame([], get_posts(['title' => 'Source (Copy)', 'post_status' => 'any']));
+    }
+
     public function test_refuses_variable_products(): void
     {
         register_post_type('product');

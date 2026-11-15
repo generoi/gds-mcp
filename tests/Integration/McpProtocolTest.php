@@ -198,7 +198,8 @@ class McpProtocolTest extends AbilityTestCase
         ]);
 
         $this->assertArrayHasKey('structuredContent', $response);
-        $this->assertIsArray($response['structuredContent']);
+        $this->assertIsArray($response['structuredContent']['terms']);
+        $this->assertArrayHasKey('total', $response['structuredContent']);
     }
 
     public function test_call_site_map_tool(): void

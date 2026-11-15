@@ -522,6 +522,108 @@ class NavMenuItemsAbilityTest extends TestCase
         $this->assertSame(['ChildB'], $childrenOfParent);
     }
 
+    public function test_move_to_a_missing_menu_is_refused_and_changes_nothing(): void
+    {
+        $this->insertItem('A');
+        $item = $this->insertItem('B');
+
+        $result = $this->ability->executeMove(['id' => $item, 'menu_id' => 999999, 'position' => 1]);
+
+        $this->assertWPError($result);
+        $this->assertSame('menu_not_found', $result->get_error_code());
+        $this->assertSame([$this->menuId], array_map('intval', wp_get_object_terms($item, 'nav_menu', ['fields' => 'ids'])));
+        $this->assertSame(['A', 'B'], $this->orderedTitles());
+    }
+
+    public function test_move_under_an_item_of_another_menu_is_refused(): void
+    {
+        $otherMenuId = wp_create_nav_menu('Other Menu');
+        $foreign = wp_update_nav_menu_item($otherMenuId, 0, ['menu-item-title' => 'Foreign', 'menu-item-url' => 'https://example.com/f', 'menu-item-status' => 'publish']);
+        $item = $this->insertItem('A');
+
+        $result = $this->ability->executeMove(['id' => $item, 'parent_item_id' => $foreign, 'position' => 1]);
+
+        $this->assertWPError($result);
+        $this->assertSame('invalid_parent_item', $result->get_error_code());
+        $this->assertSame('0', get_post_meta($item, '_menu_item_menu_item_parent', true));
+    }
+
+    public function test_move_under_a_non_menu_item_or_own_child_is_refused(): void
+    {
+        $parent = $this->insertItem('Parent');
+        $child = $this->insertItem('Child', ['menu-item-parent-id' => $parent]);
+        $pageId = $this->createPost(['post_type' => 'page', 'post_status' => 'publish']);
+
+        $underPage = $this->ability->executeMove(['id' => $parent, 'parent_item_id' => $pageId, 'position' => 1]);
+        $underChild = $this->ability->executeMove(['id' => $parent, 'parent_item_id' => $child, 'position' => 1]);
+        $underSelf = $this->ability->executeMove(['id' => $parent, 'parent_item_id' => $parent, 'position' => 1]);
+
+        foreach ([$underPage, $underChild, $underSelf] as $result) {
+            $this->assertWPError($result);
+            $this->assertSame('invalid_parent_item', $result->get_error_code());
+        }
+        $this->assertSame('0', get_post_meta($parent, '_menu_item_menu_item_parent', true));
+    }
+
+    public function test_create_under_an_item_of_another_menu_is_refused(): void
+    {
+        $otherMenuId = wp_create_nav_menu('Other Menu');
+        $foreign = wp_update_nav_menu_item($otherMenuId, 0, ['menu-item-title' => 'Foreign', 'menu-item-url' => 'https://example.com/f', 'menu-item-status' => 'publish']);
+
+        $result = $this->ability->executeCreate([
+            'menu_id' => $this->menuId,
+            'title' => 'Orphan',
+            'linked' => ['kind' => 'url', 'url' => 'https://example.com/o'],
+            'parent_item_id' => $foreign,
+        ]);
+
+        $this->assertWPError($result);
+        $this->assertSame('invalid_parent_item', $result->get_error_code());
+    }
+
+    // ── Positions and drafts ────────────────────────────────────────────────
+
+    public function test_list_and_read_return_the_position_among_siblings(): void
+    {
+        $parent = $this->insertItem('Parent');
+        $childA = $this->insertItem('ChildA', ['menu-item-parent-id' => $parent]);
+        $childB = $this->insertItem('ChildB', ['menu-item-parent-id' => $parent]);
+        $this->insertItem('Second');
+
+        $flat = $this->ability->executeList(['menu_id' => $this->menuId, 'tree' => false]);
+        $positions = array_column($flat['items'], 'position', 'title');
+
+        $this->assertSame(['Parent' => 1, 'ChildA' => 1, 'ChildB' => 2, 'Second' => 2], $positions);
+        $this->assertSame(2, $this->ability->executeRead(['id' => $childB])['position']);
+
+        // The position a move reports is the one it was given.
+        $moved = $this->ability->executeMove(['id' => $childB, 'position' => 1]);
+        $this->assertSame(1, $moved['position']);
+        $this->assertSame(2, $this->ability->executeRead(['id' => $childA])['position']);
+    }
+
+    public function test_draft_items_are_listed_and_keep_their_place(): void
+    {
+        $this->insertItem('A');
+        $this->insertItem('Draft', ['menu-item-status' => 'draft']);
+
+        $created = $this->ability->executeCreate([
+            'menu_id' => $this->menuId,
+            'title' => 'New',
+            'linked' => ['kind' => 'url', 'url' => 'https://example.com/new'],
+            'position' => 2,
+        ]);
+        $this->assertSame(2, $created['position']);
+
+        $list = $this->ability->executeList(['menu_id' => $this->menuId, 'tree' => false]);
+
+        $this->assertSame(['A', 'New', 'Draft'], array_column($list['items'], 'title'));
+        $this->assertSame([1, 2, 3], array_column($list['items'], 'position'));
+        $this->assertSame('draft', $list['items'][2]['status']);
+        // Stored orders stay distinct: the draft was shifted down too.
+        $this->assertCount(3, array_unique(array_column($list['items'], 'menu_order')));
+    }
+
     // ── Gap-filling: update & delete edges ──────────────────────────────────
 
     public function test_update_with_invalid_linked_kind_returns_error(): void

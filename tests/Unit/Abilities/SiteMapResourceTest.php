@@ -92,6 +92,63 @@ class SiteMapResourceTest extends TestCase
         $this->assertNotContains($pageId, $disconnectedIds);
     }
 
+    public function test_disconnected_pages_report_total_and_truncation(): void
+    {
+        self::factory()->post->create_many(101, ['post_type' => 'page', 'post_status' => 'publish']);
+
+        $result = (new SiteMapResource)->execute([]);
+
+        $this->assertCount(100, $result['disconnected']);
+        $this->assertGreaterThanOrEqual(101, $result['disconnected_total']);
+        $this->assertTrue($result['truncated']);
+    }
+
+    public function test_menu_and_disconnected_pages_come_from_one_language(): void
+    {
+        if (! function_exists('pll_set_post_language') || ! function_exists('PLL')) {
+            $this->markTestSkipped('Polylang not active in this environment.');
+        }
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        foreach ([
+            ['name' => 'English', 'slug' => 'en', 'locale' => 'en_US', 'term_group' => 0],
+            ['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1],
+        ] as $lang) {
+            if (! $model->get_language($lang['slug'])) {
+                $model->add_language($lang);
+            }
+        }
+        $model->update_default_lang('en');
+        $model->clean_languages_cache();
+
+        $enPage = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'English page']);
+        $fiPage = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Finnish page']);
+        pll_set_post_language($enPage, 'en');
+        pll_set_post_language($fiPage, 'fi');
+
+        $enMenu = wp_create_nav_menu('English menu');
+        $fiMenu = wp_create_nav_menu('Finnish menu');
+        $navMenus = PLL()->options['nav_menus'];
+        PLL()->options['nav_menus'] = [get_stylesheet() => ['primary_navigation' => ['en' => $enMenu, 'fi' => $fiMenu]]];
+        $unassigned = self::factory()->post->create(['post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'No language page']);
+        wp_delete_object_term_relationships($unassigned, 'language');
+
+        try {
+            $result = (new SiteMapResource)->execute(['lang' => 'fi']);
+        } finally {
+            PLL()->options['nav_menus'] = $navMenus;
+        }
+
+        $this->assertSame('fi', $result['language']);
+        $this->assertSame('Finnish menu', $result['menu']['name']);
+        $titles = array_column($result['disconnected'], 'title');
+        $this->assertContains('Finnish page', $titles);
+        $this->assertNotContains('English page', $titles);
+        $this->assertContains('No language page', $titles, 'A page with no language is not hidden.');
+
+        $this->assertWPError((new SiteMapResource)->execute(['lang' => 'xx']));
+    }
+
     public function test_hierarchical_menu(): void
     {
         $menuId = wp_create_nav_menu('Hierarchical');

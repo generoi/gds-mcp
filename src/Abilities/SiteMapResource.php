@@ -12,19 +12,24 @@ final class SiteMapResource
     {
         HelpAbility::registerAbility('gds/site-map', [
             'label' => 'Site Map',
-            'description' => 'Read-only site structure showing the primary navigation menu tree and any published pages not in the menu. Use this to understand the site hierarchy before creating or linking content.',
+            'description' => 'Read-only site structure showing the primary navigation menu tree and the published pages not in the menu (up to 100, by title; disconnected_total and truncated say whether there are more). On a multilingual site both come from one language: the default one unless lang is given. Use this to understand the site hierarchy before creating or linking content.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',
                 'default' => [],
-                'properties' => [],
+                'properties' => [
+                    'lang' => ['type' => 'string', 'description' => 'Polylang language slug whose menu and pages to show. Default: the current, else the default language.'],
+                ],
                 'additionalProperties' => false,
             ],
             'output_schema' => [
                 'type' => 'object',
                 'properties' => [
+                    'language' => ['type' => ['string', 'null']],
                     'menu' => ['type' => ['object', 'null']],
                     'disconnected' => ['type' => 'array'],
+                    'disconnected_total' => ['type' => 'integer'],
+                    'truncated' => ['type' => 'boolean'],
                 ],
             ],
             'permission_callback' => '__return_true',
@@ -59,23 +64,39 @@ final class SiteMapResource
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<string, mixed>|\WP_Error
      */
-    public function execute(mixed $input = []): array
+    public function execute(mixed $input = []): array|\WP_Error
     {
         $input = (array) ($input ?? []);
-        $menu = self::getPrimaryMenu();
+
+        $lang = null;
+        if (self::polylangAvailable() && function_exists('pll_current_language')) {
+            if (! empty($input['lang'])) {
+                $lang = (string) $input['lang'];
+                if ($error = self::validateLanguage($lang)) {
+                    return $error;
+                }
+            } else {
+                $lang = (pll_current_language() ?: pll_default_language()) ?: null;
+            }
+        }
+
+        $menu = self::getPrimaryMenu($lang);
         $menuPageIds = [];
 
         if ($menu) {
             $menuPageIds = self::collectMenuPageIds($menu['items']);
         }
 
-        $disconnected = self::getDisconnectedPages($menuPageIds);
+        [$disconnected, $total] = self::getDisconnectedPages($menuPageIds, $lang);
 
         return [
+            'language' => $lang,
             'menu' => $menu,
             'disconnected' => $disconnected,
+            'disconnected_total' => $total,
+            'truncated' => $total > count($disconnected),
         ];
     }
 
@@ -84,29 +105,34 @@ final class SiteMapResource
      *
      * @return array<string, mixed>
      */
-    private static function getPrimaryMenu(): ?array
+    private static function getPrimaryMenu(?string $lang): ?array
     {
         $locations = get_nav_menu_locations();
 
         // Try primary_navigation (Sage default), then primary, then main.
         $locationSlugs = ['primary_navigation', 'primary', 'main'];
 
-        // If Polylang is active, also try language-suffixed locations.
-        if (self::polylangAvailable() && function_exists('pll_current_language')) {
-            $lang = pll_current_language();
-            if ($lang) {
-                $defaultLang = pll_default_language();
-                if ($lang !== $defaultLang) {
-                    // Prepend language-specific locations.
-                    $langSlugs = array_map(fn ($s) => $s.'___'.$lang, $locationSlugs);
-                    $locationSlugs = array_merge($langSlugs, $locationSlugs);
+        $menuId = null;
+        if ($lang) {
+            // Polylang keeps each language's menu per location in its options.
+            $options = function_exists('PLL') && PLL() ? PLL()->options : [];
+            $pllMenus = $options['nav_menus'][get_stylesheet()] ?? [];
+            foreach ($locationSlugs as $slug) {
+                if (! empty($pllMenus[$slug][$lang]) && wp_get_nav_menu_object((int) $pllMenus[$slug][$lang])) {
+                    $menuId = (int) $pllMenus[$slug][$lang];
+                    break;
                 }
+            }
+
+            if ($lang !== pll_default_language()) {
+                // Prepend language-specific locations.
+                $langSlugs = array_map(fn ($s) => $s.'___'.$lang, $locationSlugs);
+                $locationSlugs = array_merge($langSlugs, $locationSlugs);
             }
         }
 
-        $menuId = null;
         foreach ($locationSlugs as $slug) {
-            if (! empty($locations[$slug])) {
+            if (! $menuId && ! empty($locations[$slug])) {
                 $menuId = $locations[$slug];
                 break;
             }
@@ -195,12 +221,12 @@ final class SiteMapResource
     }
 
     /**
-     * Get published pages not present in the menu.
+     * Get published pages not present in the menu, in the menu's language.
      *
      * @param  array<int, int>  $excludeIds
-     * @return list<array<string, mixed>>
+     * @return array{0: list<array<string, mixed>>, 1: int} The first 100 pages, and how many there are.
      */
-    private static function getDisconnectedPages(array $excludeIds): array
+    private static function getDisconnectedPages(array $excludeIds, ?string $lang): array
     {
         $args = [
             'post_type' => 'page',
@@ -208,22 +234,33 @@ final class SiteMapResource
             'posts_per_page' => 100,
             'orderby' => 'title',
             'order' => 'ASC',
-            'lang' => '', // Disable Polylang auto-filtering.
+            // Disable Polylang auto-filtering; the language is filtered below.
+            'lang' => '',
         ];
+
+        // Pages in the menu's language, and pages that have no language.
+        if ($lang) {
+            $args['tax_query'] = [
+                'relation' => 'OR',
+                ['taxonomy' => 'language', 'field' => 'slug', 'terms' => [$lang]],
+                ['taxonomy' => 'language', 'operator' => 'NOT EXISTS'],
+            ];
+        }
 
         if ($excludeIds) {
             $args['post__not_in'] = $excludeIds;
         }
 
-        $pages = get_posts($args);
+        $query = new \WP_Query($args);
+        $pages = $query->posts;
 
-        return array_map(fn ($page) => [
+        return [array_map(fn ($page) => [
             'post_id' => $page->ID,
             'title' => $page->post_title,
             'slug' => $page->post_name,
             'url' => get_permalink($page),
             'parent_id' => $page->post_parent ?: null,
             'language' => self::getPostLanguage($page->ID),
-        ], $pages);
+        ], $pages), (int) $query->found_posts];
     }
 }

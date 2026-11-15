@@ -116,6 +116,25 @@ class StringTranslationsIntegrationTest extends WP_UnitTestCase
         $this->assertTrue($found, 'Updated string translation should appear in list.');
     }
 
+    public function test_update_refuses_a_string_that_is_not_registered(): void
+    {
+        $model = PLL()->model;
+        $model->clean_languages_cache();
+        if (! $model->get_language('fi')) {
+            $model->add_language(['name' => 'Finnish', 'slug' => 'fi', 'locale' => 'fi', 'term_group' => 1]);
+            $model->clean_languages_cache();
+        }
+        $string = 'Never registered '.uniqid();
+
+        $result = (new UpdateStringTranslationAbility)->execute(['string' => $string, 'lang' => 'fi', 'translation' => 'Ei koskaan']);
+
+        $this->assertWPError($result);
+        $this->assertSame('string_not_registered', $result->get_error_code());
+        $mo = new \PLL_MO;
+        $mo->import_from_db($model->get_language('fi'));
+        $this->assertSame($string, $mo->translate($string), 'Nothing is stored.');
+    }
+
     public function test_translations_are_filtered_for_users_without_unfiltered_html(): void
     {
         // WP_UnitTestCase rollback removes language terms; Polylang's cache

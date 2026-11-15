@@ -10,7 +10,7 @@ final class AcfFieldsResource
     {
         HelpAbility::registerAbility('gds/acf-fields', [
             'label' => 'ACF Field Groups',
-            'description' => 'Read-only index of ACF field groups with their fields, types, and post type assignments. Use this to discover available fields before reading or updating post data with gds/posts-read or gds/posts-update.',
+            'description' => 'Read-only index of ACF field groups with their fields, types, and post type assignments. Use this to discover available fields before reading them with gds/content-read (the `acf` field) or writing them with the `fields` input of gds/content-create or gds/content-update.',
             'category' => 'gds-content',
             'input_schema' => [
                 'type' => 'object',

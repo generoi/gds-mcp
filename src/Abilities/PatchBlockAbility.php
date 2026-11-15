@@ -125,7 +125,9 @@ final class PatchBlockAbility
                 'annotations' => [
                     'readonly' => false,
                     'destructive' => false,
-                    'idempotent' => true,
+                    // Inserts add a block on every call; deletes remove the
+                    // next match.
+                    'idempotent' => false,
                 ],
             ],
         ]);
