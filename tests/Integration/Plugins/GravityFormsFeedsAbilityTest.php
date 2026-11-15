@@ -2,6 +2,7 @@
 
 namespace GeneroWP\MCP\Tests\Integration\Plugins;
 
+use GeneroWP\MCP\Integrations\GravityForms\FeedsAbility;
 use GeneroWP\MCP\Tests\AbilityTestCase;
 use GeneroWP\MCP\Tests\Fixtures\EncryptingFeedAddOn;
 use GeneroWP\MCP\Undo\RestoreSnapshot;
@@ -20,6 +21,9 @@ class GravityFormsFeedsAbilityTest extends AbilityTestCase
 
     /** @var int[] Feed IDs created during the test, deleted in tearDown */
     private array $createdFeedIds = [];
+
+    /** Whether a test switched settings encryption on, reset in tearDown */
+    private bool $encrypting = false;
 
     protected function setUp(): void
     {
@@ -42,6 +46,10 @@ class GravityFormsFeedsAbilityTest extends AbilityTestCase
         }
         $this->createdFeedIds = [];
         $this->createdFormIds = [];
+        if ($this->encrypting) {
+            \GFAPI::set_encryptor(null);
+            $this->encrypting = false;
+        }
 
         parent::tearDown();
     }
@@ -65,6 +73,93 @@ class GravityFormsFeedsAbilityTest extends AbilityTestCase
         $this->createdFeedIds[] = $id;
 
         return $id;
+    }
+
+    /**
+     * Register the add-on with a secret setting, with encryption on, and
+     * create a feed whose api_key is "sk-secret".
+     */
+    private function createSecretFeed(): int
+    {
+        $encryption = '\\Gravity_Forms\\Gravity_Forms\\Settings\\GF_Settings_Encryption';
+        if (class_exists($encryption) && method_exists('GFAPI', 'set_encryptor')) {
+            \GFAPI::set_encryptor(new $encryption('test-key'));
+            $this->encrypting = true;
+        }
+        \GFForms::include_feed_addon_framework();
+        \GFAddOn::register(EncryptingFeedAddOn::class);
+
+        $created = $this->assertAbilitySuccess('gds/feeds-create', [
+            'form_id' => $this->createForm(),
+            'addon_slug' => EncryptingFeedAddOn::SLUG,
+            'meta' => ['feed_name' => 'Original', 'api_key' => 'sk-secret'],
+        ]);
+        $this->assertSame(FeedsAbility::MASK, $created['meta']['api_key']);
+
+        return $this->trackFeed((int) $created['id']);
+    }
+
+    public function test_list_and_read_mask_secret_settings(): void
+    {
+        $id = $this->createSecretFeed();
+
+        $read = $this->assertAbilitySuccess('gds/feeds-read', ['id' => $id]);
+        $this->assertSame(FeedsAbility::MASK, $read['meta']['api_key']);
+        $this->assertSame('Original', $read['meta']['feed_name']);
+        $this->assertSame(['api_key'], $read['masked']);
+
+        $list = $this->assertAbilitySuccess('gds/feeds-list', ['addon_slug' => EncryptingFeedAddOn::SLUG]);
+        $this->assertStringNotContainsString('sk-secret', (string) wp_json_encode($list));
+        $this->assertSame(['api_key'], $list[0]['masked']);
+    }
+
+    public function test_update_with_the_mask_keeps_the_secret(): void
+    {
+        $id = $this->createSecretFeed();
+        $read = $this->assertAbilitySuccess('gds/feeds-read', ['id' => $id]);
+
+        // What a model does: read, change one key, send the meta back.
+        $updated = $this->assertAbilitySuccess('gds/feeds-update', ['id' => $id, 'meta' => ['feed_name' => 'Renamed'] + $read['meta']]);
+
+        $this->assertStringNotContainsString('sk-secret', (string) wp_json_encode($updated));
+        $stored = \GFAPI::get_feed($id);
+        $this->assertSame('sk-secret', $stored['meta']['api_key']);
+        $this->assertSame('Renamed', $stored['meta']['feed_name']);
+    }
+
+    public function test_update_with_a_new_secret_replaces_it(): void
+    {
+        $id = $this->createSecretFeed();
+
+        $this->assertAbilitySuccess('gds/feeds-update', ['id' => $id, 'meta' => ['api_key' => 'sk-new']]);
+
+        $this->assertSame('sk-new', \GFAPI::get_feed($id)['meta']['api_key']);
+    }
+
+    public function test_duplicate_copies_the_real_secret(): void
+    {
+        $id = $this->createSecretFeed();
+
+        $result = $this->assertAbilitySuccess('gds/feeds-duplicate', ['id' => $id, 'target_form_ids' => [$this->createForm()]]);
+        $copy = $this->trackFeed((int) $result['created'][0]['id']);
+
+        $this->assertStringNotContainsString('sk-secret', (string) wp_json_encode($result));
+        $this->assertSame('sk-secret', \GFAPI::get_feed($copy)['meta']['api_key']);
+    }
+
+    public function test_create_with_the_mask_stores_no_secret(): void
+    {
+        \GFForms::include_feed_addon_framework();
+        \GFAddOn::register(EncryptingFeedAddOn::class);
+
+        $created = $this->assertAbilitySuccess('gds/feeds-create', [
+            'form_id' => $this->createForm(),
+            'addon_slug' => EncryptingFeedAddOn::SLUG,
+            'meta' => ['feed_name' => 'Copied', 'api_key' => FeedsAbility::MASK],
+        ]);
+        $id = $this->trackFeed((int) $created['id']);
+
+        $this->assertArrayNotHasKey('api_key', \GFAPI::get_feed($id)['meta']);
     }
 
     public function test_undo_snapshots_keep_encrypted_settings_encrypted(): void

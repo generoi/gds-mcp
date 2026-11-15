@@ -246,6 +246,10 @@ add_filter('gds-mcp/web_fetch_allowed_hosts', fn () => ['example.com', '*.exampl
 
 The same list, when set, also applies in gds-assistant.
 
+### Gravity Forms feed secrets
+
+`gds/feeds-*` never return the value of a feed setting Gravity Forms encrypts (an API key or the like). Such a value reads as `********`, and the feed's `masked` array lists its keys. Sent back unchanged to feeds-update, the mask keeps the stored value; feeds-create leaves that setting unset; any other value replaces it. feeds-duplicate copies the real value. Add other secret keys with the `gds-mcp/feed_secret_fields` filter (`fn (array $keys, string $addonSlug) => [...$keys, 'token']`).
+
 ### HTTP with an application password
 
 Still the simplest option for a shared machine-to-machine credential, or where OAuth cannot be enabled.
@@ -291,7 +295,7 @@ claude mcp add-json -s local my-site \
 
 - **0.8.2:** `gds/posts-bulk-update` `set_meta` values are now run through kses for users without `unfiltered_html`, as post content already was. Besides stripping disallowed HTML, kses encodes a bare `&` as `&amp;`, so meta that relied on a raw `&` (URLs with query strings, for example) is stored encoded for those users.
 - **After 0.8.2:** web-fetch hosts trusted with "Approve & trust" are kept per user (or site-wide when an administrator trusts them). The old shared list (`gds_mcp_trusted_web_hosts`) recorded no owner, so it is deleted on upgrade rather than carried over: each user re-trusts their hosts once.
-- **Unreleased:** OAuth clients may only use callbacks on the allowed hosts ("Allowed callback hosts" above); a connection through any other host has to be allowed and made again. Remote clients can no longer send mail, and fetch only from `gds-mcp/web_fetch_allowed_hosts`. `gds/posts-bulk-update` and `gds/translations-audit` take only the post types the content-* tools list and no internal statuses.
+- **Unreleased:** OAuth clients may only use callbacks on the allowed hosts ("Allowed callback hosts" above); a connection through any other host has to be allowed and made again. Remote clients can no longer send mail, and fetch only from `gds-mcp/web_fetch_allowed_hosts`. `gds/posts-bulk-update` and `gds/translations-audit` take only the post types the content-* tools list and no internal statuses. Feed secrets read as `********` (see "Gravity Forms feed secrets").
 
 ## Development
 
