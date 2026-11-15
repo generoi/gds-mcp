@@ -792,6 +792,126 @@ class UndoRoundTripTest extends AbilityTestCase
         $this->assertRoundTrip('gds/redirects-manage', ['action' => 'create', 'from' => '/old-'.uniqid(), 'to' => '/new'], fn ($result) => array_filter([(int) ($result['_undo']['data']['post_id'] ?? 0)]));
     }
 
+    // ── Review follow-ups ───────────────────────────────────────────
+
+    public function test_posts_bulk_update_undo_is_refused_when_a_slug_it_restores_changed_since(): void
+    {
+        $draft = self::factory()->post->create(['post_status' => 'draft', 'post_title' => 'Draft one']);
+        $result = $this->assertAbilitySuccess('gds/posts-bulk-update', ['post_ids' => [$draft], 'set_status' => 'publish']);
+        wp_update_post(['ID' => $draft, 'post_name' => 'hand-picked']);
+
+        $this->assertUndoRefused($result);
+        $this->assertSame('hand-picked', get_post($draft)->post_name);
+    }
+
+    public function test_terms_delete_undo_of_a_menu_repoints_sub_items_at_a_parent_back_under_a_new_id(): void
+    {
+        global $wpdb;
+        $site = $this->site();
+        $result = $this->assertAbilitySuccess('gds/terms-delete', ['taxonomy' => 'menus', 'id' => $site['menu']]);
+        // The parent item's id is taken before the undo.
+        $wpdb->insert($wpdb->posts, ['ID' => $site['item_child'], 'post_type' => 'post', 'post_status' => 'draft', 'post_title' => 'Squatter']);
+
+        $this->assertNotWPError($this->restore($result));
+
+        $parent = get_posts(['post_type' => 'nav_menu_item', 'post_status' => 'any', 'numberposts' => 1, 'fields' => 'ids', 'meta_key' => '_menu_item_object', 'meta_value' => 'category', 'tax_query' => [['taxonomy' => 'nav_menu', 'terms' => $site['menu']]]]);
+        $this->assertNotEmpty($parent);
+        $this->assertNotSame($site['item_child'], (int) $parent[0]);
+        $this->assertSame((string) $parent[0], get_post_meta($site['item_sub'], '_menu_item_menu_item_parent', true));
+    }
+
+    public function test_translations_create_undo_refused_by_the_trash_leaves_the_translation_linked(): void
+    {
+        $this->requirePolylang();
+        $site = $this->site();
+        pll_set_post_language($site['about'], 'en');
+        $result = $this->assertAbilitySuccess('gds/translations-create', ['source_id' => $site['about'], 'lang' => 'fi', 'status' => 'publish']);
+        update_option('page_on_front', (int) $result['id']);
+
+        $this->assertUndoRefused($result);
+        $this->assertSame((int) $result['id'], (int) (pll_get_post_translations($site['about'])['fi'] ?? 0));
+    }
+
+    public function test_content_create_undo_is_refused_once_the_post_was_edited(): void
+    {
+        $result = $this->assertAbilitySuccess('gds/content-create', ['type' => 'posts', 'title' => 'New post', 'content' => '<p>Body</p>']);
+        wp_update_post(['ID' => (int) $result['id'], 'post_content' => 'Written by hand since']);
+
+        $this->assertUndoRefused($result);
+    }
+
+    public function test_nav_menu_items_create_undo_is_refused_once_the_item_was_edited(): void
+    {
+        $site = $this->site();
+        $result = $this->assertAbilitySuccess('gds/nav-menu-items-create', ['menu_id' => $site['menu'], 'title' => 'Blog link', 'linked' => ['kind' => 'post', 'post_id' => $site['blog']]]);
+        wp_update_post(['ID' => (int) $result['id'], 'post_title' => 'Renamed by hand']);
+
+        $this->assertUndoRefused($result);
+    }
+
+    public function test_feeds_create_undo_is_refused_once_the_feed_was_edited(): void
+    {
+        $this->requireGravityForms();
+        $result = $this->assertAbilitySuccess('gds/feeds-create', ['form_id' => $this->form(), 'addon_slug' => 'test-addon', 'meta' => ['feed_name' => 'CRM']]);
+        \GFAPI::update_feed((int) $result['id'], ['feed_name' => 'Configured by hand']);
+
+        $this->assertUndoRefused($result);
+    }
+
+    public function test_terms_create_undo_is_refused_once_the_term_was_renamed(): void
+    {
+        $result = $this->assertAbilitySuccess('gds/terms-create', ['taxonomy' => 'categories', 'name' => 'Created']);
+        wp_update_term((int) $result['id'], 'category', ['name' => 'Renamed by hand']);
+
+        $this->assertUndoRefused($result);
+    }
+
+    public function test_content_delete_undo_is_refused_when_its_slug_was_taken_since(): void
+    {
+        $site = $this->site();
+        $result = $this->assertAbilitySuccess('gds/content-delete', ['type' => 'pages', 'id' => $site['about']]);
+        self::factory()->post->create(['post_type' => 'page', 'post_name' => 'about', 'post_status' => 'publish', 'post_parent' => $site['front']]);
+
+        $error = $this->assertUndoRefused($result);
+        $this->assertStringContainsString('about', $error->get_error_message());
+        $this->assertSame('trash', get_post_status($site['about']));
+    }
+
+    public function test_forms_update_undo_records_a_revision_when_it_changes_consent_wording(): void
+    {
+        global $wpdb;
+        $this->requireGravityForms();
+        $consent = ['id' => 1, 'type' => 'consent', 'label' => 'Consent', 'checkboxLabel' => 'I agree', 'description' => 'Old terms', 'inputs' => [['id' => '1.1', 'label' => 'Consent'], ['id' => '1.2', 'label' => 'Text', 'isHidden' => true], ['id' => '1.3', 'label' => 'Description', 'isHidden' => true]]];
+        $id = \GFAPI::add_form(['title' => 'Consent '.uniqid(), 'fields' => [$consent]]);
+        $result = $this->assertAbilitySuccess('gds/forms-update', ['id' => $id, 'fields' => [['description' => 'New terms'] + $consent]]);
+        $revisions = fn () => (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}gf_form_revisions WHERE form_id = %d", $id));
+        $before = $revisions();
+
+        $this->assertNotWPError($this->restore($result));
+
+        // As GFAPI::update_form() would: entries from now on point at the old wording.
+        $this->assertSame($before + 1, $revisions());
+    }
+
+    public function test_terms_update_undo_of_a_menu_ignores_another_menu_taking_an_unrelated_location(): void
+    {
+        register_nav_menus(['sidebar' => 'Sidebar']);
+        $site = $this->site();
+        $result = $this->assertAbilitySuccess('gds/terms-update', ['taxonomy' => 'menus', 'id' => $site['footer_menu'], 'name' => 'Renamed menu']);
+        set_theme_mod('nav_menu_locations', ['sidebar' => $site['menu']] + get_nav_menu_locations());
+
+        $this->assertNotWPError($this->restore($result));
+        $this->assertNotSame('Renamed menu', get_term($site['footer_menu'], 'nav_menu')->name);
+    }
+
+    public function test_terms_update_round_trip_for_a_menu_whose_auto_add_id_is_stored_as_a_string(): void
+    {
+        $site = $this->site();
+        update_option('nav_menu_options', ['auto_add' => [(string) $site['footer_menu']]]);
+
+        $this->assertRoundTrip('gds/terms-update', ['taxonomy' => 'menus', 'id' => $site['footer_menu'], 'name' => 'Renamed menu']);
+    }
+
     // ── Coverage ────────────────────────────────────────────────────
 
     public function test_every_write_ability_has_a_round_trip_or_says_why_not(): void

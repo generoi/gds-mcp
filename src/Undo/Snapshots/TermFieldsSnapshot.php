@@ -48,7 +48,8 @@ class TermFieldsSnapshot
 
         return [
             'locations' => array_map('intval', (array) get_nav_menu_locations()),
-            'auto_add' => in_array($termId, (array) ($options['auto_add'] ?? []), true),
+            // As ints: the option may hold the ids as strings.
+            'auto_add' => in_array($termId, array_map('intval', (array) ($options['auto_add'] ?? [])), true),
         ];
     }
 

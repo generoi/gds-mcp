@@ -76,6 +76,13 @@ final class UndoGuard
     private static function fingerprint(string $kind, array $data): ?string
     {
         $state = match ($kind) {
+            // The undo of a create removes the object: refused once someone
+            // changed it since.
+            'trash', 'trash-translation', 'delete-menu-item', 'delete-attachment' => self::postState((int) ($data['id'] ?? 0)),
+            'delete-term' => self::termState((int) ($data['term_id'] ?? 0), (string) ($data['taxonomy'] ?? '')),
+            'delete-form' => self::formState((int) ($data['id'] ?? 0)),
+            'delete-feed' => self::feedState((int) ($data['feed_id'] ?? 0)),
+            'restore-redirect' => self::redirectState($data),
             'restore-post' => self::postState((int) ($data['id'] ?? 0)),
             'restore-post-content' => ($post = get_post((int) ($data['id'] ?? 0))) ? $post->post_content : null,
             'restore-post-partial' => self::partialState($data),
@@ -86,7 +93,6 @@ final class UndoGuard
             'restore-term-seo' => ($term = get_term((int) ($data['term_id'] ?? 0), (string) ($data['taxonomy'] ?? ''))) instanceof \WP_Term
                 ? SeoFields::termValues($term, array_keys((array) ($data['prev'] ?? [])))
                 : null,
-            'restore-redirect' => ($data['provider'] ?? '') === 'yoast' ? get_post_meta((int) ($data['post_id'] ?? 0), '_yoast_wpseo_redirect') : null,
             'restore-translation-link' => self::translationState($data),
             'restore-string' => self::stringState($data),
             default => null,
@@ -122,6 +128,10 @@ final class UndoGuard
             return null;
         }
         $state = ($data['status'] ?? '') !== '' ? ['status' => $post->post_status] : [];
+        // The slug and dates it puts back with the status.
+        foreach (array_keys((array) ($data['fields'] ?? [])) as $field) {
+            $state['fields'][$field] = (string) ($post->{$field} ?? '');
+        }
         foreach (array_keys((array) ($data['meta_prev'] ?? $data['metaPrev'] ?? [])) as $key) {
             $state['meta'][$key] = get_post_meta($post->ID, (string) $key);
         }
@@ -138,19 +148,40 @@ final class UndoGuard
         }
         $state = $snapshot->toArray();
         ksort($state['meta']);
+        // Only the theme locations that hold this menu: another menu put in
+        // another location is no change to this one.
+        if (isset($state['menu'])) {
+            $state['menu']['locations'] = array_filter($state['menu']['locations'], fn ($menuId) => (int) $menuId === $termId);
+        }
 
         return $state;
+    }
+
+    /**
+     * What a created redirect is now, for each provider.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function redirectState(array $data): mixed
+    {
+        global $wpdb;
+
+        return match ($data['provider'] ?? '') {
+            'srm' => self::postState((int) ($data['post_id'] ?? 0)),
+            'yoast' => get_post_meta((int) ($data['post_id'] ?? 0), '_yoast_wpseo_redirect'),
+            // Without the hit counters, which change on every visit.
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            'redirection' => class_exists('Red_Item') ? $wpdb->get_row($wpdb->prepare("SELECT url, match_url, match_data, regex, action_type, action_code, action_data, match_type, title, status, group_id, position FROM {$wpdb->prefix}redirection_items WHERE id = %d", (int) ($data['item_id'] ?? 0)), ARRAY_A) : null,
+            default => null,
+        };
     }
 
     /** @return array<string, mixed>|null */
     private static function formState(int $id): ?array
     {
-        if (! class_exists('GFAPI') || ! $id) {
-            return null;
-        }
-        $form = \GFAPI::get_form($id);
-
-        return is_array($form) ? $form : null;
+        // The stored rows: GFAPI::get_form() also carries values GF derives
+        // as entries come in.
+        return $id ? Snapshot::gravityForm($id) : null;
     }
 
     /** @return array<string, mixed>|null */
@@ -212,12 +243,12 @@ final class UndoGuard
     private static function describe(string $kind, array $data): string
     {
         return match ($kind) {
-            'restore-term', 'restore-term-seo' => sprintf('The term %d', (int) ($data['term_id'] ?? 0)),
-            'restore-form' => sprintf('Form %d', (int) ($data['id'] ?? 0)),
-            'restore-feed' => sprintf('Feed %d', (int) ($data['feed_id'] ?? 0)),
+            'restore-term', 'restore-term-seo', 'delete-term' => sprintf('The term %d', (int) ($data['term_id'] ?? 0)),
+            'restore-form', 'delete-form' => sprintf('Form %d', (int) ($data['id'] ?? 0)),
+            'restore-feed', 'delete-feed' => sprintf('Feed %d', (int) ($data['feed_id'] ?? 0)),
             'restore-translation-link' => 'The translation links of these posts',
             'restore-string' => sprintf('The "%s" translation', (string) ($data['string'] ?? '')),
-            'restore-redirect' => sprintf('The redirect on post %d', (int) ($data['post_id'] ?? 0)),
+            'restore-redirect' => 'The created redirect',
             default => sprintf('"%s" (post %d)', get_the_title((int) ($data['id'] ?? 0)), (int) ($data['id'] ?? 0)),
         };
     }

@@ -62,6 +62,17 @@ final class RestoreSnapshot
             return $changed;
         }
 
+        return self::dispatch($kind, $data);
+    }
+
+    /**
+     * Run the restore for a kind, once its guard has passed.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|WP_Error
+     */
+    private static function dispatch(string $kind, array $data): array|WP_Error
+    {
         return match ($kind) {
             'restore-post' => self::restorePost($data),
             'restore-post-content' => self::restorePostContent($data),
@@ -311,6 +322,18 @@ final class RestoreSnapshot
         // had when it was trashed: the one the undo row recorded, or for rows
         // without it the one core kept in _wp_trash_meta_status.
         $status = (string) ($data['status'] ?? '');
+
+        // Untrashing gives back the slug trashing freed; if another post took
+        // it since, WordPress would quietly add a suffix to this one's URL.
+        $post = get_post($id);
+        $slug = (string) get_post_meta($id, '_wp_desired_post_slug', true);
+        $target = $status !== '' ? $status : (string) get_post_meta($id, '_wp_trash_meta_status', true);
+        if ($slug !== '' && $target !== '') {
+            $unique = wp_unique_post_slug($slug, $id, $target, $post->post_type, (int) $post->post_parent);
+            if ($unique !== $slug) {
+                return new WP_Error('restore_failed', sprintf('Nothing was undone: the address "%s" this post had is now used by another post, so it would come back as "%s". Rename the other post first.', $slug, $unique));
+            }
+        }
         $priorStatus = static fn ($newStatus, $postId, $previousStatus) => (int) $postId === $id
             ? ($status !== '' ? $status : ((string) $previousStatus ?: $newStatus))
             : $newStatus;
@@ -346,6 +369,10 @@ final class RestoreSnapshot
     private static function trashTranslation(array $data): array|WP_Error
     {
         $id = (int) ($data['id'] ?? 0);
+        // Whatever would stop the trash stops the unlinking too.
+        if ($id && get_post($id) && ($refused = self::trashRefusal($id))) {
+            return $refused;
+        }
         if ($id && get_post($id) && function_exists('PLL') && isset(PLL()->model)) {
             $group = pll_get_post_translations($id);
             PLL()->model->post->delete_translation($id);
@@ -400,6 +427,21 @@ final class RestoreSnapshot
         if (! $id || ! get_post($id)) {
             return ['restored' => 'trash', 'id' => $id, 'note' => 'Already removed.'];
         }
+        if ($refused = self::trashRefusal($id)) {
+            return $refused;
+        }
+        if (! wp_trash_post($id)) {
+            return new WP_Error('restore_failed', "Failed to remove post {$id}.");
+        }
+
+        return ['restored' => 'trash', 'id' => $id];
+    }
+
+    /**
+     * Why undoing a create by trashing the post cannot go ahead, if it can't.
+     */
+    private static function trashRefusal(int $id): ?WP_Error
+    {
         // With EMPTY_TRASH_DAYS at 0, wp_trash_post() deletes for good.
         if (! EMPTY_TRASH_DAYS) {
             return new WP_Error('trash_not_supported', "The trash is disabled on this site (EMPTY_TRASH_DAYS is 0), so undoing would delete post {$id} permanently. Delete it in wp-admin if it should be removed for good.");
@@ -409,11 +451,8 @@ final class RestoreSnapshot
         if (! empty(Snapshot::trashSideEffects($id)['options'])) {
             return new WP_Error('changed_since', 'Nothing was undone: this page has been made the site\'s homepage or posts page since it was created. Choose another one in Settings → Reading first.');
         }
-        if (! wp_trash_post($id)) {
-            return new WP_Error('restore_failed', "Failed to remove post {$id}.");
-        }
 
-        return ['restored' => 'trash', 'id' => $id];
+        return null;
     }
 
     /**
@@ -448,22 +487,12 @@ final class RestoreSnapshot
         $order = $after ? (int) $after->menu_order : ($before ? (int) $before->menu_order + 1 : (int) $snapshot->post['menu_order']);
         NavMenuItemsAbility::shiftOrder($menuId, $order, +1);
 
-        // wp_insert_post() keeps import_id only when no post has that id.
-        $fields = ['menu_order' => $order] + $snapshot->post;
-        $newId = wp_insert_post(wp_slash(['import_id' => $snapshot->id, 'post_type' => 'nav_menu_item'] + $fields), true);
+        $newId = self::recreatePost(new PostFieldsSnapshot($snapshot->id, ['menu_order' => $order] + $snapshot->post, $snapshot->meta, $snapshot->terms, true), 'nav_menu_item');
         if (is_wp_error($newId)) {
+            // All or nothing: no half-restored item left in the menu.
             NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
 
             return $newId;
-        }
-
-        $restored = self::restorePost((new PostFieldsSnapshot($newId, $fields, $snapshot->meta, $snapshot->terms, true))->toArray());
-        if (is_wp_error($restored)) {
-            // All or nothing: no half-restored item left in the menu.
-            wp_delete_post($newId, true);
-            NavMenuItemsAbility::shiftOrder($menuId, $order + 1, -1);
-
-            return $restored;
         }
 
         foreach ((array) ($data['children'] ?? []) as $childId) {
@@ -879,6 +908,7 @@ final class RestoreSnapshot
         $isMenu = $snapshot->taxonomy === 'nav_menu';
         $menuTtId = $isMenu ? (int) $wpdb->get_var($wpdb->prepare("SELECT term_taxonomy_id FROM {$wpdb->term_taxonomy} WHERE term_id = %d AND taxonomy = 'nav_menu'", $termId)) : 0;
         $remap = [];
+        $recreated = [];
         foreach ($snapshot->menuItems as $payload) {
             $item = PostFieldsSnapshot::fromArray($payload);
             if (! $item) {
@@ -899,17 +929,20 @@ final class RestoreSnapshot
                 // wp_set_object_terms() may not resolve a term inserted raw.
                 self::reattachObjects($menuTtId, [$newId]);
             }
+            $recreated[] = $newId;
             if ($newId !== $item->id) {
                 $remap[$item->id] = $newId;
             }
         }
-        // Sub-items point at their parent by id.
-        foreach ($remap as $old => $new) {
-            foreach (get_posts(['post_type' => 'nav_menu_item', 'post_status' => 'any', 'numberposts' => -1, 'fields' => 'ids', 'meta_key' => '_menu_item_menu_item_parent', 'meta_value' => (string) $old]) as $child) {
-                if (in_array((int) $child, $remap, true)) {
-                    update_post_meta((int) $child, '_menu_item_menu_item_parent', (string) $new);
-                }
+        // Sub-items point at their parent by id: re-point every recreated one
+        // whose parent came back under a new id, whatever id it got itself.
+        foreach ($recreated as $itemId) {
+            $parent = (int) get_post_meta($itemId, '_menu_item_menu_item_parent', true);
+            if (isset($remap[$parent])) {
+                update_post_meta($itemId, '_menu_item_menu_item_parent', (string) $remap[$parent]);
             }
+        }
+        foreach ($remap as $old => $new) {
             $caveats[] = "Menu item {$old} came back under a new id ({$new}) because the old id had been reused.";
         }
 
@@ -1104,6 +1137,13 @@ final class RestoreSnapshot
         global $wpdb;
         // phpcs:disable WordPress.DB.DirectDatabaseQuery
         $meta = array_intersect_key($stored, array_flip(['display_meta', 'confirmations', 'notifications']));
+        // As GFFormsModel::update_form_meta() does before a save: record a
+        // revision when consent wording changes, so entries submitted from
+        // now on point at the wording they agreed to.
+        $displayMeta = is_string($meta['display_meta'] ?? null) ? json_decode($meta['display_meta'], true) : null;
+        if (is_array($displayMeta) && method_exists('GFFormsModel', 'maybe_create_form_revision')) {
+            \GFFormsModel::maybe_create_form_revision($displayMeta, $id);
+        }
         $ok = $wpdb->update(\GFFormsModel::get_meta_table_name(), $meta, ['form_id' => $id]) !== false;
         $ok = $ok && $wpdb->update(\GFFormsModel::get_form_table_name(), ['title' => (string) ($stored['title'] ?? ''), 'is_active' => (string) ($stored['is_active'] ?? '1')], ['id' => $id]) !== false;
         // phpcs:enable
@@ -1535,7 +1575,8 @@ final class RestoreSnapshot
         $errors = [];
         $caveats = [];
         foreach (array_reverse($items) as $item) {
-            $result = self::handle(null, $item);
+            // Guards were checked above, for all of them.
+            $result = self::dispatch((string) $item['kind'], (array) ($item['data'] ?? []));
             if (is_wp_error($result)) {
                 $errors[] = $result->get_error_message();
             } else {
