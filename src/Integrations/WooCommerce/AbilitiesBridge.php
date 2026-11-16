@@ -108,6 +108,13 @@ final class AbilitiesBridge
 
     private static function isFeatureEnabled(): bool
     {
+        // WooCommerce 11.3 registers its abilities itself (AbilitiesLoader) and
+        // deprecated this flag, which is then always false and logs a notice on
+        // every call. Nothing for the bridge to do there.
+        if (class_exists('\\Automattic\\WooCommerce\\Internal\\Abilities\\AbilitiesLoader')) {
+            return false;
+        }
+
         return FeaturesUtil::feature_is_enabled('mcp_integration');
     }
 }
